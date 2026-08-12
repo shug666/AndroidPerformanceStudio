@@ -225,3 +225,22 @@ tasks.withType<JavaExec>().configureEach {
         }
     }
 }
+
+// Suppress known ProGuard warnings from transitive dependency version mismatches.
+// These references are guarded at runtime (reflection / optional deps) and never
+// actually invoked, but ProGuard treats missing members as hard errors.
+tasks.matching { it.name == "proguardReleaseJars" }.configureEach {
+    val projectDir = project.projectDir
+    doFirst {
+        val customRules = project.file("proguard-rules.pro")
+        if (customRules.exists()) {
+            val rootConfig = project.file("build/compose/tmp/proguardReleaseJars/root-config.pro")
+            if (rootConfig.exists()) {
+                rootConfig.appendText(
+                    "\n# Custom ProGuard rules - suppress known dependency warnings\n" +
+                        customRules.readText() + "\n"
+                )
+            }
+        }
+    }
+}
