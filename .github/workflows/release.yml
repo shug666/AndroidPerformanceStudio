@@ -82,6 +82,17 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ needs.resolve.outputs.checkout_ref }}
+          submodules: recursive
+      - name: Set up Node 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24.19.0"
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Set up pinned npm
+        run: npm install --global npm@11.17.0
       - name: Set up JDK 21
         uses: actions/setup-java@v5
         with:
@@ -93,8 +104,11 @@ jobs:
             desktop-viewer/gradle/libs.versions.toml
             desktop-viewer/gradle/wrapper/gradle-wrapper.properties
             desktop-viewer/**/build.gradle.kts
+      - name: Install pinned Trace Processor
+        run: PERFETTO_TOOLS_DIR="$PWD/build/perfetto-tools" ./scripts/install-trace-processor.sh
       - name: Run tests
-        run: ./desktop-viewer/gradlew -p desktop-viewer test --no-daemon
+        run: |
+          ./desktop-viewer/gradlew -p desktop-viewer test --no-daemon
 
   prepare-release:
     name: Prepare draft GitHub Release
@@ -148,10 +162,17 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ needs.resolve.outputs.checkout_ref }}
+          submodules: recursive
       - name: Set up Node 24
         uses: actions/setup-node@v6
         with:
-          node-version: "24"
+          node-version: "24.19.0"
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Set up pinned npm
+        run: npm install --global npm@11.17.0
       - name: Build profiler assets
         shell: bash
         run: |
@@ -219,10 +240,17 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ needs.resolve.outputs.checkout_ref }}
+          submodules: recursive
       - name: Set up Node 24
         uses: actions/setup-node@v6
         with:
-          node-version: "24"
+          node-version: "24.19.0"
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Set up pinned npm
+        run: npm install --global npm@11.17.0
       - name: Build profiler assets
         shell: bash
         run: |
@@ -304,10 +332,17 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ needs.resolve.outputs.checkout_ref }}
+          submodules: recursive
       - name: Set up Node 24
         uses: actions/setup-node@v6
         with:
-          node-version: "24"
+          node-version: "24.19.0"
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Set up pinned npm
+        run: npm install --global npm@11.17.0
       - name: Build profiler assets
         shell: bash
         run: |

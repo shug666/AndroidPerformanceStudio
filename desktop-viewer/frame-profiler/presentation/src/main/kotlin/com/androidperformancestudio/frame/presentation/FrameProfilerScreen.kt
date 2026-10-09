@@ -1,6 +1,7 @@
 @file:Suppress(
     "CyclomaticComplexMethod",
     "FunctionName",
+    "LongMethod",
     "MagicNumber",
     "MaxLineLength",
     "TooManyFunctions",
@@ -42,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.frame.analysis.AnalyzedFrame
 import com.androidperformancestudio.frame.analysis.FrameAnalysisResult
+import com.androidperformancestudio.frame.analysis.FrameAttribution
 import com.androidperformancestudio.frame.analysis.JankSeverity
 import com.androidperformancestudio.frame.presentation.generated.resources.Res
 import com.androidperformancestudio.frame.presentation.generated.resources.activity
@@ -51,13 +53,19 @@ import com.androidperformancestudio.frame.presentation.generated.resources.captu
 import com.androidperformancestudio.frame.presentation.generated.resources.correlate_in_layout_inspector
 import com.androidperformancestudio.frame.presentation.generated.resources.deadline_miss_rate
 import com.androidperformancestudio.frame.presentation.generated.resources.duration
+import com.androidperformancestudio.frame.presentation.generated.resources.fragment
 import com.androidperformancestudio.frame.presentation.generated.resources.frame
+import com.androidperformancestudio.frame.presentation.generated.resources.frame_attribution
+import com.androidperformancestudio.frame.presentation.generated.resources.frame_attribution_entry
 import com.androidperformancestudio.frame.presentation.generated.resources.frame_detail
 import com.androidperformancestudio.frame.presentation.generated.resources.frame_timeline
 import com.androidperformancestudio.frame.presentation.generated.resources.frame_timeline_vsync_id
 import com.androidperformancestudio.frame.presentation.generated.resources.frames
+import com.androidperformancestudio.frame.presentation.generated.resources.interaction_state
 import com.androidperformancestudio.frame.presentation.generated.resources.jank_cluster_summary
 import com.androidperformancestudio.frame.presentation.generated.resources.jank_clusters
+import com.androidperformancestudio.frame.presentation.generated.resources.jank_stats
+import com.androidperformancestudio.frame.presentation.generated.resources.jank_stats_reasons
 import com.androidperformancestudio.frame.presentation.generated.resources.jank_types
 import com.androidperformancestudio.frame.presentation.generated.resources.largest_reported_stage
 import com.androidperformancestudio.frame.presentation.generated.resources.missed_vsync
@@ -65,12 +73,15 @@ import com.androidperformancestudio.frame.presentation.generated.resources.no_ja
 import com.androidperformancestudio.frame.presentation.generated.resources.opens_the_current_foreground_layout_for_timing_correlation_it_does
 import com.androidperformancestudio.frame.presentation.generated.resources.p50
 import com.androidperformancestudio.frame.presentation.generated.resources.p95
+import com.androidperformancestudio.frame.presentation.generated.resources.page
 import com.androidperformancestudio.frame.presentation.generated.resources.platform_jank
 import com.androidperformancestudio.frame.presentation.generated.resources.platform_jank_rate
+import com.androidperformancestudio.frame.presentation.generated.resources.render_thread
 import com.androidperformancestudio.frame.presentation.generated.resources.select_a_debuggable_process_framemetrics_agent_is_preferred_and_gfxinf
 import com.androidperformancestudio.frame.presentation.generated.resources.source
 import com.androidperformancestudio.frame.presentation.generated.resources.stage_investigation_hint
 import com.androidperformancestudio.frame.presentation.generated.resources.state_detail
+import com.androidperformancestudio.frame.presentation.generated.resources.surface_flinger_jank
 import com.androidperformancestudio.frame.presentation.generated.resources.text
 import com.androidperformancestudio.frame.presentation.generated.resources.unknown_stage
 import com.androidperformancestudio.frame.presentation.generated.resources.verdict
@@ -170,6 +181,7 @@ private fun AnalysisContent(
             )
         }
         SummaryCards(analysis, language)
+        FrameAttributionSection(analysis.attributions, language)
         state.warnings.forEach { warning ->
             Text(warning, color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodySmall)
         }
@@ -221,6 +233,38 @@ private fun SummaryCards(
         ProfilerMetricCard(localizedStringResource(Res.string.p50, language), summary.p50DurationNs.formatMillis(), Modifier.weight(1f))
         ProfilerMetricCard(localizedStringResource(Res.string.p95, language), summary.p95DurationNs.formatMillis(), Modifier.weight(1f))
         ProfilerMetricCard(localizedStringResource(Res.string.worst, language), summary.worstDurationNs.formatMillis(), Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun FrameAttributionSection(
+    attributions: List<FrameAttribution>,
+    language: UiLanguage,
+) {
+    if (attributions.isEmpty()) return
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors()) {
+        Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                localizedStringResource(Res.string.frame_attribution, language),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            attributions.take(5).forEach { attribution ->
+                Text(
+                    localizedStringResource(
+                        Res.string.frame_attribution_entry,
+                        language,
+                        attribution.activityName,
+                        attribution.uiState,
+                        attribution.platformJankFrames,
+                        attribution.totalFrames,
+                        attribution.p95DurationNs.formatMillis(),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
@@ -294,9 +338,18 @@ private fun FrameDetail(
             DetailRow(localizedStringResource(Res.string.frame, language), "#${frame.sample.frameId}")
             DetailRow(localizedStringResource(Res.string.source, language), frame.sample.source.name)
             frame.sample.activityName?.let { DetailRow(localizedStringResource(Res.string.activity, language), it.substringAfterLast('.')) }
+            frame.sample.fragmentName?.let { DetailRow(localizedStringResource(Res.string.fragment, language), it) }
+            frame.sample.pageName?.let { DetailRow(localizedStringResource(Res.string.page, language), it) }
+            frame.sample.interactionState?.let { DetailRow(localizedStringResource(Res.string.interaction_state, language), it) }
+            frame.sample.renderThreadName?.let { DetailRow(localizedStringResource(Res.string.render_thread, language), it) }
             frame.sample.windowId?.let { DetailRow(localizedStringResource(Res.string.window, language), it) }
             DetailRow(localizedStringResource(Res.string.verdict, language), frame.deadlineVerdict.name)
             DetailRow(localizedStringResource(Res.string.platform_jank, language), frame.sample.platformJank?.toString() ?: "—")
+            frame.sample.surfaceFlingerJankType?.let { DetailRow(localizedStringResource(Res.string.surface_flinger_jank, language), it) }
+            frame.sample.jankStatsJank?.let { DetailRow(localizedStringResource(Res.string.jank_stats, language), it.toString()) }
+            if (frame.sample.jankStatsReasons.isNotEmpty()) {
+                DetailRow(localizedStringResource(Res.string.jank_stats_reasons, language), frame.sample.jankStatsReasons.joinToString())
+            }
             DetailRow(localizedStringResource(Res.string.duration, language), frame.sample.resolvedDurationNs().formatMillis())
             DetailRow(localizedStringResource(Res.string.budget, language), frame.sample.expectedDurationNs.formatMillis())
             DetailRow(localizedStringResource(Res.string.budget_source, language), frame.sample.expectedDurationSource.name)

@@ -1,7 +1,12 @@
 package com.androidperformancestudio.memory.app
 
+import com.androidperformancestudio.adb.AdbTargetSnapshot
+import com.androidperformancestudio.adb.AndroidPackage
+import com.androidperformancestudio.adb.AndroidProcess
 import com.androidperformancestudio.memory.capture.AndroidSdkHprofConvLocator
 import com.androidperformancestudio.memory.capture.MemoryHeapDumpCaptureSession
+import com.androidperformancestudio.memory.model.LeakCanaryReport
+import com.androidperformancestudio.memory.model.LeakCanaryStatus
 import com.androidperformancestudio.memory.model.NativeHeapEvidenceSource
 import com.androidperformancestudio.memory.presentation.MemoryProcessOption
 import com.androidperformancestudio.platform.adb.AdbBinaryResult
@@ -32,6 +37,35 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration
 
 class DesktopMemoryProfilerBackendTest {
+    @Test
+    fun `profileable by shell processes remain selectable for heap dumps`() {
+        val snapshot =
+            AdbTargetSnapshot(
+                packages =
+                    listOf(
+                        AndroidPackage("com.example.debug", debuggable = true),
+                        AndroidPackage("com.example.profileable", profileableByShell = true),
+                        AndroidPackage("com.example.hidden"),
+                    ),
+                processes =
+                    listOf(
+                        AndroidProcess(10, 1, "u0_a10", "com.example.debug"),
+                        AndroidProcess(11, 1, "u0_a11", "com.example.profileable:worker"),
+                        AndroidProcess(12, 1, "u0_a12", "com.example.hidden"),
+                    ),
+            )
+
+        val processes = snapshot.heapDumpableProcesses()
+
+        assertEquals(
+            listOf(
+                MemoryProcessOption(10, "com.example.debug", "com.example.debug"),
+                MemoryProcessOption(11, "com.example.profileable:worker", "com.example.profileable"),
+            ),
+            processes,
+        )
+    }
+
     @Test
     fun `native import uses visible partial wire fallback only when the tool is unavailable`() =
         kotlinx.coroutines.test.runTest {
@@ -136,6 +170,10 @@ class DesktopMemoryProfilerBackendTest {
             )
             assertEquals(0, progress.first())
             assertEquals(100, progress.last())
+            assertEquals(LeakCanaryStatus.NOT_RUN, loaded.heapDump.leakCanaryReport.status)
+
+            val leakAnalysis = assertIs<MemoryBackendResult.Success<LeakCanaryReport>>(backend.analyzeLeaks()).value
+            assertEquals(LeakCanaryStatus.NO_CANDIDATES, leakAnalysis.status)
         }
 
     @Test
@@ -168,6 +206,21 @@ class DesktopMemoryProfilerBackendTest {
             val loaded = assertIs<MemoryBackendResult.Success<LoadedHeap>>(result).value
             assertEquals(0, loaded.histogram.summary.objectCount)
             assertContains(loaded.warning.orEmpty(), "Unknown heap dump sub-record")
+            assertContains(loaded.warning.orEmpty(), "No heap objects were parsed")
+        }
+
+    @Test
+    fun `import exposes structural preflight warnings before heap analysis`() =
+        kotlinx.coroutines.test.runTest {
+            val root = createTempDirectory("memory-probe-warning-import")
+            val hprof = root.resolve("without-heap-dump.hprof")
+            Files.write(hprof, hprofWithoutHeapDump())
+            val backend = DesktopMemoryProfilerBackend(root)
+
+            val result = backend.importHprof(hprof)
+
+            val loaded = assertIs<MemoryBackendResult.Success<LoadedHeap>>(result).value
+            assertContains(loaded.warning.orEmpty(), "No heap dump record was found")
             assertContains(loaded.warning.orEmpty(), "No heap objects were parsed")
         }
 
@@ -338,6 +391,17 @@ class DesktopMemoryProfilerBackendTest {
                             writeInt(0)
                         },
                     )
+                }
+            }.toByteArray()
+
+    private fun hprofWithoutHeapDump(): ByteArray =
+        ByteArrayOutputStream()
+            .also { bytes ->
+                DataOutputStream(bytes).use { output ->
+                    output.write("JAVA PROFILE 1.0.3".encodeToByteArray())
+                    output.writeByte(0)
+                    output.writeInt(Int.SIZE_BYTES)
+                    output.writeLong(0L)
                 }
             }.toByteArray()
 

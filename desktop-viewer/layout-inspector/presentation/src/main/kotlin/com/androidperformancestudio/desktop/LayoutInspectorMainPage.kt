@@ -1,5 +1,8 @@
 package com.androidperformancestudio.desktop
 
+import com.androidperformancestudio.ui.ViewerDimensions
+import com.androidperformancestudio.ui.ViewerTypography
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.HorizontalScrollbar
 import androidx.compose.foundation.LocalScrollbarStyle
@@ -15,7 +18,6 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -40,9 +42,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.v2.ScrollbarAdapter
 import androidx.compose.material3.HorizontalDivider
@@ -99,25 +98,27 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.FrameWindowScope
 import com.androidperformancestudio.presentation.generated.resources.Res
 import com.androidperformancestudio.presentation.generated.resources.*
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.LocalViewerColors
+import com.androidperformancestudio.ui.search.CompactSearchField
+import com.androidperformancestudio.ui.search.CompactSearchNavigationButton
+import com.androidperformancestudio.ui.ProfilerCompactButton
+import com.androidperformancestudio.ui.SegmentedSelector
+import com.androidperformancestudio.ui.SegmentedSelectorStyle
 import com.androidperformancestudio.ui.button.HomeButton
 import com.androidperformancestudio.ui.button.SettingsButton
-import com.androidperformancestudio.ui.ViewerTheme
 import com.androidperformancestudio.application.ConnectionStatus
 import com.androidperformancestudio.application.InspectorState
 import com.androidperformancestudio.application.InspectorStore
-import com.androidperformancestudio.platform.adb.AdbDevice
+import com.androidperformancestudio.platform.adb.AndroidDeviceInfo
 import com.androidperformancestudio.platform.toolchain.RecentPathStore
 import com.androidperformancestudio.adb.ConnectedDeviceSession
 import com.androidperformancestudio.adb.AdbProcessRunner
@@ -128,6 +129,7 @@ import com.androidperformancestudio.protocol.ProtocolCodec
 import com.androidperformancestudio.protocol.UiNode
 import com.androidperformancestudio.protocol.WindowType
 import com.androidperformancestudio.compose.inspection.host.ComposeInjectionManager
+import com.androidperformancestudio.compose.inspection.host.ComposeCompilerReportParser
 import com.androidperformancestudio.compose.inspection.host.ComposeInspectionAuthorization
 import com.androidperformancestudio.compose.inspection.host.ComposeInspectorArtifactResolver
 import com.androidperformancestudio.compose.inspection.host.ComposeLiveSession
@@ -136,10 +138,10 @@ import com.androidperformancestudio.compose.inspection.ComposeArchivePrivacy
 import com.androidperformancestudio.compose.inspection.ComposeParameterReference
 import com.androidperformancestudio.compose.inspection.ComposeValue
 import com.androidperformancestudio.ui.DropdownSelector
+import com.androidperformancestudio.ui.chooseDirectory
 import com.androidperformancestudio.ui.HeaderDivider
 import com.androidperformancestudio.ui.HeaderSpacer
 import com.androidperformancestudio.ui.HeaderToolbar
-import com.androidperformancestudio.ui.ProfilerCompactButton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -163,20 +165,32 @@ internal const val AUTO_SCAN_DEFAULT_ENABLED = false
 // Source-aware payload preflight is complete; keep the user-facing analysis entry available.
 internal const val AI_ANALYSIS_ENTRY_VISIBLE = true
 internal const val SYSTEM_UI_PACKAGE_NAME = "com.android.systemui"
-internal val FULL_COMPOSE_INSPECTION_VISIBLE: Boolean =
-    System.getProperty("agentperf.compose.full.enabled", "false").toBoolean()
+// Full Compose inspection exposes layout-only nodes such as Box, Row, and Column. It is prepared
+// automatically for the foreground app when the verified AOSP agent bundle is available.
+internal const val DEFAULT_HIDE_SYSTEM_COMPOSABLES: Boolean = false
+
+internal fun automaticComposePreflightKey(
+    serial: String?,
+    mode: CaptureTargetMode,
+    fullComposeEnabled: Boolean,
+    hasAuthorization: Boolean,
+): String? =
+    serial?.takeIf {
+        mode == CaptureTargetMode.FOREGROUND_APP && !fullComposeEnabled && !hasAuthorization
+    }?.let { "$it:${mode.name}" }
+
+internal data class ComposeFallbackRecovery(
+    val autoScanEnabled: Boolean = true,
+    val fullComposeEnabled: Boolean = false,
+    val recompositionActive: Boolean = false,
+)
+
+internal fun composeFallbackRecovery(): ComposeFallbackRecovery = ComposeFallbackRecovery()
 
 private data class AuthorizedComposeTarget(
     val prepared: PreparedComposeInspection,
     val authorization: ComposeInspectionAuthorization,
 )
-
-private sealed interface ComposeAuthorizationUiState {
-    data object Idle : ComposeAuthorizationUiState
-    data object Preparing : ComposeAuthorizationUiState
-    data class Review(val prepared: PreparedComposeInspection) : ComposeAuthorizationUiState
-    data class Failure(val message: String) : ComposeAuthorizationUiState
-}
 
 internal enum class CaptureTargetMode {
     FOREGROUND_APP,
@@ -199,7 +213,6 @@ data class InspectorCorrelationHint(
 
 @Composable
 fun FrameWindowScope.LayoutInspectorMainPage(
-    commonThemePreference: String? = null,
     commonLanguagePreference: String? = null,
     settingsRevision: Long = 0L,
     onNavigateHome: (() -> Unit)? = null,
@@ -229,14 +242,14 @@ fun FrameWindowScope.LayoutInspectorMainPage(
     val composeInjectionManager = remember {
         ComposeInjectionManager(composeProcessRunner, composeArtifactResolver)
     }
+    val composeCompilerReportParser = remember { ComposeCompilerReportParser() }
     var fullComposeEnabled by remember { mutableStateOf(false) }
-    var hideSystemComposables by remember { mutableStateOf(true) }
+    var hideSystemComposables by remember { mutableStateOf(DEFAULT_HIDE_SYSTEM_COMPOSABLES) }
     var composeAuthorization by remember { mutableStateOf<AuthorizedComposeTarget?>(null) }
-    var composeAuthorizationUiState by remember {
-        mutableStateOf<ComposeAuthorizationUiState>(ComposeAuthorizationUiState.Idle)
-    }
     var composeSession by remember { mutableStateOf<ComposeLiveSession?>(null) }
     var recompositionActive by remember { mutableStateOf(false) }
+    var automaticComposePreflightAttempt by remember { mutableStateOf<String?>(null) }
+    var automaticComposePreflightInProgress by remember { mutableStateOf(false) }
     val recompositionHeatTracker = remember { RecompositionHeatTracker() }
     var recompositionHeat by remember { mutableStateOf<Map<String, Float>>(emptyMap()) }
     LaunchedEffect(state.composeInspection?.frame?.frameId) {
@@ -252,7 +265,7 @@ fun FrameWindowScope.LayoutInspectorMainPage(
     DisposableEffect(manualRefreshSession) {
         onDispose { manualRefreshSession.close() }
     }
-    var availableDevices by remember { mutableStateOf<List<AdbDevice>>(emptyList()) }
+    var availableDevices by remember { mutableStateOf<List<AndroidDeviceInfo>>(emptyList()) }
     var selectedDeviceSerial by remember(correlationHint) { mutableStateOf(correlationHint?.deviceSerial) }
     var deviceListRefreshRequest by remember { mutableStateOf(0) }
     val protocolCodec = remember { ProtocolCodec(supportedMajor = 1) }
@@ -290,13 +303,59 @@ fun FrameWindowScope.LayoutInspectorMainPage(
 
     LaunchedEffect(deviceListRefreshRequest) {
         val devices = withContext(Dispatchers.IO) {
-            runCatching { deviceClient.listAuthorizedDevices() }.getOrDefault(emptyList())
+            runCatching { deviceClient.listAuthorizedDeviceInfos() }.getOrDefault(emptyList())
         }
         availableDevices = devices
         selectedDeviceSerial = sanitizeSelectedDeviceSerial(selectedDeviceSerial, devices)
     }
 
-    LaunchedEffect(autoScanEnabled, captureTargetMode, fullComposeEnabled, composeAuthorization) {
+    val prepareFullComposeForForeground: () -> Unit = prepare@{
+        val serial = selectedDeviceSerial ?: availableDevices.singleOrNull()?.serial ?: return@prepare
+        val key = automaticComposePreflightKey(
+            serial = serial,
+            mode = captureTargetMode,
+            fullComposeEnabled = fullComposeEnabled,
+            hasAuthorization = composeAuthorization != null,
+        ) ?: return@prepare
+        if (automaticComposePreflightAttempt == key || automaticComposePreflightInProgress) return@prepare
+        automaticComposePreflightAttempt = key
+        automaticComposePreflightInProgress = true
+        coroutineScope.launch {
+            val prepared = runCatching {
+                withContext(Dispatchers.IO) {
+                    val packageName = deviceClient.foregroundPackageName(serial)
+                    val bundleRoot = Path.of(
+                        System.getProperty("agentperf.compose.agent.bundle", "compose-agent-bundle"),
+                    ).toAbsolutePath()
+                    composeInjectionManager.preflight(serial, packageName, bundleRoot)
+                }
+            }
+            automaticComposePreflightInProgress = false
+            prepared.fold(
+                onSuccess = { target ->
+                    composeAuthorization = AuthorizedComposeTarget(
+                        target,
+                        ComposeInspectionAuthorization.authorize(target.preflight),
+                    )
+                    fullComposeEnabled = true
+                },
+                onFailure = {
+                    // Complete Compose requires the verified AOSP runtime bundle. Native View and
+                    // compatible Semantics capture must remain available when that bundle is absent.
+                    val recovery = composeFallbackRecovery()
+                    fullComposeEnabled = recovery.fullComposeEnabled
+                    composeAuthorization = null
+                    recompositionActive = recovery.recompositionActive
+                },
+            )
+        }
+    }
+
+    LaunchedEffect(selectedDeviceSerial, availableDevices, captureTargetMode, fullComposeEnabled, composeAuthorization) {
+        prepareFullComposeForForeground()
+    }
+
+    LaunchedEffect(autoScanEnabled, selectedDeviceSerial, captureTargetMode, fullComposeEnabled, composeAuthorization) {
         if (!autoScanEnabled) {
             if (store.state.connectionStatus != ConnectionStatus.ARCHIVE &&
                 store.state.connectionStatus != ConnectionStatus.ERROR
@@ -386,14 +445,21 @@ fun FrameWindowScope.LayoutInspectorMainPage(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Throwable) {
-                store.connectionFailed(error.message ?: error.javaClass.simpleName)
-                state = store.state
                 if (fullComposeEnabled) {
+                    val failedSession = fullSession
+                    fullSession = null
+                    composeSession = null
+                    withContext(NonCancellable + Dispatchers.IO) { failedSession?.close() }
+                    val recovery = composeFallbackRecovery()
                     composeAuthorization = null
-                    fullComposeEnabled = false
-                    recompositionActive = false
-                    autoScanEnabled = false
+                    fullComposeEnabled = recovery.fullComposeEnabled
+                    recompositionActive = recovery.recompositionActive
+                    autoScanEnabled = recovery.autoScanEnabled
+                    store.fallbackToCompatibleInspection()
+                    state = store.state
                 } else {
+                    store.connectionFailed(error.message ?: error.javaClass.simpleName)
+                    state = store.state
                     delay(RECONNECT_INTERVAL_MILLIS.milliseconds)
                 }
             } finally {
@@ -467,15 +533,24 @@ fun FrameWindowScope.LayoutInspectorMainPage(
     var viewDisplayOptions by remember {
         mutableStateOf(viewDisplayOptionsStore.load())
     }
-    val themePreference =
-        commonThemePreference?.let(ThemePreference::fromStorage) ?: ThemePreference.SYSTEM
     val languagePreference =
         commonLanguagePreference?.let(LanguagePreference::fromStorage) ?: LanguagePreference.SYSTEM
     val canvasBorderColorStore = remember { CanvasBorderColorStore.desktop() }
     var canvasBorderColors by remember { mutableStateOf(canvasBorderColorStore.load()) }
     val uiLanguage = languagePreference.resolve(Locale.getDefault())
+    val importComposeCompilerReports: () -> Unit = {
+        chooseDirectory(
+            window,
+            localizedStringResource(Res.string.import_compose_compiler_reports, uiLanguage),
+        )?.toPath()?.let { directory ->
+            coroutineScope.launch {
+                val report = withContext(Dispatchers.IO) { composeCompilerReportParser.parse(directory) }
+                store.loadComposeCompilerReport(report)
+                state = store.state
+            }
+        }
+    }
     var settingsVisible by remember { mutableStateOf(false) }
-    val darkTheme = themePreference.resolveDark(isSystemInDarkTheme())
     LaunchedEffect(settingsRevision) {
         if (settingsRevision > 0L) {
             archiveLimits = archiveLimitsStore.load()
@@ -789,43 +864,7 @@ fun FrameWindowScope.LayoutInspectorMainPage(
         viewDisplayOptions = updatedOptions
         viewDisplayOptionsStore.save(updatedOptions)
     }
-    val toggleFullComposeInspection: () -> Unit = {
-        if (fullComposeEnabled) {
-            fullComposeEnabled = false
-            composeAuthorization = null
-            recompositionActive = false
-        } else if (composeAuthorizationUiState !is ComposeAuthorizationUiState.Preparing) {
-            composeAuthorizationUiState = ComposeAuthorizationUiState.Preparing
-            coroutineScope.launch {
-                val result = try {
-                    val serial = selectedDeviceSerial
-                        ?: availableDevices.singleOrNull()?.serial
-                        ?: error("Select exactly one authorized device")
-                    val prepared = withContext(Dispatchers.IO) {
-                        val packageName = deviceClient.foregroundPackageName(serial)
-                        val bundleRoot = Path.of(
-                            System.getProperty("agentperf.compose.agent.bundle", "compose-agent-bundle"),
-                        ).toAbsolutePath()
-                        composeInjectionManager.preflight(
-                            serial,
-                            packageName,
-                            bundleRoot,
-                            explicitLocalArtifact = System.getProperty("agentperf.compose.inspector.path")
-                                ?.takeIf(String::isNotBlank)?.let(Path::of),
-                        )
-                    }
-                    ComposeAuthorizationUiState.Review(prepared)
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (error: Throwable) {
-                    ComposeAuthorizationUiState.Failure(error.message ?: error.javaClass.simpleName)
-                }
-                if (composeAuthorizationUiState is ComposeAuthorizationUiState.Preparing) {
-                    composeAuthorizationUiState = result
-                }
-            }
-        }
-    }
+
 
     NativeViewerMenuBar(
         model = NativeViewerMenuModel(
@@ -856,712 +895,621 @@ fun FrameWindowScope.LayoutInspectorMainPage(
     }
 
     CompositionLocalProvider(LocalLayoutInspectorLanguage provides uiLanguage) {
-        ViewerTheme(darkTheme = darkTheme) {
-            val colors = LocalViewerColors.current
-            Surface(
-            color = colors.canvasBackground,
-            modifier = Modifier
-                .fillMaxSize()
-                .focusRequester(appFocusRequester)
-                .onPreviewKeyEvent { event ->
-                    val action = if (event.type == KeyEventType.KeyDown) {
-                        ViewerActionMenu.commandAction(
-                            key = event.key,
-                            commandPressed = event.isMetaPressed || event.isCtrlPressed,
-                        )
-                    } else {
-                        null
-                    }
-                    action?.let {
-                        performAction(it)
-                        true
-                    } ?: false
-                }
-                .focusable(),
-        ) {
-            Column {
-                HeaderToolbar(
-                    language = uiLanguage,
-                    onNavigateHome = onNavigateHome,
-                    onNavigateSettings = { performAction(ViewerAction.OPEN_SETTINGS ) }
-                ) {
-                    val colors = LocalViewerColors.current
-                    val language = LocalLayoutInspectorLanguage.current
-                    val model = InspectorPresenter.present(state, language)
-                    val (packageName, separator, connectionLabel) = headerTextSegments(model, language)
-
-
-                    Text(packageName, color = colors.primaryText, fontFamily = FontFamily.Monospace)
-                    HeaderSpacer()
-                    DeviceSelector(
-                        devices = deviceChoices(availableDevices),
-                        selectedSerial = selectedDeviceSerial,
-                        onSelectDevice = { serial ->
-                            manualRefreshSession.invalidate()
-                            selectedDeviceSerial = serial
-                            deviceListRefreshRequest += 1
-                        },
+        val colors = LocalViewerColors.current
+        val model = InspectorPresenter.present(state, uiLanguage)
+        Surface(
+        color = colors.canvasBackground,
+        modifier = Modifier
+            .fillMaxSize()
+            .focusRequester(appFocusRequester)
+            .onPreviewKeyEvent { event ->
+                val action = if (event.type == KeyEventType.KeyDown) {
+                    ViewerActionMenu.commandAction(
+                        key = event.key,
+                        commandPressed = event.isMetaPressed || event.isCtrlPressed,
                     )
+                } else {
+                    null
+                }
+                action?.let {
+                    performAction(it)
+                    true
+                } ?: false
+            }
+            .focusable(),
+        ) {
+        Column {
+            HeaderToolbar(
+                language = uiLanguage,
+                onNavigateHome = onNavigateHome,
+                onNavigateSettings = { performAction(ViewerAction.OPEN_SETTINGS ) }
+            ) {
+                val colors = LocalViewerColors.current
+                val language = LocalLayoutInspectorLanguage.current
+                DeviceSelector(
+                    devices = deviceChoices(availableDevices),
+                    selectedSerial = selectedDeviceSerial,
+                    onSelectDevice = { serial ->
+                        manualRefreshSession.invalidate()
+                        composeAuthorization = null
+                        fullComposeEnabled = false
+                        recompositionActive = false
+                        automaticComposePreflightAttempt = null
+                        selectedDeviceSerial = serial
+                        deviceListRefreshRequest += 1
+                    },
+                )
+                HeaderSpacer()
+                CaptureTargetSelector(
+                    selectedMode = captureTargetMode,
+                    onSelectMode = { mode ->
+                        if (captureTargetMode != mode) {
+                            manualRefreshSession.invalidate()
+                            composeAuthorization = null
+                            fullComposeEnabled = false
+                            recompositionActive = false
+                            automaticComposePreflightAttempt = null
+                            captureTargetMode = mode
+                        }
+                    },
+                )
+                if (model.windows.size > 1) {
                     HeaderSpacer()
-                    CaptureTargetSelector(
-                        selectedMode = captureTargetMode,
-                        onSelectMode = { mode ->
-                            if (captureTargetMode != mode) {
-                                manualRefreshSession.invalidate()
-                                captureTargetMode = mode
+                    WindowSelector(
+                        windows = model.windows,
+                        selectedWindowId = model.selectedWindowId,
+                        onSelectWindow = { windowId ->
+                            if (store.selectWindow(windowId)) {
+                                hierarchyTreeState = HierarchyTreeState()
+                                hiddenLayerState = HiddenLayerState()
+                                state = store.state
+                                aiAnalysisUiState = AiAnalysisUiState.Idle
                             }
                         },
                     )
-                    if (FULL_COMPOSE_INSPECTION_VISIBLE) {
-                        HeaderSpacer()
-                        TextButton(onClick = toggleFullComposeInspection) {
-                            Text(
-                                localizedStringResource(
-                                    if (fullComposeEnabled) Res.string.full_compose_on else Res.string.full_compose_off,
-                                    language,
-                                ),
-                                fontSize = 11.sp,
+                }
+                HeaderSpacer()
+                HeaderDivider()
+                HeaderSpacer()
+                val connectionColor = when (model.connectionTone) {
+                    ConnectionTone.NEUTRAL -> colors.warning
+                    ConnectionTone.SUCCESS -> colors.success
+                    ConnectionTone.ERROR -> colors.error
+                }
+                StatusDot(connectionColor)
+                HeaderSpacer()
+                Text(model.connectionLabel, color = connectionColor, fontSize = ViewerTypography.bodyCompact.fontSize)
+                Spacer(Modifier.weight(1f))
+                val scanControlState = ScanControlState(
+                    autoScanEnabled = autoScanEnabled,
+                    manualRefreshInProgress = manualRefreshInProgress,
+                )
+                ScanModeButtons(
+                    scanControlState = scanControlState,
+                    controlsEnabled = archiveUiState !is CaptureArchiveUiState.Working,
+                    manualRefreshAvailable = !fullComposeEnabled,
+                    onAutoScanSelected = {
+                        if (!autoScanEnabled && archiveUiState !is CaptureArchiveUiState.Working) {
+                            performAction(ViewerAction.TOGGLE_AUTO_SCAN)
+                        }
+                    },
+                    onManualRefreshSelected = {
+                        if (!fullComposeEnabled &&
+                            !manualRefreshInProgress &&
+                            archiveUiState !is CaptureArchiveUiState.Working
+                        ) {
+                            if (autoScanEnabled) performAction(ViewerAction.TOGGLE_AUTO_SCAN)
+                            manualRefreshRequest += 1
+                        }
+                    },
+                )
+                HeaderSpacer()
+                HeaderDivider()
+                HeaderSpacer()
+                PanelToggleButton(
+                    position = PanelPosition.LEFT,
+                    visible = panelVisibility.showHierarchy,
+                    contentDescription = localizedStringResource(Res.string.toggle_hierarchy, language),
+                    onClick = { performAction(ViewerAction.TOGGLE_HIERARCHY) },
+                )
+                HeaderSpacer()
+                PanelToggleButton(
+                    position = PanelPosition.BOTTOM,
+                    visible = panelVisibility.showFindings,
+                    contentDescription = localizedStringResource(Res.string.toggle_findings, language),
+                    onClick = { performAction(ViewerAction.TOGGLE_FINDINGS) },
+                )
+                HeaderSpacer()
+                PanelToggleButton(
+                    position = PanelPosition.RIGHT,
+                    visible = panelVisibility.showDetails,
+                    contentDescription = localizedStringResource(Res.string.toggle_details, language),
+                    onClick = { performAction(ViewerAction.TOGGLE_DETAILS) },
+                )
+            }
+            correlationHint?.let { hint ->
+                CorrelationBanner(
+                    hint = hint,
+                    capturedPackageName = state.snapshot?.packageName,
+                )
+            }
+            HorizontalDivider(color = colors.border)
+            BoxWithConstraints(modifier = Modifier.weight(1f)) {
+                val availableHeightDp = maxHeight.value
+                val normalizedFindingsHeight = FindingsLayout.fit(findingsHeightDp, availableHeightDp)
+                SideEffect {
+                    if (findingsHeightDp != normalizedFindingsHeight) {
+                        findingsHeightDp = normalizedFindingsHeight
+                    }
+                }
+                Column(modifier = Modifier.fillMaxSize()) {
+                    BoxWithConstraints(modifier = Modifier.weight(1f)) {
+                        val availableWidthDp = maxWidth.value
+                        val normalizedPaneWidths = PaneLayout.fit(paneWidths, availableWidthDp)
+                        SideEffect {
+                            if (paneWidths != normalizedPaneWidths) {
+                                paneWidths = normalizedPaneWidths
+                            }
+                        }
+                        SideEffect {
+                            val rows = InspectorPresenter.present(state, uiLanguage).rows
+                            val sanitizedHiddenLayerState = hiddenLayerState.sanitize(rows)
+                            if (hiddenLayerState != sanitizedHiddenLayerState) {
+                                hiddenLayerState = sanitizedHiddenLayerState
+                            }
+                            val sanitizedIsolation = hierarchyIsolationState.sanitize(rows)
+                            if (hierarchyIsolationState != sanitizedIsolation) {
+                                hierarchyIsolationState = sanitizedIsolation
+                            }
+                        }
+                        Row(modifier = Modifier.fillMaxSize()) {
+                            if (panelVisibility.showHierarchy) {
+                                HierarchyPane(
+                                    state = state,
+                                    treeState = hierarchyTreeState,
+                                    viewDisplayOptions = viewDisplayOptions,
+                                    hiddenLayerState = hiddenLayerState,
+                                    isolationState = hierarchyIsolationState,
+                                    searchState = searchState,
+                                    onTreeStateChange = { hierarchyTreeState = it },
+                                    onSelect = selectNode,
+                                    onToggleHiddenLayer = toggleHiddenLayer,
+                                    onIsolate = { nodeId ->
+                                        hierarchyIsolationState = hierarchyIsolationState.isolate(
+                                            nodeId,
+                                            InspectorPresenter.present(state, uiLanguage).rows,
+                                        )
+                                    },
+                                    onIsolateParent = {
+                                        hierarchyIsolationState = hierarchyIsolationState.parent(
+                                            InspectorPresenter.present(state, uiLanguage).rows,
+                                        )
+                                    },
+                                    onClearIsolation = { hierarchyIsolationState = hierarchyIsolationState.clear() },
+                                    onSearchStateChange = { searchState = it },
+                                    onAction = performAction,
+                                    modifier =
+                                        Modifier
+                                            .width(normalizedPaneWidths.hierarchy.dp)
+                                            .fillMaxHeight(),
+                                )
+                                ResizableSeparator { deltaDp ->
+                                    paneWidths = PaneLayout.dragHierarchy(
+                                        widths = PaneLayout.fit(paneWidths, availableWidthDp),
+                                        deltaDp = deltaDp,
+                                        availableWidthDp = availableWidthDp,
+                                    )
+                                }
+                            }
+                            PreviewPane(
+                                state = state,
+                                recompositionHeat = recompositionHeat,
+                                isolationRootNodeId = hierarchyIsolationState.rootNodeId,
+                                showVisibleViewBounds = viewDisplayOptions.showVisibleViewBounds,
+                                hitTestOrder = viewDisplayOptions.canvasHitTestOrder,
+                                hiddenLayerState = hiddenLayerState,
+                                borderColors = canvasBorderColors,
+                                onToggleHitTestOrder = toggleCanvasHitTestOrder,
+                                onClearHiddenLayers = clearHiddenLayers,
+                                onHoverNode = { nodeId ->
+                                    store.setHoveredNode(nodeId)
+                                    state = store.state
+                                },
+                                onSelectNode = { nodeId ->
+                                    hierarchyTreeState = hierarchyTreeState.reveal(
+                                        nodeId,
+                                        InspectorPresenter.present(state, uiLanguage).rows,
+                                    )
+                                    selectNode(nodeId)
+                                },
+                                modifier = Modifier.weight(1f).fillMaxHeight(),
                             )
+                            if (panelVisibility.showDetails) {
+                                ResizableSeparator { deltaDp ->
+                                    paneWidths = PaneLayout.dragProperties(
+                                        widths = PaneLayout.fit(paneWidths, availableWidthDp),
+                                        deltaDp = deltaDp,
+                                        availableWidthDp = availableWidthDp,
+                                    )
+                                }
+                                DetailsPane(
+                                    state = state,
+                                    modifier = Modifier
+                                        .width(normalizedPaneWidths.properties.dp)
+                                        .fillMaxHeight(),
+                                    onOpenMemoryProfiler = onOpenMemoryProfiler,
+                                    onOpenComposeSource = onOpenComposeSource,
+                                    onLoadComposeParameter = { reference ->
+                                        val document = state.composeInspection ?: return@DetailsPane
+                                        val current = document.frame.details[reference.composableId]
+                                            ?.findValue(reference)
+                                        val maxElements = ((current?.elements?.size ?: 0) * 2)
+                                            .coerceAtLeast(50).coerceAtMost(10_000)
+                                        coroutineScope.launch {
+                                            val expanded = withContext(Dispatchers.IO) {
+                                                composeSession?.loadParameterDetails(reference, 0, maxElements)
+                                            } ?: return@launch
+                                            if (store.loadComposeParameterDetails(
+                                                    document.frame.frameId,
+                                                    reference,
+                                                    expanded,
+                                                )
+                                            ) state = store.state
+                                        }
+                                    },
+                                )
+                            }
                         }
                     }
-                    if (model.windows.size > 1) {
-                        HeaderSpacer()
-                        WindowSelector(
-                            windows = model.windows,
-                            selectedWindowId = model.selectedWindowId,
-                            onSelectWindow = { windowId ->
-                                if (store.selectWindow(windowId)) {
+                    if (panelVisibility.showFindings) {
+                        FindingsResizeSeparator { deltaDp ->
+                            findingsHeightDp = FindingsLayout.drag(
+                                heightDp = FindingsLayout.fit(findingsHeightDp, availableHeightDp),
+                                deltaDp = deltaDp,
+                                availableHeightDp = availableHeightDp,
+                            )
+                        }
+                        FindingsPane(
+                            state = state,
+                            viewDisplayOptions = viewDisplayOptions,
+                            onSelectNode = selectNode,
+                            aiAnalysisUiState = aiAnalysisUiState,
+                            onRunAiAnalysis = runAiAnalysis,
+                            onCancelAiAnalysis = cancelAiAnalysis,
+                            onOpenSourceCandidate = onOpenSourceCandidate,
+                            onCanOpenSourceCandidate = onCanOpenSourceCandidate,
+                            onCanOpenSourceCandidateDirectly = onCanOpenSourceCandidateDirectly,
+                            onSelectTimelineFrame = { index ->
+                                if (archiveUiState !is CaptureArchiveUiState.Working &&
+                                    store.selectTimelineFrame(index)
+                                ) {
                                     hierarchyTreeState = HierarchyTreeState()
                                     hiddenLayerState = HiddenLayerState()
                                     state = store.state
                                     aiAnalysisUiState = AiAnalysisUiState.Idle
                                 }
                             },
-                        )
-                    }
-                    HeaderSpacer()
-                    Text(separator, color = colors.mutedText)
-                    HeaderSpacer()
-                    val connectionColor = when (model.connectionTone) {
-                        ConnectionTone.NEUTRAL -> colors.warning
-                        ConnectionTone.SUCCESS -> colors.success
-                        ConnectionTone.ERROR -> colors.error
-                    }
-                    StatusDot(connectionColor)
-                    HeaderSpacer()
-                    Text(connectionLabel, color = connectionColor, fontSize = 12.sp)
-                    Spacer(Modifier.weight(1f))
-                    val scanControlState = ScanControlState(
-                        autoScanEnabled = autoScanEnabled,
-                        manualRefreshInProgress = manualRefreshInProgress,
-                    )
-                    if (scanControlState.showManualRefresh && !fullComposeEnabled) {
-                        ManualRefreshButton(
-                            enabled = scanControlState.manualRefreshEnabled,
-                            onClick = {
-                                if (!autoScanEnabled &&
-                                    !manualRefreshInProgress &&
-                                    archiveUiState !is CaptureArchiveUiState.Working
+                            onCloseTimelineFrame = { index ->
+                                if (archiveUiState !is CaptureArchiveUiState.Working &&
+                                    store.removeTimelineFrame(index)
                                 ) {
-                                    manualRefreshRequest += 1
+                                    hierarchyTreeState = HierarchyTreeState()
+                                    hiddenLayerState = HiddenLayerState()
+                                    state = store.state
+                                    aiAnalysisUiState = AiAnalysisUiState.Idle
                                 }
                             },
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(normalizedFindingsHeight.dp),
                         )
-                        HeaderSpacer()
-                    }
-                    AutoScanSwitch(autoScanEnabled) {
-                        performAction(ViewerAction.TOGGLE_AUTO_SCAN)
-                    }
-                    if (fullComposeEnabled) {
-                        HeaderSpacer()
-                        Row(
-                            modifier = Modifier.clickable { hideSystemComposables = !hideSystemComposables },
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Checkbox(
-                                checked = !hideSystemComposables,
-                                onCheckedChange = { hideSystemComposables = !it },
-                            )
-                            Text(
-                                localizedStringResource(Res.string.system_composables, language),
-                                fontSize = 10.sp,
-                            )
-                        }
-                        TextButton(
-                            onClick = {
-                                coroutineScope.launch {
-                                    withContext(Dispatchers.IO) {
-                                        if (recompositionActive) {
-                                            composeSession?.stopRecompositionObservation()
-                                        } else {
-                                            composeSession?.startRecompositionObservation()
-                                        }
-                                    }
-                                    recompositionActive = !recompositionActive
-                                }
-                            },
-                            enabled = composeSession != null,
-                        ) {
-                            Text(
-                                localizedStringResource(
-                                    if (recompositionActive) Res.string.stop_recomposition else Res.string.start_recomposition,
-                                    language,
-                                ),
-                                fontSize = 10.sp,
-                            )
-                        }
-                        TextButton(
-                            onClick = {
-                                coroutineScope.launch {
-                                    withContext(Dispatchers.IO) { composeSession?.resetRecompositionCounts() }
-                                    recompositionActive = true
-                                }
-                            },
-                            enabled = composeSession != null,
-                        ) {
-                            Text(localizedStringResource(Res.string.reset_recomposition, language), fontSize = 10.sp)
-                        }
-                    }
-                    HeaderSpacer()
-                    HeaderDivider()
-                    HeaderSpacer()
-                    Text(model.metricsText, color = colors.subtleText, fontSize = 12.sp)
-                    model.timelineText?.let { timelineText ->
-                        Spacer(Modifier.width(10.dp))
-                        Text(timelineText, color = colors.subtleText, fontSize = 12.sp)
-                    }
-                    HeaderSpacer()
-                    HeaderDivider()
-                    HeaderSpacer()
-                    PanelToggleButton(PanelPosition.LEFT, panelVisibility.showHierarchy) {
-                        performAction(ViewerAction.TOGGLE_HIERARCHY)
-                    }
-                    HeaderSpacer()
-                    PanelToggleButton(PanelPosition.BOTTOM, panelVisibility.showFindings) {
-                        performAction(ViewerAction.TOGGLE_FINDINGS)
-                    }
-                    HeaderSpacer()
-                    PanelToggleButton(PanelPosition.RIGHT, panelVisibility.showDetails) {
-                        performAction(ViewerAction.TOGGLE_DETAILS)
-                    }
-
-                }
-                correlationHint?.let { hint ->
-                    CorrelationBanner(
-                        hint = hint,
-                        capturedPackageName = state.snapshot?.packageName,
-                    )
-                }
-                HorizontalDivider(color = colors.border)
-                BoxWithConstraints(modifier = Modifier.weight(1f)) {
-                    val availableHeightDp = maxHeight.value
-                    val normalizedFindingsHeight = FindingsLayout.fit(findingsHeightDp, availableHeightDp)
-                    SideEffect {
-                        if (findingsHeightDp != normalizedFindingsHeight) {
-                            findingsHeightDp = normalizedFindingsHeight
-                        }
-                    }
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        BoxWithConstraints(modifier = Modifier.weight(1f)) {
-                            val availableWidthDp = maxWidth.value
-                            val normalizedPaneWidths = PaneLayout.fit(paneWidths, availableWidthDp)
-                            SideEffect {
-                                if (paneWidths != normalizedPaneWidths) {
-                                    paneWidths = normalizedPaneWidths
-                                }
-                            }
-                            SideEffect {
-                                val rows = InspectorPresenter.present(state, uiLanguage).rows
-                                val sanitizedHiddenLayerState = hiddenLayerState.sanitize(rows)
-                                if (hiddenLayerState != sanitizedHiddenLayerState) {
-                                    hiddenLayerState = sanitizedHiddenLayerState
-                                }
-                                val sanitizedIsolation = hierarchyIsolationState.sanitize(rows)
-                                if (hierarchyIsolationState != sanitizedIsolation) {
-                                    hierarchyIsolationState = sanitizedIsolation
-                                }
-                            }
-                            Row(modifier = Modifier.fillMaxSize()) {
-                                if (panelVisibility.showHierarchy) {
-                                    HierarchyPane(
-                                        state = state,
-                                        treeState = hierarchyTreeState,
-                                        viewDisplayOptions = viewDisplayOptions,
-                                        hiddenLayerState = hiddenLayerState,
-                                        isolationState = hierarchyIsolationState,
-                                        searchState = searchState,
-                                        onTreeStateChange = { hierarchyTreeState = it },
-                                        onSelect = selectNode,
-                                        onToggleHiddenLayer = toggleHiddenLayer,
-                                        onIsolate = { nodeId ->
-                                            hierarchyIsolationState = hierarchyIsolationState.isolate(
-                                                nodeId,
-                                                InspectorPresenter.present(state, uiLanguage).rows,
-                                            )
-                                        },
-                                        onIsolateParent = {
-                                            hierarchyIsolationState = hierarchyIsolationState.parent(
-                                                InspectorPresenter.present(state, uiLanguage).rows,
-                                            )
-                                        },
-                                        onClearIsolation = { hierarchyIsolationState = hierarchyIsolationState.clear() },
-                                        onSearchStateChange = { searchState = it },
-                                        onAction = performAction,
-                                        modifier =
-                                            Modifier
-                                                .width(normalizedPaneWidths.hierarchy.dp)
-                                                .fillMaxHeight(),
-                                    )
-                                    ResizableSeparator { deltaDp ->
-                                        paneWidths = PaneLayout.dragHierarchy(
-                                            widths = PaneLayout.fit(paneWidths, availableWidthDp),
-                                            deltaDp = deltaDp,
-                                            availableWidthDp = availableWidthDp,
-                                        )
-                                    }
-                                }
-                                PreviewPane(
-                                    state = state,
-                                    recompositionHeat = recompositionHeat,
-                                    isolationRootNodeId = hierarchyIsolationState.rootNodeId,
-                                    showVisibleViewBounds = viewDisplayOptions.showVisibleViewBounds,
-                                    hitTestOrder = viewDisplayOptions.canvasHitTestOrder,
-                                    hiddenLayerState = hiddenLayerState,
-                                    borderColors = canvasBorderColors,
-                                    onToggleHitTestOrder = toggleCanvasHitTestOrder,
-                                    onClearHiddenLayers = clearHiddenLayers,
-                                    onHoverNode = { nodeId ->
-                                        store.setHoveredNode(nodeId)
-                                        state = store.state
-                                    },
-                                    onSelectNode = { nodeId ->
-                                        hierarchyTreeState = hierarchyTreeState.reveal(
-                                            nodeId,
-                                            InspectorPresenter.present(state, uiLanguage).rows,
-                                        )
-                                        selectNode(nodeId)
-                                    },
-                                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                                )
-                                if (panelVisibility.showDetails) {
-                                    ResizableSeparator { deltaDp ->
-                                        paneWidths = PaneLayout.dragProperties(
-                                            widths = PaneLayout.fit(paneWidths, availableWidthDp),
-                                            deltaDp = deltaDp,
-                                            availableWidthDp = availableWidthDp,
-                                        )
-                                    }
-                                    DetailsPane(
-                                        state = state,
-                                        modifier = Modifier
-                                            .width(normalizedPaneWidths.properties.dp)
-                                            .fillMaxHeight(),
-                                        onOpenMemoryProfiler = onOpenMemoryProfiler,
-                                        onOpenComposeSource = onOpenComposeSource,
-                                        onLoadComposeParameter = { reference ->
-                                            val document = state.composeInspection ?: return@DetailsPane
-                                            val current = document.frame.details[reference.composableId]
-                                                ?.findValue(reference)
-                                            val maxElements = ((current?.elements?.size ?: 0) * 2)
-                                                .coerceAtLeast(50).coerceAtMost(10_000)
-                                            coroutineScope.launch {
-                                                val expanded = withContext(Dispatchers.IO) {
-                                                    composeSession?.loadParameterDetails(reference, 0, maxElements)
-                                                } ?: return@launch
-                                                if (store.loadComposeParameterDetails(
-                                                        document.frame.frameId,
-                                                        reference,
-                                                        expanded,
-                                                    )
-                                                ) state = store.state
-                                            }
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                        if (panelVisibility.showFindings) {
-                            FindingsResizeSeparator { deltaDp ->
-                                findingsHeightDp = FindingsLayout.drag(
-                                    heightDp = FindingsLayout.fit(findingsHeightDp, availableHeightDp),
-                                    deltaDp = deltaDp,
-                                    availableHeightDp = availableHeightDp,
-                                )
-                            }
-                            FindingsPane(
-                                state = state,
-                                viewDisplayOptions = viewDisplayOptions,
-                                onSelectNode = selectNode,
-                                aiAnalysisUiState = aiAnalysisUiState,
-                                onRunAiAnalysis = runAiAnalysis,
-                                onCancelAiAnalysis = cancelAiAnalysis,
-                                onOpenSourceCandidate = onOpenSourceCandidate,
-                                onCanOpenSourceCandidate = onCanOpenSourceCandidate,
-                                onCanOpenSourceCandidateDirectly = onCanOpenSourceCandidateDirectly,
-                                onSelectTimelineFrame = { index ->
-                                    if (archiveUiState !is CaptureArchiveUiState.Working &&
-                                        store.selectTimelineFrame(index)
-                                    ) {
-                                        hierarchyTreeState = HierarchyTreeState()
-                                        hiddenLayerState = HiddenLayerState()
-                                        state = store.state
-                                        aiAnalysisUiState = AiAnalysisUiState.Idle
-                                    }
-                                },
-                                onCloseTimelineFrame = { index ->
-                                    if (archiveUiState !is CaptureArchiveUiState.Working &&
-                                        store.removeTimelineFrame(index)
-                                    ) {
-                                        hierarchyTreeState = HierarchyTreeState()
-                                        hiddenLayerState = HiddenLayerState()
-                                        state = store.state
-                                        aiAnalysisUiState = AiAnalysisUiState.Idle
-                                    }
-                                },
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .height(normalizedFindingsHeight.dp),
-                            )
-                        }
                     }
                 }
             }
+            LayoutInspectorStatusBar(
+                model = model,
+                fullComposeEnabled = fullComposeEnabled,
+                hideSystemComposables = hideSystemComposables,
+                recompositionActive = recompositionActive,
+                recompositionControlsEnabled = composeSession != null,
+                composeCompilerReportLoaded = state.composeCompilerReport != null,
+                onImportComposeCompilerReports = importComposeCompilerReports,
+                onToggleSystemComposables = { hideSystemComposables = !hideSystemComposables },
+                onToggleRecomposition = {
+                    coroutineScope.launch {
+                        withContext(Dispatchers.IO) {
+                            if (recompositionActive) {
+                                composeSession?.stopRecompositionObservation()
+                            } else {
+                                composeSession?.startRecompositionObservation()
+                            }
+                        }
+                        recompositionActive = !recompositionActive
+                    }
+                },
+                onResetRecomposition = {
+                    coroutineScope.launch {
+                        withContext(Dispatchers.IO) { composeSession?.resetRecompositionCounts() }
+                        recompositionActive = true
+                    }
+                },
+            )
         }
-            if (settingsVisible) {
-                SettingsDialog(
-                    viewDisplayOptions = viewDisplayOptions,
-                    onViewDisplayOptionsChanged = { updated ->
-                        viewDisplayOptions = updated
-                        viewDisplayOptionsStore.save(updated)
-                    },
-                    archiveLimits = archiveLimits,
-                    onArchiveLimitsChanged = { updated ->
-                        archiveLimits = updated
-                        archiveLimitsStore.save(updated)
-                    },
-                    canvasBorderColors = canvasBorderColors,
-                    onCanvasBorderColorsChanged = { updated ->
-                        canvasBorderColors = updated
-                        canvasBorderColorStore.save(updated)
-                    },
+        }
+        if (settingsVisible) {
+            SettingsDialog(
+                viewDisplayOptions = viewDisplayOptions,
+                onViewDisplayOptionsChanged = { updated ->
+                    viewDisplayOptions = updated
+                    viewDisplayOptionsStore.save(updated)
+                },
+                archiveLimits = archiveLimits,
+                onArchiveLimitsChanged = { updated ->
+                    archiveLimits = updated
+                    archiveLimitsStore.save(updated)
+                },
+                canvasBorderColors = canvasBorderColors,
+                onCanvasBorderColorsChanged = { updated ->
+                    canvasBorderColors = updated
+                    canvasBorderColorStore.save(updated)
+                },
+                onDismiss = {
+                    settingsVisible = false
+                },
+            )
+        }
+        when (val operationState = archiveUiState) {
+            CaptureArchiveUiState.Idle,
+            is CaptureArchiveUiState.Working,
+            -> Unit
+            is CaptureArchiveUiState.Success -> {
+                val path = operationState.path.toAbsolutePath().toString()
+                val title = when (operationState.operation) {
+                    CaptureArchiveOperation.IMPORT ->
+                        localizedStringResource(Res.string.import_archive_succeeded_title, uiLanguage)
+                    CaptureArchiveOperation.IMPORT_SCREENSHOT ->
+                        localizedStringResource(Res.string.import_screenshot_succeeded_title, uiLanguage)
+                    CaptureArchiveOperation.EXPORT ->
+                        localizedStringResource(Res.string.export_archive_succeeded_title, uiLanguage)
+                }
+                val message = when (operationState.operation) {
+                    CaptureArchiveOperation.IMPORT ->
+                        localizedStringResource(Res.string.archive_import_succeeded, uiLanguage, path)
+                    CaptureArchiveOperation.IMPORT_SCREENSHOT ->
+                        localizedStringResource(Res.string.screenshot_import_succeeded, uiLanguage, path)
+                    CaptureArchiveOperation.EXPORT ->
+                        localizedStringResource(
+                            if (operationState.rawArtifactsIncluded) {
+                                Res.string.archive_export_succeeded
+                            } else {
+                                Res.string.archive_export_succeeded_no_attachments
+                            },
+                            uiLanguage,
+                            path,
+                        )
+                }
+                ExportResultDialog(
+                    title = title,
+                    message = message,
+                    dismissLabel = localizedStringResource(Res.string.dismiss, uiLanguage),
                     onDismiss = {
-                        settingsVisible = false
+                        archiveUiState = CaptureArchiveUiState.Idle
                     },
                 )
             }
-            when (val operationState = archiveUiState) {
-                CaptureArchiveUiState.Idle,
-                is CaptureArchiveUiState.Working,
-                -> Unit
-                is CaptureArchiveUiState.Success -> {
-                    val path = operationState.path.toAbsolutePath().toString()
-                    val title = when (operationState.operation) {
-                        CaptureArchiveOperation.IMPORT ->
-                            localizedStringResource(Res.string.import_archive_succeeded_title, uiLanguage)
-                        CaptureArchiveOperation.IMPORT_SCREENSHOT ->
-                            localizedStringResource(Res.string.import_screenshot_succeeded_title, uiLanguage)
-                        CaptureArchiveOperation.EXPORT ->
-                            localizedStringResource(Res.string.export_archive_succeeded_title, uiLanguage)
-                    }
-                    val message = when (operationState.operation) {
-                        CaptureArchiveOperation.IMPORT ->
-                            localizedStringResource(Res.string.archive_import_succeeded, uiLanguage, path)
-                        CaptureArchiveOperation.IMPORT_SCREENSHOT ->
-                            localizedStringResource(Res.string.screenshot_import_succeeded, uiLanguage, path)
-                        CaptureArchiveOperation.EXPORT ->
+            is CaptureArchiveUiState.Failure -> {
+                val title = when (operationState.operation) {
+                    CaptureArchiveOperation.IMPORT -> localizedStringResource(Res.string.import_archive_failed_title, uiLanguage)
+                    CaptureArchiveOperation.IMPORT_SCREENSHOT -> localizedStringResource(Res.string.import_screenshot_failed_title, uiLanguage)
+                    CaptureArchiveOperation.EXPORT -> localizedStringResource(Res.string.export_archive_failed_title, uiLanguage)
+                }
+                val message = when (operationState.operation) {
+                    CaptureArchiveOperation.IMPORT ->
+                        localizedStringResource(Res.string.archive_import_failed, uiLanguage, operationState.message)
+                    CaptureArchiveOperation.IMPORT_SCREENSHOT ->
+                        localizedStringResource(Res.string.screenshot_import_failed, uiLanguage, operationState.message)
+                    CaptureArchiveOperation.EXPORT ->
+                        localizedStringResource(Res.string.archive_export_failed, uiLanguage, operationState.message)
+                }
+                ExportResultDialog(
+                    title = title,
+                    message = message,
+                    dismissLabel = localizedStringResource(Res.string.dismiss, uiLanguage),
+                    onDismiss = {
+                        archiveUiState = CaptureArchiveUiState.Idle
+                    },
+                )
+            }
+        }
+        pendingAiAnalysis?.let { prepared ->
+            val input = prepared.input
+            val manifest = prepared.manifest
+            AlertDialog(
+                onDismissRequest = { pendingAiAnalysis = null },
+                title = { Text(localizedStringResource(Res.string.ai_analysis_dialog_title, uiLanguage)) },
+                text = {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                        val analysisScope =
                             localizedStringResource(
-                                if (operationState.rawArtifactsIncluded) {
-                                    Res.string.archive_export_succeeded
+                                if (input.selectedNodeId == null) {
+                                    Res.string.ai_analysis_scope_report_summary
                                 } else {
-                                    Res.string.archive_export_succeeded_no_attachments
+                                    Res.string.ai_analysis_scope_selected_node
                                 },
                                 uiLanguage,
-                                path,
                             )
-                    }
-                    ExportResultDialog(
-                        title = title,
-                        message = message,
-                        dismissLabel = localizedStringResource(Res.string.dismiss, uiLanguage),
-                        onDismiss = {
-                            archiveUiState = CaptureArchiveUiState.Idle
-                        },
-                    )
-                }
-                is CaptureArchiveUiState.Failure -> {
-                    val title = when (operationState.operation) {
-                        CaptureArchiveOperation.IMPORT -> localizedStringResource(Res.string.import_archive_failed_title, uiLanguage)
-                        CaptureArchiveOperation.IMPORT_SCREENSHOT -> localizedStringResource(Res.string.import_screenshot_failed_title, uiLanguage)
-                        CaptureArchiveOperation.EXPORT -> localizedStringResource(Res.string.export_archive_failed_title, uiLanguage)
-                    }
-                    val message = when (operationState.operation) {
-                        CaptureArchiveOperation.IMPORT ->
-                            localizedStringResource(Res.string.archive_import_failed, uiLanguage, operationState.message)
-                        CaptureArchiveOperation.IMPORT_SCREENSHOT ->
-                            localizedStringResource(Res.string.screenshot_import_failed, uiLanguage, operationState.message)
-                        CaptureArchiveOperation.EXPORT ->
-                            localizedStringResource(Res.string.archive_export_failed, uiLanguage, operationState.message)
-                    }
-                    ExportResultDialog(
-                        title = title,
-                        message = message,
-                        dismissLabel = localizedStringResource(Res.string.dismiss, uiLanguage),
-                        onDismiss = {
-                            archiveUiState = CaptureArchiveUiState.Idle
-                        },
-                    )
-                }
-            }
-            pendingAiAnalysis?.let { prepared ->
-                val input = prepared.input
-                val manifest = prepared.manifest
-                AlertDialog(
-                    onDismissRequest = { pendingAiAnalysis = null },
-                    title = { Text(localizedStringResource(Res.string.ai_analysis_dialog_title, uiLanguage)) },
-                    text = {
-                        Column(Modifier.verticalScroll(rememberScrollState())) {
-                            val analysisScope =
-                                localizedStringResource(
-                                    if (input.selectedNodeId == null) {
-                                        Res.string.ai_analysis_scope_report_summary
-                                    } else {
-                                        Res.string.ai_analysis_scope_selected_node
-                                    },
-                                    uiLanguage,
-                                )
+                        Text(
+                            localizedStringResource(
+                                Res.string.ai_analysis_dialog_details,
+                                uiLanguage,
+                                analysisScope,
+                                manifest.evidenceCount,
+                                manifest.sources.size,
+                                manifest.payloadBytes,
+                            ),
+                        )
+                        Text(
+                            localizedStringResource(
+                                Res.string.ai_analysis_model_and_bindings,
+                                uiLanguage,
+                                manifest.model,
+                                manifest.sourceSnapshotIds.size,
+                                manifest.buildEvidenceBundleIds.size,
+                            ),
+                        )
+                        manifest.sourceSnapshotIds.forEach { snapshotId ->
                             Text(
                                 localizedStringResource(
-                                    Res.string.ai_analysis_dialog_details,
+                                    Res.string.ai_analysis_source_snapshot_item,
                                     uiLanguage,
-                                    analysisScope,
-                                    manifest.evidenceCount,
-                                    manifest.sources.size,
-                                    manifest.payloadBytes,
+                                    snapshotId,
                                 ),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        manifest.evidence.forEach { evidence ->
+                            Text(
+                                localizedStringResource(
+                                    Res.string.ai_analysis_evidence_item,
+                                    uiLanguage,
+                                    evidence.id,
+                                    evidence.kind,
+                                    evidence.summary,
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        manifest.sources.forEach { source ->
+                            Text(
+                                localizedStringResource(
+                                    Res.string.ai_analysis_source_item,
+                                    uiLanguage,
+                                    source.relativePath,
+                                    source.startLine ?: 1,
+                                    source.endLine ?: source.startLine ?: 1,
+                                    source.lineCount,
+                                    source.byteCount,
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
                             )
                             Text(
                                 localizedStringResource(
-                                    Res.string.ai_analysis_model_and_bindings,
+                                    Res.string.ai_analysis_source_resolution,
                                     uiLanguage,
-                                    manifest.model,
-                                    manifest.sourceSnapshotIds.size,
-                                    manifest.buildEvidenceBundleIds.size,
+                                    source.resolutionConfidence ?: "UNKNOWN",
+                                    source.reasons.joinToString(" · "),
+                                    source.indexComplete?.toString() ?: "unknown",
                                 ),
+                                style = MaterialTheme.typography.bodySmall,
                             )
-                            manifest.sourceSnapshotIds.forEach { snapshotId ->
-                                Text(
-                                    localizedStringResource(
-                                        Res.string.ai_analysis_source_snapshot_item,
-                                        uiLanguage,
-                                        snapshotId,
-                                    ),
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                            manifest.evidence.forEach { evidence ->
-                                Text(
-                                    localizedStringResource(
-                                        Res.string.ai_analysis_evidence_item,
-                                        uiLanguage,
-                                        evidence.id,
-                                        evidence.kind,
-                                        evidence.summary,
-                                    ),
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                            manifest.sources.forEach { source ->
-                                Text(
-                                    localizedStringResource(
-                                        Res.string.ai_analysis_source_item,
-                                        uiLanguage,
-                                        source.relativePath,
-                                        source.startLine ?: 1,
-                                        source.endLine ?: source.startLine ?: 1,
-                                        source.lineCount,
-                                        source.byteCount,
-                                    ),
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                Text(
-                                    localizedStringResource(
-                                        Res.string.ai_analysis_source_resolution,
-                                        uiLanguage,
-                                        source.resolutionConfidence ?: "UNKNOWN",
-                                        source.reasons.joinToString(" · "),
-                                        source.indexComplete?.toString() ?: "unknown",
-                                    ),
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                            manifest.blockedReason?.let { reason ->
-                                Text(
-                                    localizedStringResource(Res.string.ai_analysis_blocked, uiLanguage, reason),
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                            if (manifest.requiresSourceUploadAuthorization) {
-                                Text(
-                                    localizedStringResource(Res.string.ai_analysis_source_upload_hint, uiLanguage),
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                            if (manifest.requiresNarrowerScope) {
-                                Text(
-                                    localizedStringResource(Res.string.ai_analysis_narrow_scope_hint, uiLanguage),
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                            val controlsEnabled = aiAnalysisUiState !is AiAnalysisUiState.Working
-                            if (state.selectedNode != null) {
-                                val entireReport = input.selectedNodeId == null
-                                val changeScope: (Boolean) -> Unit = { useEntireReport ->
-                                    val selectedNode = if (useEntireReport) null else state.selectedNode
-                                    buildAiAnalysisInput(selectedNode)?.let { scopedInput ->
-                                        prepareAiAnalysis(
-                                            scopedInput.copy(includeSourceSnippets = input.includeSourceSnippets),
-                                        )
-                                    }
-                                }
-                                Row(
-                                    modifier = Modifier.clickable(enabled = controlsEnabled) { changeScope(!entireReport) },
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Checkbox(
-                                        checked = entireReport,
-                                        enabled = controlsEnabled,
-                                        onCheckedChange = changeScope,
+                        }
+                        manifest.blockedReason?.let { reason ->
+                            Text(
+                                localizedStringResource(Res.string.ai_analysis_blocked, uiLanguage, reason),
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                        if (manifest.requiresSourceUploadAuthorization) {
+                            Text(
+                                localizedStringResource(Res.string.ai_analysis_source_upload_hint, uiLanguage),
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                        if (manifest.requiresNarrowerScope) {
+                            Text(
+                                localizedStringResource(Res.string.ai_analysis_narrow_scope_hint, uiLanguage),
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                        val controlsEnabled = aiAnalysisUiState !is AiAnalysisUiState.Working
+                        if (state.selectedNode != null) {
+                            val entireReport = input.selectedNodeId == null
+                            val changeScope: (Boolean) -> Unit = { useEntireReport ->
+                                val selectedNode = if (useEntireReport) null else state.selectedNode
+                                buildAiAnalysisInput(selectedNode)?.let { scopedInput ->
+                                    prepareAiAnalysis(
+                                        scopedInput.copy(includeSourceSnippets = input.includeSourceSnippets),
                                     )
-                                    Text(localizedStringResource(Res.string.ai_analysis_entire_report, uiLanguage))
                                 }
-                            }
-                            val performanceDataOnly = manifest.performanceDataOnly
-                            val changePayload: (Boolean) -> Unit = { performanceOnly ->
-                                prepareAiAnalysis(input.copy(includeSourceSnippets = !performanceOnly))
                             }
                             Row(
-                                modifier = Modifier.clickable(enabled = controlsEnabled) { changePayload(!performanceDataOnly) },
+                                modifier = Modifier.clickable(enabled = controlsEnabled) { changeScope(!entireReport) },
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Checkbox(
-                                    checked = performanceDataOnly,
+                                    checked = entireReport,
                                     enabled = controlsEnabled,
-                                    onCheckedChange = changePayload,
+                                    onCheckedChange = changeScope,
                                 )
-                                Text(localizedStringResource(Res.string.ai_analysis_performance_data_only, uiLanguage))
+                                Text(localizedStringResource(Res.string.ai_analysis_entire_report, uiLanguage))
                             }
                         }
-                    },
-                    confirmButton = {
-                        TextButton(
-                            enabled = manifest.canAnalyze && aiAnalysisUiState !is AiAnalysisUiState.Working,
-                            onClick = {
-                                pendingAiAnalysis = null
-                                performAiAnalysis(prepared)
-                            },
-                        ) { Text(localizedStringResource(Res.string.analyze, uiLanguage)) }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { pendingAiAnalysis = null }) {
-                            Text(localizedStringResource(Res.string.cancel, uiLanguage))
+                        val performanceDataOnly = manifest.performanceDataOnly
+                        val changePayload: (Boolean) -> Unit = { performanceOnly ->
+                            prepareAiAnalysis(input.copy(includeSourceSnippets = !performanceOnly))
                         }
-                    },
-                )
-            }
-            when (val composeState = composeAuthorizationUiState) {
-                ComposeAuthorizationUiState.Idle -> Unit
-                ComposeAuthorizationUiState.Preparing -> ExportResultDialog(
-                    title = localizedStringResource(Res.string.compose_preflight_title, uiLanguage),
-                    message = localizedStringResource(Res.string.compose_preflight_running, uiLanguage),
-                    dismissLabel = localizedStringResource(Res.string.cancel, uiLanguage),
-                    onDismiss = { composeAuthorizationUiState = ComposeAuthorizationUiState.Idle },
-                )
-                is ComposeAuthorizationUiState.Failure -> ExportResultDialog(
-                    title = localizedStringResource(Res.string.compose_preflight_failed, uiLanguage),
-                    message = composeState.message,
-                    dismissLabel = localizedStringResource(Res.string.dismiss, uiLanguage),
-                    onDismiss = { composeAuthorizationUiState = ComposeAuthorizationUiState.Idle },
-                )
-                is ComposeAuthorizationUiState.Review -> {
-                    val preflight = composeState.prepared.preflight
-                    AlertDialog(
-                        onDismissRequest = { composeAuthorizationUiState = ComposeAuthorizationUiState.Idle },
-                        title = { Text(localizedStringResource(Res.string.compose_authorize_title, uiLanguage)) },
-                        text = {
-                            Text(
-                                localizedStringResource(
-                                    Res.string.compose_authorize_message,
-                                    uiLanguage,
-                                    preflight.packageName,
-                                    preflight.pid,
-                                    preflight.apiLevel,
-                                    preflight.abi,
-                                    preflight.composeVersion ?: "—",
-                                    preflight.inspectorSource ?: "—",
-                                    localizedStringResource(
-                                        if (preflight.inspectorDownloadRequired) Res.string.download_required
-                                        else Res.string.download_not_required,
-                                        uiLanguage,
-                                    ),
-                                    preflight.bundleFingerprint.take(12),
-                                    preflight.performanceNotice,
-                                ),
+                        Row(
+                            modifier = Modifier.clickable(enabled = controlsEnabled) { changePayload(!performanceDataOnly) },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(
+                                checked = performanceDataOnly,
+                                enabled = controlsEnabled,
+                                onCheckedChange = changePayload,
                             )
-                        },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                composeAuthorization = AuthorizedComposeTarget(
-                                    composeState.prepared,
-                                    ComposeInspectionAuthorization.authorize(preflight),
-                                )
-                                composeAuthorizationUiState = ComposeAuthorizationUiState.Idle
-                                captureTargetMode = CaptureTargetMode.FOREGROUND_APP
-                                fullComposeEnabled = true
-                                autoScanEnabled = true
-                            }) { Text(localizedStringResource(Res.string.authorize_attach, uiLanguage)) }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = {
-                                composeAuthorizationUiState = ComposeAuthorizationUiState.Idle
-                            }) { Text(localizedStringResource(Res.string.cancel, uiLanguage)) }
-                        },
-                    )
-                }
-            }
-            if (pendingComposeExportConsent) {
-                var fullFidelity by remember { mutableStateOf(false) }
-                AlertDialog(
-                    onDismissRequest = { pendingComposeExportConsent = false },
-                    title = { Text(localizedStringResource(Res.string.compose_export_title, uiLanguage)) },
-                    text = {
-                        Column {
-                            Text(localizedStringResource(Res.string.compose_export_safe_default, uiLanguage))
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.clickable { fullFidelity = !fullFidelity },
-                            ) {
-                                Checkbox(checked = fullFidelity, onCheckedChange = { fullFidelity = it })
-                                Text(localizedStringResource(Res.string.compose_export_full_fidelity, uiLanguage))
-                            }
+                            Text(localizedStringResource(Res.string.ai_analysis_performance_data_only, uiLanguage))
                         }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            pendingComposeExportConsent = false
-                            performExportCaptureArchive(
-                                if (fullFidelity) ComposeArchivePrivacy.FULL_FIDELITY
-                                else ComposeArchivePrivacy.SAFE_REDACTED,
-                            )
-                        }) { Text(localizedStringResource(Res.string.export_archive, uiLanguage)) }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { pendingComposeExportConsent = false }) {
-                            Text(localizedStringResource(Res.string.cancel, uiLanguage))
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = manifest.canAnalyze && aiAnalysisUiState !is AiAnalysisUiState.Working,
+                        onClick = {
+                            pendingAiAnalysis = null
+                            performAiAnalysis(prepared)
+                        },
+                    ) { Text(localizedStringResource(Res.string.analyze, uiLanguage)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingAiAnalysis = null }) {
+                        Text(localizedStringResource(Res.string.cancel, uiLanguage))
+                    }
+                },
+            )
+        }
+        if (pendingComposeExportConsent) {
+            var fullFidelity by remember { mutableStateOf(false) }
+            AlertDialog(
+                onDismissRequest = { pendingComposeExportConsent = false },
+                title = { Text(localizedStringResource(Res.string.compose_export_title, uiLanguage)) },
+                text = {
+                    Column {
+                        Text(localizedStringResource(Res.string.compose_export_safe_default, uiLanguage))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { fullFidelity = !fullFidelity },
+                        ) {
+                            Checkbox(checked = fullFidelity, onCheckedChange = { fullFidelity = it })
+                            Text(localizedStringResource(Res.string.compose_export_full_fidelity, uiLanguage))
                         }
-                    },
-                )
-            }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        pendingComposeExportConsent = false
+                        performExportCaptureArchive(
+                            if (fullFidelity) ComposeArchivePrivacy.FULL_FIDELITY
+                            else ComposeArchivePrivacy.SAFE_REDACTED,
+                        )
+                    }) { Text(localizedStringResource(Res.string.export_archive, uiLanguage)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingComposeExportConsent = false }) {
+                        Text(localizedStringResource(Res.string.cancel, uiLanguage))
+                    }
+                },
+            )
         }
     }
 }
@@ -1588,7 +1536,7 @@ private fun CorrelationBanner(
         text = hint.message + suffix,
         modifier = Modifier.fillMaxWidth().background(colors.panel).padding(horizontal = 18.dp, vertical = 5.dp),
         color = if (matches) colors.secondaryText else colors.warning,
-        fontSize = 12.sp,
+        fontSize = ViewerTypography.bodyCompact.fontSize,
     )
 }
 
@@ -1687,68 +1635,163 @@ private fun ExportResultDialog(
     )
 }
 
-internal fun headerTextSegments(
+internal fun statusBarPackageName(
     model: InspectorScreenModel,
     language: UiLanguage = UiLanguage.ENGLISH,
-): List<String> =
-    listOf(model.packageName ?: localizedStringResource(Res.string.no_app, language), "|", model.connectionLabel)
+): String = model.packageName ?: localizedStringResource(Res.string.no_app, language)
 
 @Composable
-private fun AutoScanSwitch(
-    enabled: Boolean,
-    onToggle: () -> Unit,
+private fun ScanModeButtons(
+    scanControlState: ScanControlState,
+    controlsEnabled: Boolean,
+    manualRefreshAvailable: Boolean,
+    onAutoScanSelected: () -> Unit,
+    onManualRefreshSelected: () -> Unit,
+) {
+    val language = LocalLayoutInspectorLanguage.current
+    SegmentedSelector(
+        items = listOf(ScanMode.MANUAL, ScanMode.AUTOMATIC),
+        selectedItem = scanControlState.selectedMode,
+        onItemSelected = { mode ->
+            if (mode == ScanMode.AUTOMATIC) onAutoScanSelected() else onManualRefreshSelected()
+        },
+        onSelectedItemClick = { mode ->
+            if (mode == ScanMode.MANUAL) onManualRefreshSelected()
+        },
+        itemLabel = { mode ->
+            localizedStringResource(
+                if (mode == ScanMode.MANUAL) Res.string.refresh else Res.string.auto_scan,
+                language,
+            )
+        },
+        itemEnabled = { mode ->
+            mode == ScanMode.AUTOMATIC ||
+                (manualRefreshAvailable && scanControlState.manualRefreshEnabled)
+        },
+        enabled = controlsEnabled,
+        style = SegmentedSelectorStyle.COMPACT_OUTLINED,
+    )
+}
+
+@Composable
+private fun LayoutInspectorStatusBar(
+    model: InspectorScreenModel,
+    fullComposeEnabled: Boolean,
+    hideSystemComposables: Boolean,
+    recompositionActive: Boolean,
+    recompositionControlsEnabled: Boolean,
+    composeCompilerReportLoaded: Boolean,
+    onImportComposeCompilerReports: () -> Unit,
+    onToggleSystemComposables: () -> Unit,
+    onToggleRecomposition: () -> Unit,
+    onResetRecomposition: () -> Unit,
 ) {
     val colors = LocalViewerColors.current
     val language = LocalLayoutInspectorLanguage.current
     Row(
-        modifier = Modifier.clickable(onClick = onToggle),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(ViewerDimensions.footerHeight)
+                .background(colors.toolbar)
+                .border(
+                    ViewerDimensions.hairline,
+                    colors.border,
+                    RoundedCornerShape(0.dp),
+                )
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = localizedStringResource(Res.string.auto_scan, language),
-            color = if (enabled) colors.primaryText else colors.mutedText,
-            fontSize = 11.sp,
+        StatusBarValue(
+            label = localizedStringResource(Res.string.package_name, language),
+            value = statusBarPackageName(model, language),
+            valueColor = colors.primaryText,
+            monospace = true,
         )
-        Spacer(Modifier.width(6.dp))
-        Box(
-            modifier =
-                Modifier
-                    .width(30.dp)
-                    .height(16.dp)
-                    .background(
-                        color = if (enabled) colors.accent.copy(alpha = 0.55f) else colors.switchTrackOff,
-                        shape = RoundedCornerShape(8.dp),
-                    ).padding(2.dp),
-            contentAlignment = if (enabled) Alignment.CenterEnd else Alignment.CenterStart,
-        ) {
-            Box(
-                Modifier
-                    .size(12.dp)
-                    .background(
-                        color = if (enabled) Color.White else colors.switchThumbOff,
-                        shape = RoundedCornerShape(50),
-                    ),
+        StatusBarDivider()
+        ProfilerCompactButton(
+            text = localizedStringResource(Res.string.import_compose_compiler_reports, language),
+            selected = composeCompilerReportLoaded,
+            onClick = onImportComposeCompilerReports,
+        )
+        if (composeCompilerReportLoaded) {
+            StatusBarValue(
+                label = localizedStringResource(Res.string.compose_compiler_report, language),
+                value = localizedStringResource(Res.string.loaded, language),
+                valueColor = colors.primaryText,
+            )
+        }
+        StatusBarDivider()
+        if (fullComposeEnabled) {
+            ProfilerCompactButton(
+                text = localizedStringResource(Res.string.system_composables, language),
+                selected = !hideSystemComposables,
+                onClick = onToggleSystemComposables,
+            )
+            ProfilerCompactButton(
+                text = localizedStringResource(
+                    if (recompositionActive) Res.string.stop_recomposition else Res.string.start_recomposition,
+                    language,
+                ),
+                selected = recompositionActive,
+                enabled = recompositionControlsEnabled,
+                onClick = onToggleRecomposition,
+            )
+            ProfilerCompactButton(
+                text = localizedStringResource(Res.string.reset_recomposition, language),
+                enabled = recompositionControlsEnabled,
+                onClick = onResetRecomposition,
+            )
+            StatusBarDivider()
+        }
+        StatusBarValue(
+            label = localizedStringResource(Res.string.metrics, language),
+            value = model.metricsText,
+            valueColor = colors.subtleText,
+        )
+        model.timelineText?.let { timelineText ->
+            StatusBarValue(
+                label = localizedStringResource(Res.string.timeline, language),
+                value = timelineText,
+                valueColor = colors.subtleText,
             )
         }
     }
 }
 
 @Composable
-private fun ManualRefreshButton(
-    enabled: Boolean,
-    onClick: () -> Unit,
+private fun StatusBarValue(
+    label: String,
+    value: String,
+    valueColor: Color,
+    monospace: Boolean = false,
 ) {
-    val language = LocalLayoutInspectorLanguage.current
-    ProfilerCompactButton(
-        text = localizedStringResource(Res.string.refresh, language),
-        enabled = enabled,
-        onClick = onClick,
-        modifier =
-            Modifier
-                .width(56.dp)
-                .semantics {
-                    contentDescription = localizedStringResource(Res.string.refresh_once, language)
-                },
+    val colors = LocalViewerColors.current
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = "$label:",
+            color = colors.mutedText,
+            fontSize = ViewerTypography.label.fontSize,
+            maxLines = 1,
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text = value,
+            color = valueColor,
+            fontFamily = if (monospace) FontFamily.Monospace else FontFamily.Default,
+            fontSize = ViewerTypography.secondary.fontSize,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun StatusBarDivider() {
+    VerticalDivider(
+        modifier = Modifier.height(14.dp),
+        color = LocalViewerColors.current.border,
     )
 }
 
@@ -1762,20 +1805,22 @@ private enum class PanelPosition {
 private fun PanelToggleButton(
     position: PanelPosition,
     visible: Boolean,
+    contentDescription: String,
     onClick: () -> Unit,
 ) {
     val colors = LocalViewerColors.current
-    val iconColor = if (visible) colors.accent else colors.mutedText
+    val iconColor = colors.accent
     Box(
         modifier =
             Modifier
                 .width(26.dp)
                 .height(21.dp)
                 .background(
-                    color = if (visible) colors.accent.copy(alpha = 0.18f) else Color.Transparent,
+                    color = if (visible) colors.accent.copy(alpha = 0.18f) else colors.transparent,
                     shape = RoundedCornerShape(3.dp),
                 )
-                .clickable(onClick = onClick),
+                .clickable(onClick = onClick)
+                .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.size(15.dp)) {
@@ -1899,19 +1944,19 @@ private fun HierarchyPane(
             .focusable(),
     ) {
         PanelTitle(localizedStringResource(Res.string.hierarchy, language)) {
-            Text("${visibleRows.size}", color = colors.mutedText, fontSize = 11.sp)
+            Text("${visibleRows.size}", color = colors.mutedText, fontSize = ViewerTypography.secondary.fontSize)
             TextButton(
                 onClick = { onIsolate(state.selectedNodeId) },
                 enabled = state.selectedNodeId != null,
             ) {
-                Text(localizedStringResource(Res.string.isolate_subtree, language), fontSize = 9.sp)
+                Text(localizedStringResource(Res.string.isolate_subtree, language), fontSize = ViewerTypography.dense.fontSize)
             }
             if (isolationState.active) {
                 TextButton(onClick = onIsolateParent) {
-                    Text(localizedStringResource(Res.string.isolate_parent, language), fontSize = 9.sp)
+                    Text(localizedStringResource(Res.string.isolate_parent, language), fontSize = ViewerTypography.dense.fontSize)
                 }
                 TextButton(onClick = onClearIsolation) {
-                    Text(localizedStringResource(Res.string.clear_isolation, language), fontSize = 9.sp)
+                    Text(localizedStringResource(Res.string.clear_isolation, language), fontSize = ViewerTypography.dense.fontSize)
                 }
             }
         }
@@ -1960,7 +2005,7 @@ private fun HierarchyPane(
                             row.selected -> colors.selectedRow
                             isCurrentMatch -> colors.searchCurrentMatchRow
                             isSearchMatch -> colors.searchMatchRow
-                            else -> Color.Transparent
+                            else -> colors.transparent
                         }
                         var contextMenuExpanded by remember(row.id) { mutableStateOf(false) }
                         Box {
@@ -2029,8 +2074,8 @@ private fun HierarchyPane(
                                         else -> colors.hiddenRowText
                                     },
                                     fontFamily = FontFamily.Monospace,
-                                    fontSize = HierarchyRowLayout.FONT_SIZE_SP.sp,
-                                    lineHeight = 11.sp,
+                                    fontSize = ViewerTypography.secondary.fontSize,
+                                    lineHeight = ViewerTypography.dense.lineHeight,
                                     maxLines = 1,
                                     softWrap = false,
                                 )
@@ -2182,7 +2227,7 @@ private fun PreviewPane(
             Text(
                 source?.let { "${it.width} × ${it.height}" } ?: localizedStringResource(Res.string.no_live_frame, language),
                 color = colors.mutedText,
-                fontSize = 11.sp,
+                fontSize = ViewerTypography.secondary.fontSize,
                 fontFamily = FontFamily.Monospace,
             )
             Spacer(Modifier.width(12.dp))
@@ -2460,12 +2505,7 @@ private fun PreviewPane(
                                         hiddenNodeIds = hiddenLayerState.hiddenNodeIds,
                                     ).forEach { overlay ->
                                         drawRect(
-                                            color = Color(
-                                                red = 1f,
-                                                green = 0.75f * (1f - overlay.intensity),
-                                                blue = 0.08f,
-                                                alpha = 0.45f + 0.4f * overlay.intensity,
-                                            ),
+                                            color = colors.warning.copy(alpha = 0.45f + 0.4f * overlay.intensity),
                                             topLeft = Offset(overlay.bounds.left, overlay.bounds.top),
                                             size = Size(overlay.bounds.width, overlay.bounds.height),
                                             style = Stroke(width = (1f + 3f * overlay.intensity).dp.toPx()),
@@ -2500,7 +2540,7 @@ private fun PreviewPane(
                             }
                         } else {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(localizedStringResource(Res.string.waiting_for_frame, language), color = colors.previewText, fontSize = 13.sp)
+                                Text(localizedStringResource(Res.string.waiting_for_frame, language), color = colors.previewText, fontSize = ViewerTypography.body.fontSize)
                             }
                         }
                     }
@@ -2558,7 +2598,7 @@ private fun PreviewZoomControls(
         Text(
             text = PreviewZoomState.label(scale),
             color = colors.primaryText,
-            fontSize = 11.sp,
+            fontSize = ViewerTypography.secondary.fontSize,
             fontFamily = FontFamily.Monospace,
             modifier = Modifier.width(42.dp),
         )
@@ -2588,8 +2628,8 @@ private fun PreviewZoomButton(
     ) {
         Text(
             text = label,
-            color = if (enabled) colors.primaryText else colors.mutedText.copy(alpha = 0.45f),
-            fontSize = 16.sp,
+            color = if (enabled) colors.accent else colors.mutedText.copy(alpha = 0.45f),
+            fontSize = ViewerTypography.sectionTitle.fontSize,
             fontWeight = FontWeight.SemiBold,
         )
     }
@@ -2741,7 +2781,9 @@ private fun IntSize.asDestination(): FloatRect? =
         FloatRect(0f, 0f, it.width.toFloat(), it.height.toFloat())
     }
 
-internal fun canvasCornerRadiusDp(appOnly: Boolean): Int = if (appOnly) 24 else 4
+/** Returns the Canvas preview radius as a whole number of density-independent pixels. */
+internal fun canvasCornerRadiusDp(appOnly: Boolean): Int =
+    (if (appOnly) 24 else 4) / 2
 
 @Composable
 private fun LayerVisibilityButton(
@@ -2756,7 +2798,7 @@ private fun LayerVisibilityButton(
             .width(LayerVisibilityButtonStyle.WIDTH_DP.dp)
             .height(LayerVisibilityButtonStyle.HEIGHT_DP.dp)
             .background(
-                color = if (hidden) colors.accent.copy(alpha = 0.14f) else Color.Transparent,
+                color = colors.accent.copy(alpha = if (hidden) 0.14f else 0.06f),
                 shape = RoundedCornerShape(3.dp),
             )
             .semantics { contentDescription = localizedStringResource(Res.string.toggle_layer_visibility, language) }
@@ -2765,9 +2807,9 @@ private fun LayerVisibilityButton(
     ) {
         Text(
             text = label,
-            color = if (hidden) colors.accent else colors.mutedText,
-            fontSize = LayerVisibilityButtonStyle.FONT_SIZE_SP.sp,
-            lineHeight = LayerVisibilityButtonStyle.LINE_HEIGHT_SP.sp,
+            color = colors.accent,
+            fontSize = ViewerTypography.label.fontSize,
+            lineHeight = ViewerTypography.label.lineHeight,
             maxLines = 1,
         )
     }
@@ -2786,11 +2828,11 @@ private fun HitTestOrderToggle(
     }
     Text(
         text = label,
-        color = colors.secondaryText,
-        fontSize = 10.sp,
+        color = colors.accent,
+        fontSize = ViewerTypography.label.fontSize,
         fontWeight = FontWeight.Bold,
         modifier = Modifier
-            .background(colors.sectionBackground, RoundedCornerShape(4.dp))
+            .background(colors.accent.copy(alpha = 0.14f), RoundedCornerShape(4.dp))
             .clickable(onClick = onToggle)
             .padding(horizontal = 8.dp, vertical = 4.dp),
     )
@@ -2806,7 +2848,7 @@ private fun HiddenLayerSummary(
     Text(
         text = localizedStringResource(Res.string.hidden_layer_summary, language, count),
         color = colors.warning,
-        fontSize = 10.sp,
+        fontSize = ViewerTypography.label.fontSize,
         fontWeight = FontWeight.Bold,
         modifier = Modifier
             .background(colors.warning.copy(alpha = 0.12f), RoundedCornerShape(4.dp))
@@ -2822,14 +2864,14 @@ private fun CanvasModeToggle(
 ) {
     val colors = LocalViewerColors.current
     val language = LocalLayoutInspectorLanguage.current
-    val color = if (appOnly) colors.accent else colors.mutedText
+    val color = colors.accent
     Text(
         text = if (appOnly) localizedStringResource(Res.string.app_only_on, language) else localizedStringResource(Res.string.app_only_off, language),
         color = color,
-        fontSize = 10.sp,
+        fontSize = ViewerTypography.label.fontSize,
         fontWeight = FontWeight.Bold,
         modifier = Modifier
-            .background(color.copy(alpha = 0.14f), RoundedCornerShape(4.dp))
+            .background(color.copy(alpha = if (appOnly) 0.18f else 0.08f), RoundedCornerShape(4.dp))
             .clickable(onClick = onToggle)
             .padding(horizontal = 8.dp, vertical = 4.dp),
     )
@@ -2873,15 +2915,15 @@ private fun DetailsPane(
                 val shape = RoundedCornerShape(4.dp)
                 Box(
                     modifier = Modifier
-                        .border(1.dp, colors.border, shape)
+                        .border(1.dp, colors.accent, shape)
                         .clickable(onClick = {
                             onOpenMemoryProfiler(className)
                         })
                 ) {
                     Text(
                         text = localizedStringResource(Res.string.find_in_memory_profiler, language),
-                        color = colors.secondaryText,
-                        fontSize = 11.sp,
+                        color = colors.accent,
+                        fontSize = ViewerTypography.secondary.fontSize,
                         maxLines = 1,
                         modifier = Modifier
                             .background(colors.sectionBackground, RoundedCornerShape(4.dp))
@@ -2900,7 +2942,7 @@ private fun DetailsPane(
                         )
                     },
                 ) {
-                    Text(localizedStringResource(Res.string.open_compose_source, language), fontSize = 10.sp)
+                    Text(localizedStringResource(Res.string.open_compose_source, language), fontSize = ViewerTypography.label.fontSize)
                 }
             }
         }
@@ -2972,7 +3014,7 @@ private fun DetailSection(
         Text(
             text = section.title,
             color = headerColor,
-            fontSize = 11.sp,
+            fontSize = ViewerTypography.secondary.fontSize,
             fontWeight = FontWeight.Bold,
         )
     }
@@ -3007,7 +3049,7 @@ private fun DetailRow(
             .background(stripeColor)
             .background(
                 if (row.tone == DetailTone.NORMAL) {
-                    Color.Transparent
+                    colors.transparent
                 } else {
                     color.copy(alpha = 0.06f)
                 },
@@ -3024,16 +3066,16 @@ private fun DetailRow(
         Text(
             text = row.label,
             color = colors.detailLabel,
-            fontSize = 9.sp,
-            lineHeight = 11.sp,
+            fontSize = ViewerTypography.dense.fontSize,
+            lineHeight = ViewerTypography.dense.lineHeight,
             modifier = Modifier.width(108.dp),
         )
         SelectionContainer {
             Text(
                 text = row.value,
                 color = color,
-                fontSize = 10.sp,
-                lineHeight = 12.sp,
+                fontSize = ViewerTypography.label.fontSize,
+                lineHeight = ViewerTypography.label.lineHeight,
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier.weight(1f),
             )
@@ -3084,7 +3126,7 @@ private fun FindingsPane(
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(localizedStringResource(Res.string.findings, language), color = colors.secondaryText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text(localizedStringResource(Res.string.findings, language), color = colors.secondaryText, fontSize = ViewerTypography.secondary.fontSize, fontWeight = FontWeight.Bold)
             Spacer(Modifier.width(18.dp))
             Badge(localizedStringResource(Res.string.info_badge, language, severitySummary.info), colors.info)
             Spacer(Modifier.width(8.dp))
@@ -3099,28 +3141,27 @@ private fun FindingsPane(
                     is AiAnalysisUiState.Failure -> localizedStringResource(Res.string.ai_analysis_failed, language, aiAnalysisUiState.message)
                 }
                 if (aiStatus != null) {
-                    Text(aiStatus, color = colors.mutedText, fontSize = 11.sp, maxLines = 1)
+                    Text(aiStatus, color = colors.mutedText, fontSize = ViewerTypography.secondary.fontSize, maxLines = 1)
                     Spacer(Modifier.width(12.dp))
                 }
-                TextButton(
+            }
+            Text(localizedStringResource(Res.string.timeline_live_capture, language), color = colors.mutedText, fontSize = ViewerTypography.secondary.fontSize)
+            if (AI_ANALYSIS_ENTRY_VISIBLE) {
+                Spacer(Modifier.width(12.dp))
+                ProfilerCompactButton(
+                    text = localizedStringResource(
+                        if (aiAnalysisUiState is AiAnalysisUiState.Working) Res.string.cancel else Res.string.run_ai_analysis,
+                        language,
+                    ),
+                    selected = aiAnalysisUiState is AiAnalysisUiState.Working,
                     onClick = if (aiAnalysisUiState is AiAnalysisUiState.Working) {
                         onCancelAiAnalysis
                     } else {
                         onRunAiAnalysis
                     },
                     enabled = state.snapshot != null,
-                ) {
-                    Text(
-                        localizedStringResource(
-                            if (aiAnalysisUiState is AiAnalysisUiState.Working) Res.string.cancel else Res.string.run_ai_analysis,
-                            language,
-                        ),
-                        fontSize = 11.sp,
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
+                )
             }
-            Text(localizedStringResource(Res.string.timeline_live_capture, language), color = colors.mutedText, fontSize = 11.sp)
         }
         if (model.timelineFrames.isNotEmpty()) {
             HorizontalDivider(color = colors.border)
@@ -3233,7 +3274,7 @@ private fun TimelineStrip(
         }
     }
 
-    Box(modifier = Modifier.fillMaxWidth().height(42.dp)) {
+    Box(modifier = Modifier.fillMaxWidth().height(PanelHeaderLayout.HEIGHT_DP.dp)) {
         LazyRow(
             state = listState,
             modifier = Modifier
@@ -3241,7 +3282,6 @@ private fun TimelineStrip(
                 .padding(
                     start = if (buttons.visible) 32.dp else 12.dp,
                     end = if (buttons.visible) 32.dp else 12.dp,
-                    bottom = 8.dp,
                 ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -3251,11 +3291,11 @@ private fun TimelineStrip(
                     if (frame.selected) colors.selectedRow
                     else if (colors.isDark) colors.detailRowDeep
                     else colors.sectionBackground
-                val textColor = if (frame.selected) colors.primaryText else colors.secondaryText
+                val textColor = if (frame.selected) colors.primaryText else colors.accent
                 Row(
                     modifier = Modifier
                         .background(background, RoundedCornerShape(4.dp))
-                        .border(1.dp, if (frame.selected) colors.accent.copy(alpha = 0.7f) else colors.border, RoundedCornerShape(4.dp))
+                        .border(1.dp, colors.accent.copy(alpha = if (frame.selected) 0.7f else 0.45f), RoundedCornerShape(4.dp))
                         .clickable { onSelectTimelineFrame(frame.index) }
                         .padding(start = 8.dp, end = 3.dp, top = 3.dp, bottom = 3.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -3263,7 +3303,7 @@ private fun TimelineStrip(
                     Text(
                         text = "${frame.label} ${frame.summary}",
                         color = textColor,
-                        fontSize = 11.sp,
+                        fontSize = ViewerTypography.secondary.fontSize,
                         maxLines = 1,
                     )
                     Box(
@@ -3278,7 +3318,7 @@ private fun TimelineStrip(
                                 .clickable { onCloseTimelineFrame(frame.index) },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("×", color = colors.mutedText, fontSize = 14.sp, lineHeight = 14.sp)
+                        Text("×", color = colors.accent, fontSize = ViewerTypography.lead.fontSize, lineHeight = ViewerTypography.label.lineHeight)
                     }
                 }
             }
@@ -3320,15 +3360,15 @@ private fun TimelineScrollButton(
         modifier = modifier
             .width(28.dp)
             .fillMaxHeight()
-            .background(colors.panel)
-            .border(1.dp, colors.border)
+            .background(colors.accent.copy(alpha = 0.08f))
+            .border(1.dp, colors.accent)
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = if (direction == TimelineScrollDirection.LEFT) "‹" else "›",
-            color = if (enabled) colors.primaryText else colors.subtleText,
-            fontSize = 18.sp,
+            color = if (enabled) colors.accent else colors.subtleText,
+            fontSize = ViewerTypography.pageTitle.fontSize,
         )
     }
 }
@@ -3349,7 +3389,7 @@ private fun FindingRow(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (selected) colors.selectedRow else Color.Transparent)
+            .background(if (selected) colors.selectedRow else colors.transparent)
             .onPointerEvent(
                 eventType = PointerEventType.Press,
                 pass = PointerEventPass.Initial,
@@ -3364,14 +3404,14 @@ private fun FindingRow(
             Text(
                 "[${finding.nodeNumber}]  ${finding.title}  ·  ${finding.message}",
                 color = findingColor,
-                fontSize = FindingsTypography.TEXT_SIZE_SP.sp,
-                lineHeight = FindingsTypography.LINE_HEIGHT_SP.sp,
+                fontSize = ViewerTypography.secondary.fontSize,
+                lineHeight = ViewerTypography.secondary.lineHeight,
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(
                         horizontal = 16.dp,
-                        vertical = FindingsTypography.VERTICAL_PADDING_DP.dp,
+                        vertical = FindingsLayoutTokens.VERTICAL_PADDING_DP.dp,
                     ),
             )
         }
@@ -3382,7 +3422,7 @@ private fun FindingRow(
 private fun PanelTitle(title: String, trailing: String) {
     val colors = LocalViewerColors.current
     PanelTitle(title) {
-        Text(trailing, color = colors.mutedText, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+        Text(trailing, color = colors.mutedText, fontSize = ViewerTypography.secondary.fontSize, fontFamily = FontFamily.Monospace)
     }
 }
 
@@ -3399,7 +3439,7 @@ private fun PanelTitle(
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, color = colors.secondaryText, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        Text(title, color = colors.secondaryText, fontWeight = FontWeight.Bold, fontSize = ViewerTypography.secondary.fontSize)
         Spacer(Modifier.weight(1f))
         trailingContent()
     }
@@ -3411,7 +3451,7 @@ private fun Badge(text: String, color: Color) {
     Text(
         text,
         color = color,
-        fontSize = 10.sp,
+        fontSize = ViewerTypography.label.fontSize,
         fontWeight = FontWeight.Bold,
         modifier = Modifier.background(color.copy(alpha = 0.12f), RoundedCornerShape(4.dp))
             .padding(horizontal = 7.dp, vertical = 3.dp),
@@ -3489,106 +3529,38 @@ private fun HierarchySearchBar(
             .padding(horizontal = 6.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(22.dp)
-                .border(1.dp, colors.border, RoundedCornerShape(3.dp))
-                .background(colors.sectionBackground.copy(alpha = 0.3f), RoundedCornerShape(3.dp))
-                .padding(horizontal = 6.dp),
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            BasicTextField(
-                value = searchState.query,
-                onValueChange = onQueryChange,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(end = if (searchState.query.isNotEmpty()) 14.dp else 0.dp),
-                textStyle = androidx.compose.ui.text.TextStyle(
-                    color = colors.primaryText,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
-                ),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onNavigateNext() }),
-                cursorBrush = androidx.compose.ui.graphics.SolidColor(colors.accent),
-            )
-            if (searchState.query.isEmpty()) {
-                Text(
-                    localizedStringResource(Res.string.search_hierarchy, language),
-                    color = colors.mutedText,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
-                    maxLines = 1,
-                )
-            }
-            if (searchState.query.isNotEmpty()) {
-                Text(
-                    text = "✕",
-                    color = colors.mutedText,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .clickable { onQueryChange("") }
-                )
-            }
-        }
+        CompactSearchField(
+            value = searchState.query,
+            placeholder = localizedStringResource(Res.string.search_hierarchy, language),
+            onValueChange = onQueryChange,
+            onSearch = onNavigateNext,
+            modifier = Modifier.weight(1f),
+        )
         if (searchState.isSearching) {
             Spacer(Modifier.width(4.dp))
             Text(
                 summary ?: localizedStringResource(Res.string.search_no_match, language),
                 color = if (matchedNodeIds.isEmpty()) colors.error else colors.mutedText,
-                fontSize = 9.sp,
+                fontSize = ViewerTypography.dense.fontSize,
                 fontFamily = FontFamily.Monospace,
                 maxLines = 1,
                 modifier = Modifier.widthIn(min = 32.dp),
             )
             Spacer(Modifier.width(2.dp))
-            SearchNavButton(
+            CompactSearchNavigationButton(
                 label = "◀",
                 contentDescription = localizedStringResource(Res.string.search_previous, language),
                 enabled = matchedNodeIds.isNotEmpty(),
                 onClick = onNavigatePrevious,
             )
             Spacer(Modifier.width(2.dp))
-            SearchNavButton(
+            CompactSearchNavigationButton(
                 label = "▶",
                 contentDescription = localizedStringResource(Res.string.search_next, language),
                 enabled = matchedNodeIds.isNotEmpty(),
                 onClick = onNavigateNext,
             )
         }
-    }
-}
-
-@Composable
-private fun SearchNavButton(
-    label: String,
-    contentDescription: String,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    val colors = LocalViewerColors.current
-    Box(
-        modifier = Modifier
-            .width(20.dp)
-            .height(20.dp)
-            .background(
-                color = if (enabled) colors.sectionBackground else Color.Transparent,
-                shape = RoundedCornerShape(3.dp),
-            )
-            .let { base -> if (enabled) base.clickable(onClick = onClick) else base }
-            .semantics { this.contentDescription = contentDescription },
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label,
-            color = if (enabled) colors.primaryText else colors.mutedText.copy(alpha = 0.4f),
-            fontSize = 9.sp,
-            maxLines = 1,
-        )
     }
 }
 
@@ -3614,8 +3586,8 @@ private fun HierarchySearchHighlightText(
             text,
             color = baseColor,
             fontFamily = FontFamily.Monospace,
-            fontSize = HierarchyRowLayout.FONT_SIZE_SP.sp,
-            lineHeight = 11.sp,
+            fontSize = ViewerTypography.secondary.fontSize,
+            lineHeight = ViewerTypography.dense.lineHeight,
             maxLines = 1,
             softWrap = false,
         )
@@ -3648,8 +3620,8 @@ private fun HierarchySearchHighlightText(
     Text(
         annotatedString,
         fontFamily = FontFamily.Monospace,
-        fontSize = HierarchyRowLayout.FONT_SIZE_SP.sp,
-        lineHeight = 11.sp,
+        fontSize = ViewerTypography.secondary.fontSize,
+        lineHeight = ViewerTypography.dense.lineHeight,
         maxLines = 1,
         softWrap = false,
     )

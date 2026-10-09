@@ -3,6 +3,7 @@ package com.androidperformancestudio.memory.app
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -56,17 +57,34 @@ class MemoryProfilerWorkspaceSourceTest {
         val home = toolbar.indexOf("onNavigateHome = onBack")
         val selectors = toolbar.indexOf("MemoryProfilerToolbarSelectors(")
         val refresh = toolbar.indexOf("ProfilerCompactButton(")
-        val spacer = toolbar.indexOf("Spacer(Modifier.weight(1f))")
+        val navigationScroll = toolbar.indexOf(".horizontalScroll(rememberScrollState())")
         val dumpHeap = toolbar.indexOf("MemoryProfilerDumpHeapButton(")
 
         assertTrue(home >= 0)
         assertTrue(selectors > home)
         assertTrue(refresh > selectors)
-        assertTrue(spacer > refresh)
-        assertTrue(dumpHeap > spacer)
+        assertTrue(navigationScroll > refresh)
+        assertTrue(dumpHeap > navigationScroll)
         assertTrue(toolbar.contains("onSelectDevice = { serial ->"))
         assertTrue(toolbar.contains("onSelectProcess = controller::selectProcess"))
-        assertTrue(toolbar.contains("onDumpHeap = { scope.launch { controller.dumpHeap() } }"))
+        assertEquals(1, Regex("SegmentedSelector\\(").findAll(toolbar).count())
+        val primaryViewSelector = toolbar.substringAfter("SegmentedSelector(").substringBefore("ProfilerCompactButton(")
+        val primaryViewModes =
+            workspace.substringAfter("private val MEMORY_PROFILER_PRIMARY_VIEW_MODES =")
+                .substringBefore("private fun MemoryProfilerViewMode.primaryViewLabel")
+        assertTrue(primaryViewModes.contains("MemoryProfilerViewMode.Dashboard"))
+        assertTrue(primaryViewModes.contains("MemoryProfilerViewMode.ClassList"))
+        assertTrue(primaryViewModes.contains("MemoryProfilerViewMode.Dominators"))
+        assertTrue(primaryViewSelector.contains("items = MEMORY_PROFILER_PRIMARY_VIEW_MODES"))
+        assertTrue(primaryViewSelector.contains("selectedItem = state.viewMode.takeIf"))
+        assertTrue(primaryViewSelector.contains("style = SegmentedSelectorStyle.COMPACT_OUTLINED"))
+        assertTrue(toolbar.contains("onDumpHeap = {"))
+        assertTrue(toolbar.contains("controller.changeViewMode(MemoryProfilerViewMode.Dashboard)"))
+        assertTrue(toolbar.contains("onDumpBitmaps = {"))
+        assertTrue(toolbar.contains("controller.changeViewMode(MemoryProfilerViewMode.BitmapDump)"))
+        assertTrue(toolbar.contains("onCaptureNativeHeap = {"))
+        assertTrue(toolbar.contains("controller.changeViewMode(MemoryProfilerViewMode.NativeHeap)"))
+        assertTrue(toolbar.contains("Res.string.native_heap_view"))
     }
 
     @Test

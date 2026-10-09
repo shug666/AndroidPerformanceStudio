@@ -3,9 +3,13 @@
 package com.androidperformancestudio.memory.app
 
 import com.androidperformancestudio.adb.AdbDevicePropertiesReader
-import com.androidperformancestudio.adb.AdbDeviceRefresher
-import com.androidperformancestudio.adb.AdbTargetCatalog
-import com.androidperformancestudio.adb.SystemAdbLocator
+import com.androidperformancestudio.adb.AdbTargetSnapshot
+import com.androidperformancestudio.adb.AndroidTargetListener
+import com.androidperformancestudio.adb.AndroidTargetMonitor
+import com.androidperformancestudio.adb.AndroidTargetMonitors
+import com.androidperformancestudio.adb.AndroidTargetSubscription
+import com.androidperformancestudio.adb.defaultAdbExecutable
+import com.androidperformancestudio.adb.profileableOrDebuggableProcesses
 import com.androidperformancestudio.memory.analysis.BitmapDumpAnalysisRequest
 import com.androidperformancestudio.memory.analysis.BitmapDumpAnalyzer
 import com.androidperformancestudio.memory.analysis.HeapGraphToHeapDump
@@ -16,10 +20,13 @@ import com.androidperformancestudio.memory.analysis.MemoryHistogramAnalyzer
 import com.androidperformancestudio.memory.analysis.NativeHeapTraceParser
 import com.androidperformancestudio.memory.analysis.ProguardMapping
 import com.androidperformancestudio.memory.analysis.ProguardMappingParser
+import com.androidperformancestudio.memory.analysis.SharkLeakAnalyzer
 import com.androidperformancestudio.memory.analysis.isLikelyObfuscatedClassName
 import com.androidperformancestudio.memory.analysis.withDeobfuscation
+import com.androidperformancestudio.memory.capture.AndroidProjectLeakCanaryInjector
 import com.androidperformancestudio.memory.capture.BitmapCaptureRequest
 import com.androidperformancestudio.memory.capture.BitmapHeapDumpCaptureSession
+import com.androidperformancestudio.memory.capture.LeakCanaryAgentConnection
 import com.androidperformancestudio.memory.capture.MemoryCaptureRequest
 import com.androidperformancestudio.memory.capture.MemoryHeapDumpCaptureSession
 import com.androidperformancestudio.memory.capture.NativeHeapCaptureRequest
@@ -28,8 +35,11 @@ import com.androidperformancestudio.memory.export.BitmapDumpExportAdapters
 import com.androidperformancestudio.memory.export.MemoryExportAdapters
 import com.androidperformancestudio.memory.hprof.BitmapDumpParseException
 import com.androidperformancestudio.memory.hprof.BitmapDumpParser
+import com.androidperformancestudio.memory.hprof.HprofInputProbe
 import com.androidperformancestudio.memory.hprof.HprofParseException
 import com.androidperformancestudio.memory.hprof.HprofParser
+import com.androidperformancestudio.memory.hprof.HprofRecordIndexer
+import com.androidperformancestudio.memory.leak.protocol.LeakCanaryAgentResponse
 import com.androidperformancestudio.memory.memory_app.generated.resources.Res
 import com.androidperformancestudio.memory.memory_app.generated.resources.android_sdk_platform_tools_not_found
 import com.androidperformancestudio.memory.memory_app.generated.resources.bitmap_dump_failed
@@ -53,15 +63,21 @@ import com.androidperformancestudio.memory.model.BitmapDumpSession
 import com.androidperformancestudio.memory.model.HeapDump
 import com.androidperformancestudio.memory.model.HeapHistogram
 import com.androidperformancestudio.memory.model.HeapSummary
+import com.androidperformancestudio.memory.model.LeakCanaryLiveEvent
+import com.androidperformancestudio.memory.model.LeakCanaryLiveSession
+import com.androidperformancestudio.memory.model.LeakCanaryLiveStatus
+import com.androidperformancestudio.memory.model.LeakCanaryReport
+import com.androidperformancestudio.memory.model.LeakCanaryStatus
 import com.androidperformancestudio.memory.model.NativeHeapEvidenceSource
 import com.androidperformancestudio.memory.model.NativeHeapTrace
 import com.androidperformancestudio.memory.presentation.MemoryDeviceOption
 import com.androidperformancestudio.memory.presentation.MemoryProcessOption
 import com.androidperformancestudio.memory.storage.MemorySessionMetadata
+import com.androidperformancestudio.memory.storage.MemorySessionUiSettings
 import com.androidperformancestudio.memory.storage.SqliteMemorySessionStore
 import com.androidperformancestudio.model.StudioResult
 import com.androidperformancestudio.platform.adb.AdbDeviceState
-import com.androidperformancestudio.platform.toolchain.SystemHostPlatformDetector
+import com.androidperformancestudio.platform.adb.DefaultAdbClient
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.localizedStringResource
 import kotlinx.coroutines.Dispatchers
@@ -79,7 +95,8 @@ import java.time.format.DateTimeFormatter
 @Suppress("LargeClass", "LongParameterList", "TooManyFunctions")
 internal class DesktopMemoryProfilerBackend(
     private val dataRoot: Path = defaultDataRoot(),
-    private val adbLocator: () -> Path? = ::locateSystemAdb,
+    private val adbLocator: () -> Path? = ::defaultAdbExecutable,
+    private val targetMonitorProvider: (Path) -> AndroidTargetMonitor = AndroidTargetMonitors::shared,
     private val captureSessionFactory: (Path) -> MemoryHeapDumpCaptureSession = ::MemoryHeapDumpCaptureSession,
     private val bitmapCaptureSessionFactory: (Path) -> BitmapHeapDumpCaptureSession = ::BitmapHeapDumpCaptureSession,
     private val language: UiLanguage = UiLanguage.ENGLISH,
@@ -87,7 +104,10 @@ internal class DesktopMemoryProfilerBackend(
     private val javaHeapArtifactAnalyzer: JavaHeapArtifactAnalyzer = PerfettoJavaHeapArtifactAnalyzer(),
 ) : MemoryProfilerBackend {
     private val parser = HprofParser()
+    private val inputProbe = HprofInputProbe()
+    private val recordIndexer = HprofRecordIndexer()
     private val analyzer = MemoryDeepAnalyzer()
+    private val sharkLeakAnalyzer = SharkLeakAnalyzer()
     private val exports = MemoryExportAdapters()
     private val bitmapParser = BitmapDumpParser()
     private val bitmapAnalyzer = BitmapDumpAnalyzer()
@@ -96,18 +116,29 @@ internal class DesktopMemoryProfilerBackend(
     private val artifactStore = MemoryArtifactStore(dataRoot.resolve("capture-artifacts"))
 
     private var mapping: ProguardMapping? = null
+    private var mappingFile: Path? = null
+    private var mappingDigest: String? = null
     private var lastLoadRequest: HeapLoadRequest? = null
+    private var lastLoadedHeap: LoadedHeap? = null
+    private var leakCanaryConnection: LeakCanaryAgentConnection? = null
+    private var leakCanaryCursor: Long = 0L
+    private var leakCanaryEvents: List<LeakCanaryLiveEvent> = emptyList()
+
+    override fun registerTargetListener(listener: AndroidTargetListener): AndroidTargetSubscription {
+        val monitor = adbLocator()?.let(targetMonitorProvider) ?: return AndroidTargetSubscription {}
+        return monitor.register(listener)
+    }
 
     override suspend fun listDevices(): MemoryBackendResult<List<MemoryDeviceOption>> {
         val adb = adbLocator() ?: return missingAdb()
-        return when (val result = AdbDeviceRefresher(adb).refresh()) {
+        return when (val result = targetMonitorProvider(adb).refreshDevices()) {
             is StudioResult.Failure ->
                 result.toBackendFailure(localizedStringResource(Res.string.unable_to_list_android_devices, language))
             is StudioResult.Success ->
                 MemoryBackendResult.Success(
                     result.value.map { device ->
                         val apiLevel =
-                            if (device.state == AdbDeviceState.ONLINE) {
+                            if (device.online) {
                                 when (val properties = AdbDevicePropertiesReader(adb).read(device.serial)) {
                                     is StudioResult.Success -> properties.value.sdkInt
                                     is StudioResult.Failure -> null
@@ -117,8 +148,8 @@ internal class DesktopMemoryProfilerBackend(
                             }
                         MemoryDeviceOption(
                             serial = device.serial,
-                            name = device.model?.replace('_', ' ') ?: device.serial,
-                            online = device.state == AdbDeviceState.ONLINE,
+                            name = device.displayName,
+                            online = device.online,
                             apiLevel = apiLevel,
                             supportsBitmapDump = apiLevel != null && apiLevel >= BitmapHeapDumpCaptureSession.MINIMUM_BITMAP_DUMP_API,
                         )
@@ -129,25 +160,10 @@ internal class DesktopMemoryProfilerBackend(
 
     override suspend fun listProcesses(serial: String): MemoryBackendResult<List<MemoryProcessOption>> {
         val adb = adbLocator() ?: return missingAdb()
-        return when (val result = AdbTargetCatalog(adb).refresh(serial)) {
+        return when (val result = targetMonitorProvider(adb).refreshTargets(serial)) {
             is StudioResult.Failure ->
                 result.toBackendFailure(localizedStringResource(Res.string.unable_to_list_device_processes, language))
-            is StudioResult.Success -> {
-                val debuggablePackages =
-                    result.value.packages
-                        .filter { it.debuggable }
-                        .mapTo(hashSetOf()) { it.packageName }
-                val processes =
-                    result.value.processes
-                        .mapNotNull { process ->
-                            val packageName =
-                                debuggablePackages.firstOrNull { candidate ->
-                                    process.name == candidate || process.name.startsWith("$candidate:")
-                                } ?: return@mapNotNull null
-                            MemoryProcessOption(pid = process.pid, name = process.name, packageName = packageName)
-                        }.sortedWith(compareBy<MemoryProcessOption> { it.name }.thenBy { it.pid })
-                MemoryBackendResult.Success(processes)
-            }
+            is StudioResult.Success -> MemoryBackendResult.Success(result.value.heapDumpableProcesses())
         }
     }
 
@@ -501,6 +517,105 @@ internal class DesktopMemoryProfilerBackend(
             }
         }
 
+    override suspend fun openLeakCanaryAgent(
+        serial: String,
+        process: MemoryProcessOption,
+    ): MemoryBackendResult<LeakCanaryLiveSession> =
+        withContext(Dispatchers.IO) {
+            closeLeakCanaryAgent()
+            val adb = adbLocator() ?: return@withContext missingAdb()
+            val connection = LeakCanaryAgentConnection(DefaultAdbClient(adb), serial, process.packageName)
+            runCatching {
+                connection.open()
+                val response = connection.startSession()
+                leakCanaryConnection = connection
+                leakCanaryCursor = response.latestSequence
+                leakCanaryEvents = emptyList()
+                MemoryBackendResult.Success(
+                    response.toLiveSession(LeakCanaryLiveStatus.RUNNING),
+                )
+            }.getOrElse { error ->
+                connection.close()
+                MemoryBackendResult.Failure(
+                    "LeakCanary Agent unavailable",
+                    error.message ?: error::class.simpleName.orEmpty(),
+                )
+            }
+        }
+
+    override suspend fun pollLeakCanaryAgent(): MemoryBackendResult<LeakCanaryLiveSession> =
+        withContext(Dispatchers.IO) {
+            val connection =
+                leakCanaryConnection
+                    ?: return@withContext MemoryBackendResult.Failure(
+                        "LeakCanary Agent unavailable",
+                        "The LeakCanary Agent connection is not open.",
+                    )
+            runCatching {
+                val response = connection.poll(leakCanaryCursor)
+                leakCanaryCursor = response.latestSequence
+                MemoryBackendResult.Success(response.toLiveSession(LeakCanaryLiveStatus.RUNNING))
+            }.getOrElse { error ->
+                MemoryBackendResult.Failure(
+                    "LeakCanary Agent polling failed",
+                    error.message ?: error::class.simpleName.orEmpty(),
+                )
+            }
+        }
+
+    override fun closeLeakCanaryAgent() {
+        leakCanaryConnection?.close()
+        leakCanaryConnection = null
+        leakCanaryCursor = 0L
+        leakCanaryEvents = emptyList()
+    }
+
+    override suspend fun injectLeakCanaryAgent(projectRoot: Path): MemoryBackendResult<String> =
+        withContext(Dispatchers.IO) {
+            val bundle =
+                findLeakCanaryAgentBundle()
+                    ?: return@withContext MemoryBackendResult.Failure(
+                        "LeakCanary Agent bundle unavailable",
+                        "Build :android-agent-leakcanary:bundleLeakCanaryAgent before injection.",
+                    )
+            runCatching {
+                val result = AndroidProjectLeakCanaryInjector().inject(projectRoot, bundle.first, bundle.second)
+                MemoryBackendResult.Success(result.message)
+            }.getOrElse { error ->
+                MemoryBackendResult.Failure(
+                    "LeakCanary Agent injection failed",
+                    error.message ?: error::class.simpleName.orEmpty(),
+                )
+            }
+        }
+
+    override suspend fun analyzeLeaks(): MemoryBackendResult<LeakCanaryReport> =
+        withContext(Dispatchers.IO) {
+            val loaded =
+                lastLoadedHeap
+                    ?: return@withContext MemoryBackendResult.Failure(
+                        "Leak analysis unavailable",
+                        "Load an HPROF snapshot before starting LeakCanary analysis.",
+                    )
+            val hprofFile = loaded.heapDump.convertedHprofFile ?: loaded.heapDump.rawHprofFile
+            if (hprofFile == null || !Files.isRegularFile(hprofFile)) {
+                return@withContext MemoryBackendResult.Failure(
+                    "Leak analysis unavailable",
+                    "The loaded snapshot does not have a readable HPROF source.",
+                )
+            }
+            runCatching { sharkLeakAnalyzer.analyze(loaded.heapDump, hprofFile) }
+                .fold(
+                    onSuccess = { MemoryBackendResult.Success(it) },
+                    onFailure = { error ->
+                        MemoryBackendResult.Failure(
+                            "Leak analysis failed",
+                            error.message ?: error::class.simpleName.orEmpty(),
+                        )
+                    },
+                )
+        }
+
     override suspend fun importMapping(file: Path): MemoryBackendResult<LoadedHeap?> =
         withContext(Dispatchers.IO) {
             val parsedMapping =
@@ -513,6 +628,8 @@ internal class DesktopMemoryProfilerBackend(
                     )
                 }
             mapping = parsedMapping
+            mappingFile = file
+            mappingDigest = digestFile(file)
             val last = lastLoadRequest
             if (last == null) {
                 MemoryBackendResult.Success<LoadedHeap?>(null)
@@ -538,8 +655,28 @@ internal class DesktopMemoryProfilerBackend(
             }
         }
 
+    override fun loadWorkspaceSettings(sessionId: String): MemorySessionUiSettings =
+        SqliteMemorySessionStore.open(dataRoot.resolve("memory-sessions.db")).use { store ->
+            store.loadUiSettings(sessionId)
+        }
+
+    override fun saveWorkspaceSettings(
+        sessionId: String,
+        settings: MemorySessionUiSettings,
+    ) {
+        SqliteMemorySessionStore.open(dataRoot.resolve("memory-sessions.db")).use { store ->
+            store.saveUiSettings(sessionId, settings)
+        }
+    }
+
     override suspend fun loadSession(metadata: MemorySessionMetadata): MemoryBackendResult<LoadedHeap> =
         withContext(Dispatchers.IO) {
+            mappingFile = metadata.mappingFile?.takeIf(Files::isRegularFile)
+            mapping =
+                mappingFile?.let { path ->
+                    runCatching { ProguardMappingParser.parse(path) }.getOrNull()
+                }
+            mappingDigest = metadata.mappingDigest
             val file = metadata.convertedHprofFile ?: metadata.rawHprofFile
             if (!Files.isRegularFile(file)) {
                 return@withContext MemoryBackendResult.Failure(
@@ -584,6 +721,49 @@ internal class DesktopMemoryProfilerBackend(
         exports.exportClassHistogramCsv(histogram, output)
     }
 
+    override fun exportClassInstances(
+        heapDump: HeapDump,
+        className: String,
+        output: Path,
+    ) {
+        exports.exportClassInstancesCsv(heapDump, className, output)
+    }
+
+    override fun exportHeapDiff(
+        diff: com.androidperformancestudio.memory.model.HeapDiff,
+        output: Path,
+    ) {
+        exports.exportHeapDiffCsv(diff, output)
+    }
+
+    override fun exportHeapSnapshotJson(
+        heapDump: HeapDump,
+        histogram: HeapHistogram,
+        output: Path,
+        snapshotSummary: com.androidperformancestudio.memory.model.HeapSnapshotSummary?,
+        exportContext: com.androidperformancestudio.memory.model.HeapExportContext?,
+    ) {
+        exports.exportHeapSnapshotJson(heapDump, histogram, output, snapshotSummary, exportContext)
+    }
+
+    override fun exportInvestigationReport(
+        heapDump: HeapDump,
+        histogram: HeapHistogram,
+        diff: com.androidperformancestudio.memory.model.HeapDiff?,
+        output: Path,
+        snapshotSummary: com.androidperformancestudio.memory.model.HeapSnapshotSummary?,
+        exportContext: com.androidperformancestudio.memory.model.HeapExportContext?,
+    ) {
+        exports.exportInvestigationReportMarkdown(heapDump, histogram, diff, output, snapshotSummary, exportContext)
+    }
+
+    override fun exportObjectInvestigation(
+        investigation: com.androidperformancestudio.memory.model.HeapObjectInvestigation,
+        output: Path,
+    ) {
+        exports.exportObjectInvestigationJson(investigation, output)
+    }
+
     override fun exportBitmapSession(
         session: BitmapDumpSession,
         output: Path,
@@ -604,12 +784,22 @@ internal class DesktopMemoryProfilerBackend(
     ): MemoryBackendResult<LoadedHeap> {
         lastLoadRequest = request
         return try {
+            val probe = inputProbe.inspect(request.file)
+            val probeWarning = probe.warnings.joinToString(separator = "\n").ifBlank { null }
+            val indexFile = ensureLargeFileIndex(request.file, probe.fileSizeBytes)
             val parsedFile =
                 parser.parse(request.file) { parserProgress -> onProgress(parserProgress / 2) }.copy(
                     rawHprofFile = request.rawFile,
                     convertedHprofFile = request.convertedFile,
                 )
-            val deobfuscated = mapping?.let { parsedFile.withDeobfuscation(it) } ?: parsedFile
+            val mappingForLoad = validatedMapping()
+            val mappingWarning =
+                if (mapping != null && mappingForLoad == null) {
+                    "mapping.txt digest changed or the file is unavailable; mapping was ignored until re-imported"
+                } else {
+                    null
+                }
+            val deobfuscated = mappingForLoad?.let { parsedFile.withDeobfuscation(it) } ?: parsedFile
             val parserWarning =
                 parsedFile.warnings
                     .joinToString(separator = "\n", transform = { it.message })
@@ -623,14 +813,34 @@ internal class DesktopMemoryProfilerBackend(
                     pid = request.sessionMetadata?.pid ?: 0,
                     capturedAt = capturedAt,
                     emptyWarningFileName = request.file.fileName.toString(),
-                    extraWarning = listOfNotNull(request.warning, parserWarning).joinToString("\n").ifBlank { null },
+                    extraWarning =
+                        listOfNotNull(request.warning, probeWarning, mappingWarning, parserWarning)
+                            .joinToString("\n")
+                            .ifBlank { null },
                     cleanupWarning = request.cleanupWarning,
                     onAnalysisProgress = { onProgress(50 + it / 2) },
+                    deobfuscator = mappingForLoad,
                 )
             request.sessionMetadata?.let { metadata ->
-                persistSession(metadata, capturedAt, request.rawFile, request.convertedFile, loaded.histogram.summary)
+                persistSession(
+                    metadata,
+                    capturedAt,
+                    request.rawFile,
+                    request.convertedFile,
+                    loaded.histogram.summary,
+                    mappingFile,
+                    mappingDigest,
+                )
             }
-            MemoryBackendResult.Success(loaded)
+            val uiSettings = request.sessionMetadata?.sessionId?.let(::loadWorkspaceSettings) ?: MemorySessionUiSettings()
+            MemoryBackendResult.Success(
+                loaded.copy(
+                    uiSettings = uiSettings,
+                    sourceFileDigest = digestFile(request.rawFile),
+                    mappingDigest = mappingDigest,
+                    indexFile = indexFile,
+                ),
+            )
         } catch (exception: HprofParseException) {
             analysisFailure(exception)
         } catch (exception: IOException) {
@@ -640,6 +850,51 @@ internal class DesktopMemoryProfilerBackend(
         } catch (exception: SQLException) {
             analysisFailure(exception)
         }
+    }
+
+    private fun validatedMapping(): ProguardMapping? {
+        val current = mapping
+        return if (current == null) {
+            null
+        } else {
+            val file = mappingFile
+            val expectedDigest = mappingDigest
+            if (file == null || expectedDigest == null) {
+                current
+            } else if (Files.isRegularFile(file)) {
+                current.takeIf { digestFile(file) == expectedDigest }
+            } else {
+                null
+            }
+        }
+    }
+
+    private fun ensureLargeFileIndex(
+        file: Path,
+        fileSizeBytes: Long,
+    ): Path? {
+        if (fileSizeBytes <= HprofInputProbe.RECOMMENDED_MATERIALIZED_BYTES) return null
+        val sourceDigest = digestFile(file)
+        val indexFile = dataRoot.resolve("hprof-index").resolve("$sourceDigest.idx")
+        if (!Files.isRegularFile(indexFile)) {
+            recordIndexer.build(file, indexFile)
+        } else {
+            recordIndexer.read(indexFile)
+        }
+        return indexFile
+    }
+
+    private fun digestFile(file: Path): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        Files.newInputStream(file).use { input ->
+            val buffer = ByteArray(DEFAULT_DIGEST_BUFFER_BYTES)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                if (count > 0) digest.update(buffer, 0, count)
+            }
+        }
+        return digest.digest().joinToString(separator = "") { byte -> "%02x".format(byte) }
     }
 
     /**
@@ -658,8 +913,9 @@ internal class DesktopMemoryProfilerBackend(
         extraWarning: String? = null,
         cleanupWarning: String? = null,
         onAnalysisProgress: (Int) -> Unit = {},
+        deobfuscator: ProguardMapping? = mapping,
     ): LoadedHeap {
-        val deepAnalysis = analyzer.analyze(heapDump, deobfuscator = mapping, onProgress = onAnalysisProgress)
+        val deepAnalysis = analyzer.analyze(heapDump, deobfuscator = deobfuscator, onProgress = onAnalysisProgress)
         val histogram = deepAnalysis.histogram
         val emptyHeapWarning =
             if (emptyWarningFileName != null && histogram.summary.objectCount == 0) {
@@ -668,7 +924,7 @@ internal class DesktopMemoryProfilerBackend(
                 null
             }
         val noMappingWarning =
-            if (mapping == null && histogram.classes.any { isLikelyObfuscatedClassName(it.className) }) {
+            if (deobfuscator == null && histogram.classes.any { isLikelyObfuscatedClassName(it.className) }) {
                 localizedStringResource(Res.string.mapping_not_loaded_hint, language)
             } else {
                 null
@@ -683,10 +939,10 @@ internal class DesktopMemoryProfilerBackend(
                         heapName = heapName,
                         retainedSizes = deepAnalysis.dominatorTree.retainedSizes,
                         immediateDominators = deepAnalysis.dominatorTree.immediateDominators,
-                        deobfuscator = mapping,
+                        deobfuscator = deobfuscator,
                     ).classes
             }
-        val parsed =
+        val analysisHeap =
             heapDump.copy(
                 id = id,
                 packageName = packageName,
@@ -700,18 +956,29 @@ internal class DesktopMemoryProfilerBackend(
                 bitmapInstances = deepAnalysis.bitmapInstances,
                 activityLeaks = deepAnalysis.activityLeaks,
             )
-        return LoadedHeap(
-            heapDump = parsed,
-            histogram = histogram,
-            mapping = mapping,
-            availableHeaps = availableHeaps,
-            perHeapClasses = perHeapClasses,
-            warning =
-                listOfNotNull(extraWarning, emptyHeapWarning, noMappingWarning)
-                    .joinToString("\n")
-                    .ifBlank { null },
-            cleanupWarning = cleanupWarning,
-        )
+        val parsed =
+            analysisHeap.copy(
+                leakCanaryReport =
+                    LeakCanaryReport(
+                        status = LeakCanaryStatus.NOT_RUN,
+                        message = "LeakCanary analysis has not been run for this snapshot.",
+                    ),
+            )
+        val loaded =
+            LoadedHeap(
+                heapDump = parsed,
+                histogram = histogram,
+                mapping = deobfuscator,
+                availableHeaps = availableHeaps,
+                perHeapClasses = perHeapClasses,
+                warning =
+                    listOfNotNull(extraWarning, emptyHeapWarning, noMappingWarning)
+                        .joinToString("\n")
+                        .ifBlank { null },
+                cleanupWarning = cleanupWarning,
+            )
+        lastLoadedHeap = loaded
+        return loaded
     }
 
     private fun persistSession(
@@ -720,6 +987,8 @@ internal class DesktopMemoryProfilerBackend(
         rawFile: Path,
         convertedFile: Path?,
         summary: HeapSummary,
+        mappingFile: Path?,
+        mappingDigest: String?,
     ) {
         SqliteMemorySessionStore.open(dataRoot.resolve("memory-sessions.db")).use { store ->
             store.upsert(
@@ -730,12 +999,62 @@ internal class DesktopMemoryProfilerBackend(
                     capturedAt = capturedAt,
                     rawHprofFile = rawFile,
                     convertedHprofFile = convertedFile,
+                    mappingFile = mappingFile,
+                    mappingDigest = mappingDigest,
                     classCount = summary.classCount,
                     objectCount = summary.objectCount,
                     shallowSizeBytes = summary.shallowSize,
                 ),
             )
         }
+    }
+
+    private fun LeakCanaryAgentResponse.toLiveSession(status: LeakCanaryLiveStatus): LeakCanaryLiveSession {
+        val newEvents =
+            events.map { event ->
+                LeakCanaryLiveEvent(
+                    sequence = event.sequence,
+                    kind = event.kind,
+                    monotonicNs = event.monotonicNs,
+                    className = event.className,
+                    description = event.description,
+                    watchId = event.watchId,
+                    retained = event.retained,
+                    source = event.source,
+                )
+            }
+        leakCanaryEvents = (leakCanaryEvents + newEvents).takeLast(MAX_LIVE_EVENTS)
+        return LeakCanaryLiveSession(
+            status = status,
+            packageName = packageName,
+            processName = events.lastOrNull()?.processName,
+            sessionId = sessionId,
+            cursor = latestSequence,
+            droppedEvents = droppedEvents,
+            leakCanaryAvailable = leakCanaryAvailable,
+            events = leakCanaryEvents,
+            message = message,
+        )
+    }
+
+    private fun findLeakCanaryAgentBundle(): Pair<Path, Path>? {
+        val names =
+            listOf(
+                "android-agent-leakcanary-debug.aar" to "leakcanary-agent-protocol-0.1.0-SNAPSHOT.jar",
+            )
+        val roots =
+            generateSequence(Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize()) { it.parent }
+                .flatMap { root ->
+                    sequenceOf(
+                        root.resolve("memory-profiler/build/leakcanary-agent-bundle"),
+                        root.resolve("desktop-viewer/memory-profiler/build/leakcanary-agent-bundle"),
+                    )
+                }.toList()
+        return roots
+            .asSequence()
+            .flatMap { directory ->
+                names.asSequence().map { (aarName, jarName) -> directory.resolve(aarName) to directory.resolve(jarName) }
+            }.firstOrNull { (aar, jar) -> Files.isRegularFile(aar) && Files.isRegularFile(jar) }
     }
 
     private fun analysisFailure(exception: Exception): MemoryBackendResult.Failure =
@@ -843,7 +1162,9 @@ internal class DesktopMemoryProfilerBackend(
         private const val CAPTURE_PROGRESS_WEIGHT = 60
         private const val PARSER_PROGRESS_WEIGHT = 40
         private const val PERCENT_COMPLETE = 100
+        private const val DEFAULT_DIGEST_BUFFER_BYTES = 64 * 1024
         private val SESSION_ID_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS").withZone(ZoneOffset.UTC)
+        private const val MAX_LIVE_EVENTS = 1_000
 
         private fun defaultDataRoot(): Path =
             Path.of(
@@ -851,10 +1172,10 @@ internal class DesktopMemoryProfilerBackend(
                 ".android-performance-studio",
                 "memory-profiler",
             )
-
-        private fun locateSystemAdb(): Path? {
-            val platform = (SystemHostPlatformDetector().detect() as? StudioResult.Success)?.value ?: return null
-            return (SystemAdbLocator(platform).locate() as? StudioResult.Success)?.value?.executable
-        }
     }
 }
+
+internal fun AdbTargetSnapshot.heapDumpableProcesses(): List<MemoryProcessOption> =
+    profileableOrDebuggableProcesses().map { process ->
+        MemoryProcessOption(process.pid, process.name, process.packageName)
+    }

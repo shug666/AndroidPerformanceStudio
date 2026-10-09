@@ -9,10 +9,20 @@
 
 package com.androidperformancestudio.startup.app
 
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
@@ -28,6 +38,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.FrameWindowScope
@@ -66,6 +77,7 @@ import com.androidperformancestudio.startup.startup_app.generated.resources.seco
 import com.androidperformancestudio.startup.startup_app.generated.resources.speed
 import com.androidperformancestudio.startup.startup_app.generated.resources.speed_profile
 import com.androidperformancestudio.startup.startup_app.generated.resources.startup_type
+import com.androidperformancestudio.startup.startup_app.generated.resources.status
 import com.androidperformancestudio.startup.startup_app.generated.resources.stop_experiment
 import com.androidperformancestudio.startup.startup_app.generated.resources.timeout
 import com.androidperformancestudio.startup.startup_app.generated.resources.unknown
@@ -76,10 +88,11 @@ import com.androidperformancestudio.ui.DropdownSelector
 import com.androidperformancestudio.ui.HeaderDivider
 import com.androidperformancestudio.ui.HeaderSpacer
 import com.androidperformancestudio.ui.HeaderToolbar
+import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.ProfilerCompactButton
-import com.androidperformancestudio.ui.ProfilerToolbarStatus
 import com.androidperformancestudio.ui.UiLanguage
-import com.androidperformancestudio.ui.ViewerTheme
+import com.androidperformancestudio.ui.ViewerDimensions
+import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.chooseOpenFile
 import com.androidperformancestudio.ui.chooseSaveFile
 import com.androidperformancestudio.ui.localizedStringResource
@@ -89,7 +102,6 @@ import kotlinx.coroutines.launch
 @Composable
 public fun FrameWindowScope.StartupProfilerMainPage(
     language: UiLanguage = UiLanguage.ENGLISH,
-    darkTheme: Boolean = isSystemInDarkTheme(),
     onBack: () -> Unit = {},
 ) {
     val controller = remember(language) { StartupProfilerController(language = language) }
@@ -137,35 +149,41 @@ public fun FrameWindowScope.StartupProfilerMainPage(
         },
     )
 
-    ViewerTheme(darkTheme = darkTheme) {
-        if (state.compilationConfirmationRequired) {
-            AlertDialog(
-                onDismissRequest = controller::dismissCompilationConfirmation,
-                title = { Text(localizedStringResource(Res.string.compilation_change_title, language)) },
-                text = { Text(localizedStringResource(Res.string.compilation_change_message, language)) },
-                dismissButton = {
-                    TextButton(onClick = controller::dismissCompilationConfirmation) {
-                        Text(localizedStringResource(Res.string.cancel, language))
-                    }
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            controller.dismissCompilationConfirmation()
-                            experimentJob = scope.launch { controller.runExperiment(compilationChangeConfirmed = true) }
-                        },
-                    ) { Text(localizedStringResource(Res.string.continue_action, language)) }
-                },
-            )
-        }
-        Column(Modifier.fillMaxSize()) {
-            HeaderToolbar(
-                language = language,
-                onNavigateHome = {
-                    experimentJob?.cancel()
-                    onBack()
-                },
-                onNavigateSettings = null,
+    if (state.compilationConfirmationRequired) {
+        AlertDialog(
+            onDismissRequest = controller::dismissCompilationConfirmation,
+            title = { Text(localizedStringResource(Res.string.compilation_change_title, language)) },
+            text = { Text(localizedStringResource(Res.string.compilation_change_message, language)) },
+            dismissButton = {
+                TextButton(onClick = controller::dismissCompilationConfirmation) {
+                    Text(localizedStringResource(Res.string.cancel, language))
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        controller.dismissCompilationConfirmation()
+                        experimentJob = scope.launch { controller.runExperiment(compilationChangeConfirmed = true) }
+                    },
+                ) { Text(localizedStringResource(Res.string.continue_action, language)) }
+            },
+        )
+    }
+    Column(Modifier.fillMaxSize()) {
+        HeaderToolbar(
+            language = language,
+            onNavigateHome = {
+                experimentJob?.cancel()
+                onBack()
+            },
+            onNavigateSettings = null,
+        ) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 DropdownSelector(
                     items = state.devices,
@@ -179,6 +197,8 @@ public fun FrameWindowScope.StartupProfilerMainPage(
                 HeaderSpacer()
                 DropdownSelector(
                     items = state.targets,
+                    searchable = true,
+                    searchLanguage = language,
                     selectedItem = state.targets.firstOrNull { it.componentName == state.selectedComponentName },
                     onItemSelected = { controller.selectTarget(it.componentName) },
                     itemLabel = {
@@ -221,11 +241,6 @@ public fun FrameWindowScope.StartupProfilerMainPage(
                             experimentJob = scope.launch { controller.runExperiment() }
                         }
                     },
-                )
-                HeaderSpacer()
-                ProfilerToolbarStatus(
-                    message = state.operationMessage,
-                    error = state.errorMessage,
                 )
                 HeaderDivider()
                 HeaderSpacer()
@@ -303,29 +318,76 @@ public fun FrameWindowScope.StartupProfilerMainPage(
                     enabled = !state.isRunning,
                 )
             }
+        }
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.outline,
+        )
+        if (state.isRunning && state.totalRuns > 0) {
             HorizontalDivider(
                 thickness = 1.dp,
                 color = MaterialTheme.colorScheme.outline,
             )
-            if (state.isRunning && state.totalRuns > 0) {
-                HorizontalDivider(
-                    thickness = 1.dp,
-                    color = MaterialTheme.colorScheme.outline,
-                )
-                LinearProgressIndicator(
-                    progress = { state.completedRuns.toFloat() / state.totalRuns.toFloat() },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            HorizontalDivider(
-                thickness = 1.dp,
-                color = MaterialTheme.colorScheme.outline,
+            LinearProgressIndicator(
+                progress = { state.completedRuns.toFloat() / state.totalRuns.toFloat() },
+                modifier = Modifier.fillMaxWidth(),
             )
-            StartupProfilerScreen(
-                state = state,
-                actions = StartupProfilerActions(onSelectRun = controller::selectRun),
-                language = language,
-                modifier = Modifier.weight(1f),
+        }
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.outline,
+        )
+        StartupProfilerScreen(
+            state = state,
+            actions = StartupProfilerActions(onSelectRun = controller::selectRun),
+            language = language,
+            modifier = Modifier.weight(1f),
+        )
+        StartupProfilerStatusBar(
+            language = language,
+            operationMessage = state.operationMessage,
+            errorMessage = state.errorMessage,
+        )
+    }
+}
+
+@Composable
+private fun StartupProfilerStatusBar(
+    language: UiLanguage,
+    operationMessage: String?,
+    errorMessage: String?,
+) {
+    val colors = LocalViewerColors.current
+    val status = errorMessage ?: operationMessage
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(ViewerDimensions.footerHeight)
+                .background(colors.toolbar)
+                .border(
+                    ViewerDimensions.hairline,
+                    colors.border,
+                    RoundedCornerShape(0.dp),
+                ).horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        status?.let {
+            Text(
+                text = "${localizedStringResource(Res.string.status, language)}:",
+                color = colors.mutedText,
+                fontSize = ViewerTypography.label.fontSize,
+                maxLines = 1,
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = it,
+                color = if (errorMessage != null) MaterialTheme.colorScheme.error else colors.secondaryText,
+                fontSize = ViewerTypography.secondary.fontSize,
+                lineHeight = ViewerTypography.secondary.lineHeight,
+                maxLines = 1,
             )
         }
     }

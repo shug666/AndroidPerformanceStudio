@@ -63,6 +63,8 @@ class AppNavigator(
         private set
     var perfettoTraceNotice by mutableStateOf<String?>(null)
         private set
+    var perfettoTimestampNanos by mutableStateOf<Long?>(null)
+        private set
     var sourceLocation by mutableStateOf<SourceLocation?>(null)
         private set
     var memoryImportFile by mutableStateOf<Path?>(null)
@@ -89,9 +91,11 @@ class AppNavigator(
     fun openPerfettoTrace(
         path: Path,
         notice: String,
+        timestampNanos: Long? = null,
     ) {
         perfettoTraceFile = path
         perfettoTraceNotice = notice
+        perfettoTimestampNanos = timestampNanos
         activate(AppDestination.PERFETTO)
     }
 
@@ -99,6 +103,7 @@ class AppNavigator(
     fun clearPerfettoTrace() {
         perfettoTraceFile = null
         perfettoTraceNotice = null
+        perfettoTimestampNanos = null
     }
 
     /** Opens the memory profiler and imports [file] (HPROF, or java_hprof when [javaHeap]). */
@@ -124,3 +129,17 @@ class AppNavigator(
         this.destination = destination
     }
 }
+
+internal fun AppDestination.hasNativeFeatureMenu(): Boolean =
+    when (this) {
+        AppDestination.LAYOUT_INSPECTOR,
+        AppDestination.SIMPLEPERF,
+        AppDestination.PERFETTO,
+        AppDestination.MEMORY_PROFILER,
+        AppDestination.FRAME_PROFILER,
+        AppDestination.STARTUP_PROFILER,
+        AppDestination.BATTERY_PROFILER,
+        AppDestination.METHOD_RECORDING,
+        -> true
+        else -> false
+    }

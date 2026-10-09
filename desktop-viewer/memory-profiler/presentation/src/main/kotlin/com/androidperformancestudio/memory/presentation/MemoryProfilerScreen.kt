@@ -4,12 +4,26 @@
     "MagicNumber",
     "MaxLineLength",
     "TooManyFunctions",
+    "CyclomaticComplexMethod",
     "ktlint:standard:function-naming",
+    "ktlint:standard:argument-list-wrapping",
+    "ktlint:standard:binary-expression-wrapping",
+    "ktlint:standard:chain-method-continuation",
+    "ktlint:standard:indent",
+    "ktlint:standard:import-ordering",
+    "ktlint:standard:max-line-length",
+    "ktlint:standard:no-unused-imports",
 )
 
 package com.androidperformancestudio.memory.presentation
 
-import androidx.compose.foundation.Image
+import com.androidperformancestudio.ui.LocalViewerColors
+import com.androidperformancestudio.ui.ProfilerCompactButton
+import com.androidperformancestudio.ui.ViewerDimensions
+
+import com.androidperformancestudio.ui.ViewerTypography
+
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,66 +33,54 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toComposeImageBitmap
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.androidperformancestudio.memory.model.ActivityLeakEntry
-import com.androidperformancestudio.memory.model.BitmapDumpComparison
-import com.androidperformancestudio.memory.model.BitmapDumpSession
 import com.androidperformancestudio.memory.model.ClassStats
 import com.androidperformancestudio.memory.model.HeapSummary
 import com.androidperformancestudio.memory.model.NativeHeapAnalysis
-import com.androidperformancestudio.memory.model.NativeHeapSample
 import com.androidperformancestudio.memory.model.NativeHeapTrace
 import com.androidperformancestudio.memory.presentation.generated.resources.Res
 import com.androidperformancestudio.memory.presentation.generated.resources.activity
 import com.androidperformancestudio.memory.presentation.generated.resources.activity_leak_entry
 import com.androidperformancestudio.memory.presentation.generated.resources.activity_leaks
-import com.androidperformancestudio.memory.presentation.generated.resources.allocated
-import com.androidperformancestudio.memory.presentation.generated.resources.allocs
 import com.androidperformancestudio.memory.presentation.generated.resources.bitmap_analysis
-import com.androidperformancestudio.memory.presentation.generated.resources.bitmap_dump_comparison
-import com.androidperformancestudio.memory.presentation.generated.resources.bitmap_dump_comparison_summary
-import com.androidperformancestudio.memory.presentation.generated.resources.bitmap_dump_gallery
-import com.androidperformancestudio.memory.presentation.generated.resources.bitmap_dump_image
-import com.androidperformancestudio.memory.presentation.generated.resources.bitmap_dump_summary
 import com.androidperformancestudio.memory.presentation.generated.resources.bitmap_entry
 import com.androidperformancestudio.memory.presentation.generated.resources.bitmap_estimated_pixel_memory
 import com.androidperformancestudio.memory.presentation.generated.resources.bitmap_java_native_memory
 import com.androidperformancestudio.memory.presentation.generated.resources.class_histogram
 import com.androidperformancestudio.memory.presentation.generated.resources.class_name
 import com.androidperformancestudio.memory.presentation.generated.resources.classes
+import com.androidperformancestudio.memory.presentation.generated.resources.cancel
 import com.androidperformancestudio.memory.presentation.generated.resources.cleanup_warning
 import com.androidperformancestudio.memory.presentation.generated.resources.count
 import com.androidperformancestudio.memory.presentation.generated.resources.count_value
-import com.androidperformancestudio.memory.presentation.generated.resources.freed
-import com.androidperformancestudio.memory.presentation.generated.resources.frees
+import com.androidperformancestudio.memory.presentation.generated.resources.class_level_diff
+import com.androidperformancestudio.memory.presentation.generated.resources.dominator_tree
+import com.androidperformancestudio.memory.presentation.generated.resources.diff_view
 import com.androidperformancestudio.memory.presentation.generated.resources.heap_diff
 import com.androidperformancestudio.memory.presentation.generated.resources.heap_diff_entry
 import com.androidperformancestudio.memory.presentation.generated.resources.heap_size
@@ -89,8 +91,8 @@ import com.androidperformancestudio.memory.presentation.generated.resources.leak
 import com.androidperformancestudio.memory.presentation.generated.resources.leak_suspects
 import com.androidperformancestudio.memory.presentation.generated.resources.manual_verification
 import com.androidperformancestudio.memory.presentation.generated.resources.mapping_loaded_note
-import com.androidperformancestudio.memory.presentation.generated.resources.native_function
 import com.androidperformancestudio.memory.presentation.generated.resources.native_heap
+import com.androidperformancestudio.memory.presentation.generated.resources.open_native_heap
 import com.androidperformancestudio.memory.presentation.generated.resources.native_heap_total
 import com.androidperformancestudio.memory.presentation.generated.resources.native_heap_trace_summary
 import com.androidperformancestudio.memory.presentation.generated.resources.no_activity_leaks_detected
@@ -106,8 +108,6 @@ import com.androidperformancestudio.memory.presentation.generated.resources.unav
 import com.androidperformancestudio.memory.presentation.generated.resources.warning
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.localizedStringResource
-import java.nio.file.Files
-import org.jetbrains.skia.Image as SkiaImage
 
 @Composable
 public fun MemoryProfilerScreen(
@@ -117,48 +117,100 @@ public fun MemoryProfilerScreen(
     modifier: Modifier = Modifier,
 ) {
     val presentedState = MemoryProfilerPresenter.present(state)
-    Surface(modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+    Surface(modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surface),
+                    .background(MaterialTheme.colorScheme.background),
         ) {
-            Column(
-                modifier = Modifier.padding(top = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                ErrorAndWarnings(presentedState, actions, language)
-                presentedState.artifact?.let { artifact ->
-                    Text(
-                        "Evidence: ${artifact.kind.value} · ${artifact.completeness} · " +
-                            "${artifact.availableCapabilities.size} capabilities",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp),
-                    )
-                }
-                if (presentedState.mappingLoaded) {
-                    Text(
-                        localizedStringResource(Res.string.mapping_loaded_note, language),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp),
-                    )
+            if (presentedState.artifact != null || presentedState.mappingLoaded) {
+                Column(
+                    modifier = Modifier.padding(top = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    presentedState.snapshotSummary?.let { snapshot ->
+                        Text(
+                            "Snapshot: ${snapshot.id} · ${snapshot.format} · ${snapshot.capabilities.size} capabilities" +
+                                snapshot.sourceFileDigest?.let { " · source ${it.take(12)}" }.orEmpty() +
+                                snapshot.mappingDigest?.let { " · mapping ${it.take(12)}" }.orEmpty() +
+                                if (snapshot.indexFile != null) " · indexed" else "",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = ViewerTypography.bodyCompact.fontSize,
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                        )
+                    }
+                    presentedState.artifact?.let { artifact ->
+                        Text(
+                            "Evidence: ${artifact.kind.value} · ${artifact.completeness} · " +
+                                "${artifact.availableCapabilities.size} capabilities",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = ViewerTypography.bodyCompact.fontSize,
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                        )
+                    }
+                    if (presentedState.mappingLoaded) {
+                        Text(
+                            localizedStringResource(Res.string.mapping_loaded_note, language),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = ViewerTypography.bodyCompact.fontSize,
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                        )
+                    }
                 }
             }
-            if (presentedState.viewMode == MemoryProfilerViewMode.ClassList) {
-                MemoryProfilerClassListPane(
-                    state = presentedState,
-                    actions = actions,
-                    language = language,
-                    modifier = Modifier.fillMaxSize().weight(1f),
-                )
-            } else {
+            when (presentedState.viewMode) {
+                MemoryProfilerViewMode.ClassList ->
+                    MemoryProfilerClassListPane(
+                        state = presentedState,
+                        actions = actions,
+                        language = language,
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                    )
+                MemoryProfilerViewMode.Dominators ->
+                    MemoryProfilerDominatorPane(
+                        rows = presentedState.dominatorRows,
+                        actions = actions,
+                        language = language,
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                    )
+                MemoryProfilerViewMode.Diff ->
+                    MemoryProfilerDiffPane(
+                        diff = presentedState.heapDiff,
+                        language = language,
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                    )
+                MemoryProfilerViewMode.BitmapDump ->
+                    MemoryProfilerBitmapDumpPage(
+                        session = presentedState.bitmapDumpSession,
+                        comparison = presentedState.bitmapDumpComparison,
+                        isLoading = presentedState.isDumping,
+                        language = language,
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                    )
+                MemoryProfilerViewMode.NativeHeap ->
+                    MemoryProfilerNativeHeapPage(
+                        trace = presentedState.nativeHeapTrace,
+                        analysis = presentedState.nativeHeapAnalysis,
+                        isLoading = presentedState.isDumping,
+                        language = language,
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                    )
+                MemoryProfilerViewMode.LeakCanary ->
+                    MemoryProfilerLeakCanaryPage(
+                        report = presentedState.leakCanaryReport,
+                        hasHeap = presentedState.snapshotSummary != null,
+                        isLoading = presentedState.isDumping,
+                        liveSession = presentedState.leakCanaryLiveSession,
+                        language = language,
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                    )
+                MemoryProfilerViewMode.Dashboard -> {
                 Column(
                     modifier =
                         Modifier
-                            .fillMaxSize()
+                            .fillMaxWidth()
+                            .weight(1f)
                             .padding(8.dp)
                             .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -173,197 +225,265 @@ public fun MemoryProfilerScreen(
                     )
                     LeakSuspectsPhaseTwo(presentedState, language)
                     ActivityLeakSection(presentedState.activityLeaks, language)
-                    NativeHeapSection(presentedState.nativeHeapTrace, presentedState.nativeHeapAnalysis, language)
+                    NativeHeapSummarySection(
+                        trace = presentedState.nativeHeapTrace,
+                        analysis = presentedState.nativeHeapAnalysis,
+                        language = language,
+                        onOpen = { actions.onChangeViewMode(MemoryProfilerViewMode.NativeHeap) },
+                    )
                     HeapDiffSection(presentedState.heapDiff, language)
                     BitmapSection(presentedState.bitmapInstances, language)
-                    BitmapDumpGallery(presentedState.bitmapDumpSession, presentedState.bitmapDumpComparison, language)
+                }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun BitmapDumpGallery(
-    session: BitmapDumpSession?,
-    comparison: BitmapDumpComparison?,
-    language: UiLanguage,
-) {
-    if (session == null) return
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(4.dp))
-                .padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text(localizedStringResource(Res.string.bitmap_dump_gallery, language), fontWeight = FontWeight.Bold)
-        Text(
-            localizedStringResource(
-                Res.string.bitmap_dump_summary,
-                language,
-                session.summary.exportedImageCount,
-                session.summary.uniqueImageCount,
-                session.summary.duplicateGroupCount,
-                formatBytes(session.summary.estimatedBitmapBytes),
-            ),
-        )
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(session.images, key = { it.recordIndex }) { bitmap ->
-                Column(
-                    modifier =
-                        Modifier
-                            .width(180.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp))
-                            .padding(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    val image =
-                        remember(bitmap.file) {
-                            runCatching {
-                                SkiaImage.makeFromEncoded(Files.readAllBytes(bitmap.file)).toComposeImageBitmap()
-                            }.getOrNull()
-                        }
-                    if (image != null) {
-                        Image(
-                            bitmap = image,
-                            contentDescription = "Bitmap ${bitmap.recordIndex}",
-                            modifier = Modifier.fillMaxWidth().height(120.dp),
-                            contentScale = ContentScale.Fit,
-                        )
-                    } else {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth().height(120.dp),
-                            color = MaterialTheme.colorScheme.surface,
-                        ) {}
-                    }
-                    Text(
-                        localizedStringResource(
-                            Res.string.bitmap_dump_image,
-                            language,
-                            bitmap.recordIndex,
-                            bitmap.width,
-                            bitmap.height,
-                            formatBytes(bitmap.estimatedMemoryBytes),
-                            bitmap.duplicateCount,
-                        ),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        fontSize = 12.sp,
-                    )
-                }
-            }
-        }
-        comparison?.let { diff ->
-            Text(localizedStringResource(Res.string.bitmap_dump_comparison, language), fontWeight = FontWeight.Bold)
-            Text(
-                localizedStringResource(
-                    Res.string.bitmap_dump_comparison_summary,
-                    language,
-                    diff.before.exportedImageCount,
-                    diff.after.exportedImageCount,
-                    (diff.after.exportedImageCount - diff.before.exportedImageCount).withSign(),
-                    (diff.after.estimatedBitmapBytes - diff.before.estimatedBitmapBytes).withSign(),
-                ),
+            MemoryProfilerStatusBar(
+                state = presentedState,
+                actions = actions,
+                language = language,
             )
         }
     }
 }
 
 @Composable
-private fun ErrorAndWarnings(
+private fun MemoryProfilerDominatorPane(
+    rows: List<MemoryDominatorRow>,
+    actions: MemoryProfilerActions,
+    language: UiLanguage,
+    modifier: Modifier,
+) {
+    val expanded = remember(rows) { mutableStateMapOf<Long, Boolean>() }
+    val childrenByParent = remember(rows) { rows.groupBy { it.parentObjectId } }
+    val rowsById = remember(rows) { rows.associateBy { it.objectId } }
+
+    fun isVisible(row: MemoryDominatorRow): Boolean {
+        var parentId = row.parentObjectId
+        while (parentId != null) {
+            if (expanded[parentId] == false) return false
+            parentId = rowsById[parentId]?.parentObjectId
+        }
+        return true
+    }
+
+    val visibleRows = rows.filter(::isVisible)
+    Column(
+        modifier = modifier.padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(localizedStringResource(Res.string.dominator_tree, language), fontWeight = FontWeight.Bold)
+        Text(
+            text = "Retained-size evidence; selecting a row opens the object inspector.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = ViewerTypography.secondary.fontSize,
+        )
+        if (rows.isEmpty()) {
+            Text(
+                text = localizedStringResource(Res.string.import_or_dump_an_hprof_file_to_show_class_histogram, language),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
+                itemsIndexed(visibleRows, key = { _, row -> row.objectId }) { index, row ->
+                    val hasChildren = childrenByParent[row.objectId].orEmpty().isNotEmpty()
+                    val isExpanded = expanded[row.objectId] != false
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    if (index % 2 == 0) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surface,
+                                    RoundedCornerShape(3.dp),
+                                )
+                                .clickable { actions.onSelectInstance(row.objectId) }
+                                .padding(start = (8 + row.depth * 16).dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text =
+                                when {
+                                    !hasChildren -> "·"
+                                    isExpanded -> "▾"
+                                    else -> "▸"
+                                },
+                            modifier =
+                                Modifier.clickable(enabled = hasChildren) {
+                                    expanded[row.objectId] = !isExpanded
+                                },
+                            fontSize = ViewerTypography.bodyCompact.fontSize,
+                        )
+                        Text(
+                            text = "0x${java.lang.Long.toHexString(row.objectId)} · ${row.className}",
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontSize = ViewerTypography.bodyCompact.fontSize,
+                        )
+                        Text(formatBytes(row.shallowSize), fontSize = ViewerTypography.secondary.fontSize)
+                        Text(formatBytes(row.retainedSize), fontSize = ViewerTypography.secondary.fontSize)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MemoryProfilerDiffPane(
+    diff: com.androidperformancestudio.memory.model.HeapDiff?,
+    language: UiLanguage,
+    modifier: Modifier,
+) {
+    Column(
+        modifier = modifier.padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(localizedStringResource(Res.string.diff_view, language), fontWeight = FontWeight.Bold)
+        Text(
+            localizedStringResource(Res.string.class_level_diff, language),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = ViewerTypography.secondary.fontSize,
+        )
+        if (diff == null || diff.entries.isEmpty()) {
+            Text(localizedStringResource(Res.string.no_class_changes_between_the_latest_two_heap_dumps, language))
+        } else {
+            LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
+                itemsIndexed(diff.entries, key = { _, entry -> entry.className }) { index, entry ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(
+                                if (index % 2 == 0) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surface,
+                                RoundedCornerShape(3.dp),
+                            ).padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(entry.className, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("${entry.beforeCount} → ${entry.afterCount}")
+                        Text(entry.countDelta.withSign())
+                        Text(formatBytes(entry.shallowSizeDelta))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MemoryProfilerStatusBar(
     state: MemoryProfilerState,
     actions: MemoryProfilerActions,
     language: UiLanguage,
 ) {
-    state.operationMessage?.let { message ->
-        MessageCard(
-            title = localizedStringResource(Res.string.in_progress, language),
-            body = message,
-            tone = MessageTone.INFO,
-        ) {
-            CircularProgressIndicator(Modifier.width(24.dp).height(24.dp))
+    val colors = LocalViewerColors.current
+    var hasStatus = false
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(ViewerDimensions.footerHeight)
+                .background(colors.toolbar)
+                .border(
+                    ViewerDimensions.hairline,
+                    colors.border,
+                    RoundedCornerShape(0.dp),
+                ).horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .testTag("memory-profiler-status-bar"),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        state.operationMessage?.let { message ->
+            CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                strokeWidth = 2.dp,
+            )
+            Text(
+                text = state.loadPhase.name,
+                color = colors.mutedText,
+                fontSize = ViewerTypography.label.fontSize,
+                maxLines = 1,
+            )
+            MemoryProfilerStatusMessage(
+                label = localizedStringResource(Res.string.in_progress, language),
+                message = message,
+                messageColor = colors.secondaryText,
+            )
+            ProfilerCompactButton(
+                text = localizedStringResource(Res.string.cancel, language),
+                onClick = actions.onCancelOperation,
+            )
+            hasStatus = true
+        }
+        state.error?.let { error ->
+            if (hasStatus) MemoryProfilerStatusDivider()
+            MemoryProfilerStatusMessage(
+                label = error.title,
+                message = error.detail,
+                messageColor = MaterialTheme.colorScheme.error,
+            )
+            ProfilerCompactButton(
+                text = error.retryLabel,
+                onClick = actions.onRetry,
+            )
+            hasStatus = true
+        }
+        state.cleanupWarning?.let { warning ->
+            if (hasStatus) MemoryProfilerStatusDivider()
+            MemoryProfilerStatusMessage(
+                label = localizedStringResource(Res.string.cleanup_warning, language),
+                message = warning,
+                messageColor = MaterialTheme.colorScheme.tertiary,
+            )
+            hasStatus = true
+        }
+        state.warning?.let { warning ->
+            if (hasStatus) MemoryProfilerStatusDivider()
+            MemoryProfilerStatusMessage(
+                label = localizedStringResource(Res.string.warning, language),
+                message = warning,
+                messageColor = MaterialTheme.colorScheme.tertiary,
+            )
         }
     }
-    state.error?.let { error ->
-        MessageCard(
-            title = error.title,
-            body = error.detail,
-            tone = MessageTone.ERROR,
-        ) {
-            Button(onClick = actions.onRetry) { Text(error.retryLabel) }
-        }
-    }
-    state.cleanupWarning?.let { warning ->
-        MessageCard(
-            title = localizedStringResource(Res.string.cleanup_warning, language),
-            body = warning,
-            tone = MessageTone.WARNING,
+}
+
+@Composable
+private fun MemoryProfilerStatusMessage(
+    label: String,
+    message: String,
+    messageColor: Color,
+) {
+    val colors = LocalViewerColors.current
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "$label:",
+            color = colors.mutedText,
+            fontSize = ViewerTypography.label.fontSize,
+            maxLines = 1,
         )
-    }
-    state.warning?.let { warning ->
-        MessageCard(
-            title = localizedStringResource(Res.string.warning, language),
-            body = warning,
-            tone = MessageTone.WARNING,
+        Text(
+            text = message,
+            color = messageColor,
+            fontSize = ViewerTypography.secondary.fontSize,
+            lineHeight = ViewerTypography.secondary.lineHeight,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
 
 @Composable
-private fun MessageCard(
-    title: String,
-    body: String,
-    tone: MessageTone,
-    trailing: @Composable (() -> Unit)? = null,
-) {
-    val palette =
-        when (tone) {
-            MessageTone.INFO ->
-                MessageCardPalette(
-                    MaterialTheme.colorScheme.primaryContainer,
-                    MaterialTheme.colorScheme.onPrimaryContainer,
-                    MaterialTheme.colorScheme.primary,
-                )
-            MessageTone.ERROR ->
-                MessageCardPalette(
-                    MaterialTheme.colorScheme.errorContainer,
-                    MaterialTheme.colorScheme.onErrorContainer,
-                    MaterialTheme.colorScheme.error,
-                )
-            MessageTone.WARNING ->
-                MessageCardPalette(
-                    MaterialTheme.colorScheme.tertiaryContainer,
-                    MaterialTheme.colorScheme.onTertiaryContainer,
-                    MaterialTheme.colorScheme.tertiary,
-                )
-        }
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .background(palette.container, RoundedCornerShape(4.dp))
-                .border(1.dp, palette.border, RoundedCornerShape(4.dp))
-                .padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, color = palette.content, fontWeight = FontWeight.Bold)
-            Text(body, color = palette.content)
-        }
-        trailing?.invoke()
-    }
+private fun MemoryProfilerStatusDivider() {
+    Text(
+        text = "•",
+        color = LocalViewerColors.current.mutedText,
+        fontSize = ViewerTypography.label.fontSize,
+    )
 }
-
-private enum class MessageTone { INFO, ERROR, WARNING }
-
-private data class MessageCardPalette(
-    val container: Color,
-    val content: Color,
-    val border: Color,
-)
 
 @Composable
 private fun Overview(
@@ -421,7 +541,7 @@ private fun Histogram(
                 .fillMaxWidth()
                 .height(300.dp)
                 .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(4.dp))
-                .padding(8.dp),
+                .testTag("memory-profiler-class-histogram"),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(localizedStringResource(Res.string.class_histogram, language), fontWeight = FontWeight.Bold)
@@ -430,9 +550,10 @@ private fun Histogram(
             Text(localizedStringResource(Res.string.import_or_dump_an_hprof_file_to_show_class_histogram, language))
         } else {
             LazyColumn(Modifier.fillMaxWidth()) {
-                items(classes, key = { it.className }) { stats ->
+                itemsIndexed(classes, key = { _, stats -> stats.className }) { index, stats ->
                     HistogramRow(
                         stats = stats,
+                        rowIndex = index,
                         highlighted = stats.className == highlightedClassName,
                         onClick = { actions.onHighlightClass(stats.className) },
                         language = language,
@@ -493,6 +614,7 @@ private fun SortHeader(
 @Composable
 private fun HistogramRow(
     stats: ClassStats,
+    rowIndex: Int,
     highlighted: Boolean,
     onClick: () -> Unit,
     language: UiLanguage,
@@ -502,7 +624,11 @@ private fun HistogramRow(
             .fillMaxWidth()
             .height(32.dp)
             .background(
-                if (highlighted) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                when {
+                    highlighted -> MaterialTheme.colorScheme.primaryContainer
+                    rowIndex % 2 == 0 -> MaterialTheme.colorScheme.surfaceContainerLow
+                    else -> MaterialTheme.colorScheme.surface
+                },
                 RoundedCornerShape(3.dp),
             ).clickable(onClick = onClick)
             .padding(horizontal = 4.dp),
@@ -635,50 +761,37 @@ private fun ActivityLeakSection(
 }
 
 @Composable
-private fun NativeHeapSection(
+private fun NativeHeapSummarySection(
     trace: NativeHeapTrace?,
     analysis: NativeHeapAnalysis,
     language: UiLanguage,
+    onOpen: () -> Unit,
 ) {
     Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(4.dp))
-                .padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
+        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(4.dp)).padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(localizedStringResource(Res.string.native_heap, language), fontWeight = FontWeight.Bold)
-        if (trace == null) {
-            Text(localizedStringResource(Res.string.no_native_heap_trace, language))
-            return@Column
-        }
-        Text(
-            localizedStringResource(
-                Res.string.native_heap_trace_summary,
-                language,
-                trace.fileName,
-                formatBytes(trace.fileSizeBytes),
-                trace.deviceSdkApiLevel?.toString() ?: "?",
-            ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        trace.artifact?.let { artifact ->
-            Text(
-                "Source: ${trace.evidenceSource}; completeness: ${artifact.completeness}; " +
-                    "capabilities: ${artifact.availableCapabilities.joinToString { it.value }}",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 12.sp,
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(localizedStringResource(Res.string.native_heap, language), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            ProfilerCompactButton(
+                text = localizedStringResource(Res.string.open_native_heap, language),
+                enabled = trace != null,
+                onClick = onOpen,
             )
-            trace.fallbackReason?.let { reason ->
-                Text(
-                    "Best-effort fallback: $reason",
-                    color = MaterialTheme.colorScheme.error,
-                    fontSize = 12.sp,
-                )
-            }
         }
-        if (analysis.topAllocations.isNotEmpty()) {
+        if (trace == null) {
+            Text(localizedStringResource(Res.string.no_native_heap_trace, language), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            Text(
+                localizedStringResource(
+                    Res.string.native_heap_trace_summary,
+                    language,
+                    trace.fileName,
+                    formatBytes(trace.fileSizeBytes),
+                    trace.deviceSdkApiLevel?.toString() ?: "?",
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Text(
                 localizedStringResource(
                     Res.string.native_heap_total,
@@ -689,129 +802,7 @@ private fun NativeHeapSection(
                 ),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            var sortColumn by remember { mutableStateOf(NativeHeapSortColumn.ALLOCATED) }
-            var descending by remember { mutableStateOf(true) }
-            val rows =
-                remember(analysis, sortColumn, descending) {
-                    val comparator =
-                        when (sortColumn) {
-                            NativeHeapSortColumn.FUNCTION -> compareBy<NativeHeapSample> { it.functionName }
-                            NativeHeapSortColumn.ALLOCATED -> compareBy { it.allocatedBytes }
-                            NativeHeapSortColumn.FREED -> compareBy { it.freedBytes }
-                            NativeHeapSortColumn.ALLOCS -> compareBy { it.allocCount }
-                            NativeHeapSortColumn.FREES -> compareBy { it.freeCount }
-                        }
-                    analysis.topAllocations.sortedWith(if (descending) comparator.reversed() else comparator)
-                }
-            NativeHeapTableHeader(language, sortColumn, descending) { column ->
-                if (sortColumn == column) {
-                    descending = !descending
-                } else {
-                    sortColumn = column
-                    descending = true
-                }
-            }
-            LazyColumn(Modifier.heightIn(max = 240.dp)) {
-                items(rows) { sample -> NativeHeapTableRow(sample) }
-            }
         }
-    }
-}
-
-private enum class NativeHeapSortColumn { FUNCTION, ALLOCATED, FREED, ALLOCS, FREES }
-
-@Composable
-private fun NativeHeapTableHeader(
-    language: UiLanguage,
-    sortColumn: NativeHeapSortColumn,
-    descending: Boolean,
-    onSort: (NativeHeapSortColumn) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        NativeHeapHeaderCell(
-            localizedStringResource(Res.string.native_function, language),
-            Modifier.weight(1f),
-            sortColumn == NativeHeapSortColumn.FUNCTION,
-            descending,
-            onSort,
-            NativeHeapSortColumn.FUNCTION,
-        )
-        NativeHeapHeaderCell(
-            localizedStringResource(Res.string.allocated, language),
-            Modifier.width(88.dp),
-            sortColumn == NativeHeapSortColumn.ALLOCATED,
-            descending,
-            onSort,
-            NativeHeapSortColumn.ALLOCATED,
-        )
-        NativeHeapHeaderCell(
-            localizedStringResource(Res.string.freed, language),
-            Modifier.width(80.dp),
-            sortColumn == NativeHeapSortColumn.FREED,
-            descending,
-            onSort,
-            NativeHeapSortColumn.FREED,
-        )
-        NativeHeapHeaderCell(
-            localizedStringResource(Res.string.allocs, language),
-            Modifier.width(56.dp),
-            sortColumn == NativeHeapSortColumn.ALLOCS,
-            descending,
-            onSort,
-            NativeHeapSortColumn.ALLOCS,
-        )
-        NativeHeapHeaderCell(
-            localizedStringResource(Res.string.frees, language),
-            Modifier.width(56.dp),
-            sortColumn == NativeHeapSortColumn.FREES,
-            descending,
-            onSort,
-            NativeHeapSortColumn.FREES,
-        )
-    }
-}
-
-@Composable
-@Suppress("LongParameterList")
-private fun NativeHeapHeaderCell(
-    text: String,
-    modifier: Modifier,
-    active: Boolean,
-    descending: Boolean,
-    onSort: (NativeHeapSortColumn) -> Unit,
-    column: NativeHeapSortColumn,
-) {
-    Text(
-        text = if (active) "$text ${if (descending) "↓" else "↑"}" else text,
-        modifier = modifier.clickable { onSort(column) },
-        fontWeight = FontWeight.Bold,
-        fontSize = 12.sp,
-        color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 1,
-    )
-}
-
-@Composable
-private fun NativeHeapTableRow(sample: NativeHeapSample) {
-    Row(
-        modifier = Modifier.fillMaxWidth().height(26.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            sample.functionName,
-            Modifier.weight(1f),
-            fontSize = 12.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(formatBytes(sample.allocatedBytes), Modifier.width(88.dp), fontSize = 12.sp, textAlign = TextAlign.End)
-        Text(formatBytes(sample.freedBytes), Modifier.width(80.dp), fontSize = 12.sp, textAlign = TextAlign.End)
-        Text(integer(sample.allocCount.toInt()), Modifier.width(56.dp), fontSize = 12.sp, textAlign = TextAlign.End)
-        Text(integer(sample.freeCount.toInt()), Modifier.width(56.dp), fontSize = 12.sp, textAlign = TextAlign.End)
     }
 }
 
@@ -873,7 +864,7 @@ private fun BitmapSection(
                 Text(
                     localizedStringResource(Res.string.bitmap_estimated_pixel_memory, language, formatBytes(estimated)),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
+                    fontSize = ViewerTypography.bodyCompact.fontSize,
                 )
                 val nativeSize = bitmap.nativeSizeBytes
                 if (bitmap.javaSizeBytes > 0L && nativeSize != null) {
@@ -885,7 +876,7 @@ private fun BitmapSection(
                             formatBytes(nativeSize),
                         ),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp,
+                        fontSize = ViewerTypography.bodyCompact.fontSize,
                     )
                 }
             }

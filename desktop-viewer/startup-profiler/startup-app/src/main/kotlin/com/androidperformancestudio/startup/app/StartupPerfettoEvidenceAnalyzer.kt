@@ -20,6 +20,7 @@ import com.androidperformancestudio.contracts.Sha256
 import com.androidperformancestudio.model.StudioResult
 import com.androidperformancestudio.platform.perfetto.TraceAnalysisContexts
 import com.androidperformancestudio.platform.perfetto.TraceProcessorToolResolver
+import com.androidperformancestudio.startup.analysis.StartupPerfettoEvidenceSlices
 import com.androidperformancestudio.startup.analysis.StartupPerfettoTraceAdapter
 import com.androidperformancestudio.startup.model.StartupPerfettoRootCauseEvidence
 import com.androidperformancestudio.startup.model.StartupRun
@@ -68,13 +69,35 @@ internal class StartupPerfettoEvidenceAnalyzer(
             }
         return try {
             val scheduling = context.query(adapter.schedulingQuery(run.processIdAfter)).valueOrReturn()
+            val waking = context.query(adapter.wakingQuery(run.processIdAfter)).valueOrReturn()
+            val runQueue = context.query(adapter.runQueueQuery()).valueOrReturn()
+            val gc = context.query(adapter.gcQuery(run.processIdAfter)).valueOrReturn()
+            val jit = context.query(adapter.jitQuery(run.processIdAfter)).valueOrReturn()
+            val classLoading = context.query(adapter.classLoadingQuery(run.processIdAfter)).valueOrReturn()
+            val classVerification = context.query(adapter.classVerificationQuery(run.processIdAfter)).valueOrReturn()
             val binder = context.query(adapter.binderQuery(run.processIdAfter)).valueOrReturn()
             val main = context.query(adapter.mainThreadQuery(run.processIdAfter)).valueOrReturn()
             val frames = context.query(adapter.frameQuery(run.processIdAfter)).valueOrReturn()
             StudioResult.Success(
                 StartupPerfettoProcessingResult(
                     analyzedArtifact,
-                    adapter.map(scheduling, binder, main, frames, analyzedArtifact.clockMappings.singleOrNull()),
+                    adapter.map(
+                        evidence =
+                            StartupPerfettoEvidenceSlices(
+                                scheduling = scheduling,
+                                binder = binder,
+                                mainThread = main,
+                                frames = frames,
+                                waking = waking,
+                                runQueue = runQueue,
+                                gc = gc,
+                                jit = jit,
+                                classLoading = classLoading,
+                                classVerification = classVerification,
+                            ),
+                        clockMapping = analyzedArtifact.clockMappings.singleOrNull(),
+                        milestones = run.milestones,
+                    ),
                 ),
             )
         } catch (failure: QueryFailure) {

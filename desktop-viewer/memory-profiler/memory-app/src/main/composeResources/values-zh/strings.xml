@@ -1,11 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="diff_view">差异</string>
+    <string name="native_heap_view">Native 堆</string>
+    <string name="bitmap_dump_view">Bitmap</string>
+    <string name="dashboard_view">概览</string>
+    <string name="class_list_view">类列表</string>
+    <string name="dominators_view">支配树</string>
     <string name="file">文件</string>
     <string name="export">导出</string>
     <string name="back_to_home">返回主页</string>
     <string name="refresh_devices">刷新设备</string>
     <string name="export_raw_hprof">导出原始 HPROF</string>
     <string name="export_standard_hprof">导出标准 HPROF</string>
+    <string name="export_object_investigation">导出对象调查 JSON</string>
+    <string name="export_class_instances">导出选中类实例 CSV</string>
+    <string name="export_diff">导出类差异 CSV</string>
+    <string name="export_snapshot_json">导出快照 JSON</string>
+    <string name="export_investigation_report">导出调查报告</string>
     <string name="export_csv">导出 CSV</string>
     <string name="unable_to_analyze_hprof">无法分析 HPROF</string>
     <string name="android_sdk_platform_tools_not_found">未找到 Android SDK Platform Tools</string>
@@ -47,4 +58,11 @@
     <string name="no_heap_objects_parsed">未能从 %1$s 解析出堆对象。该文件可能使用了不受支持的 HPROF 记录，或不包含堆转储。</string>
     <string name="install_sdk_platform_tools">请安装 SDK Platform Tools，或配置 ANDROID_HOME/ANDROID_SDK_ROOT 以使 adb 可用。</string>
     <string name="hprof_parser_out_of_memory">解析器分析此文件时内存不足。请尝试关闭其他工作区，或增大桌面应用的最大堆内存。</string>
+    <string name="memory_leaks_view">内存泄漏</string>
+    <string name="analyzing_memory_leaks">正在分析内存泄漏…</string>
+    <string name="memory_leaks_analysis_failed">内存泄漏分析失败</string>
+    <string name="connecting_leak_canary_agent">正在连接 LeakCanary Agent…</string>
+    <string name="monitoring_leak_canary">正在监听 LeakCanary 事件…</string>
+    <string name="inject_leak_canary_agent">注入 Agent</string>
+    <string name="choose_android_project">选择 Android 工程</string>
 </resources>

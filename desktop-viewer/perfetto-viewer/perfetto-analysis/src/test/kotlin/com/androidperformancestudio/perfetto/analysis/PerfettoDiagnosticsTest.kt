@@ -14,9 +14,36 @@ class PerfettoDiagnosticsTest {
         assertEquals(
             setOf(
                 "cpu_hotspots",
+                "sched_switch",
+                "sched_waking",
+                "run_queue",
+                "main_thread_blocked",
                 "cpu_freq_dist",
+                "cpu_contention",
+                "binder_ipc_long_tail",
+                "binder_system_server",
                 "binder_latency",
+                "binder_server_saturation",
+                "binder_wait_chain",
+                "binder_frame_alignment",
                 "frame_jank",
+                "frame_surface_correlation",
+                "file_io_syscalls",
+                "fsync_calls",
+                "block_io_pressure",
+                "page_faults",
+                "sqlite_activity",
+                "sqlite_lock_wait",
+                "art_gc_events",
+                "art_allocation_churn",
+                "art_jit_dex2oat",
+                "art_class_loading",
+                "art_class_verification",
+                "thermal_throttling",
+                "dvfs_residency",
+                "gpu_frequency_residency",
+                "power_rails",
+                "power_frame_alignment",
                 "mem_counters",
                 "input_latency",
                 "thread_states",
@@ -30,11 +57,30 @@ class PerfettoDiagnosticsTest {
     fun `standard library diagnostics declare their modules and avoid like`() {
         val byId = PerfettoDiagnostics.all.associateBy(DiagnosticQuery::id)
 
+        assertTrue(byId.getValue("sched_switch").sql.contains("sched_slice"))
+        assertTrue(byId.getValue("sched_waking").sql.contains("sched_waking"))
+        assertTrue(byId.getValue("run_queue").sql.contains("sched_runnable_thread_count"))
+        assertTrue(byId.getValue("run_queue").sql.contains("LEAD(ts) OVER"))
+        assertTrue(byId.getValue("main_thread_blocked").sql.contains("is_main_thread"))
         assertTrue(byId.getValue("cpu_freq_dist").sql.contains("INCLUDE PERFETTO MODULE linux.cpu.frequency;"))
+        assertTrue(byId.getValue("binder_ipc_long_tail").sql.contains("PERCENTILE"))
+        assertTrue(byId.getValue("binder_system_server").sql.contains("system_server"))
         assertTrue(byId.getValue("binder_latency").sql.contains("INCLUDE PERFETTO MODULE android.binder;"))
+        assertTrue(byId.getValue("binder_wait_chain").sql.contains("thread_state_dur"))
+        assertTrue(byId.getValue("binder_frame_alignment").sql.contains("actual_frame_timeline_slice"))
+        assertTrue(byId.getValue("binder_frame_alignment").sql.contains("binder.client_upid = actual.upid"))
         assertTrue(byId.getValue("frame_jank").sql.contains("INCLUDE PERFETTO MODULE android.frames.per_frame_metrics;"))
         assertTrue(byId.getValue("mem_counters").sql.contains("INCLUDE PERFETTO MODULE linux.memory.process;"))
         assertTrue(byId.getValue("wakeup_latency").sql.contains("INCLUDE PERFETTO MODULE sched.runnable;"))
+        assertTrue(byId.getValue("cpu_contention").sql.contains("sched_previous_runnable_on_thread"))
+        assertTrue(byId.getValue("binder_server_saturation").sql.contains("server_dur"))
+        assertTrue(byId.getValue("binder_wait_chain").sql.contains("android_sync_binder_thread_state_by_txn"))
+        assertTrue(byId.getValue("frame_surface_correlation").sql.contains("actual_frame_timeline_slice"))
+        assertTrue(byId.getValue("block_io_pressure").sql.contains("INCLUDE PERFETTO MODULE linux.block_io;"))
+        assertTrue(byId.getValue("art_gc_events").sql.contains("android_garbage_collection_events"))
+        assertTrue(byId.getValue("art_class_loading").sql.contains("android_class_loading_for_startup"))
+        assertTrue(byId.getValue("dvfs_residency").sql.contains("INCLUDE PERFETTO MODULE android.dvfs;"))
+        assertTrue(byId.getValue("power_rails").sql.contains("android_power_rails_counters"))
         PerfettoDiagnostics.all.forEach { query ->
             assertFalse(Regex("\\bLIKE\\b", RegexOption.IGNORE_CASE).containsMatchIn(query.sql), query.id)
         }

@@ -115,8 +115,9 @@ import com.androidperformancestudio.startup.presentation.generated.resources.var
 import com.androidperformancestudio.startup.presentation.generated.resources.wait_time
 import com.androidperformancestudio.startup.presentation.generated.resources.warm
 import com.androidperformancestudio.startup.presentation.generated.resources.warnings
-import com.androidperformancestudio.ui.UiLanguage
+import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.ProfilerMetricCard
+import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.localizedStringResource
 import java.util.Locale
 
@@ -315,7 +316,7 @@ private fun RunRow(
     onSelect: (String) -> Unit,
     language: UiLanguage,
 ) {
-    val background = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+    val background = if (selected) MaterialTheme.colorScheme.primaryContainer else LocalViewerColors.current.transparent
     Row(Modifier.background(background).clickable { onSelect(run.id) }.padding(vertical = 6.dp, horizontal = 8.dp)) {
         TableCell(run.iteration.toString(), 70)
         TableCell(run.observedType.localizedLabel(language), 100)
@@ -436,6 +437,16 @@ private fun RunDetail(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            rootCause.phaseAttributions.forEach { phase ->
+                Text(
+                    "${phase.phaseName}: GC ${phase.gcNs / 1_000_000.0} ms · " +
+                        "JIT ${phase.jitNs / 1_000_000.0} ms · " +
+                        "class load ${phase.classLoadingNs / 1_000_000.0} ms · " +
+                        "verify/init ${phase.classVerificationNs / 1_000_000.0} ms",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
     if (run.diagnostics.isNotEmpty()) {

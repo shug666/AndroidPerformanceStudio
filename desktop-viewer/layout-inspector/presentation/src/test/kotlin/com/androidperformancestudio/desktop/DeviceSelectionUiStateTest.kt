@@ -1,24 +1,35 @@
 package com.androidperformancestudio.desktop
 
-import com.androidperformancestudio.platform.adb.AdbDevice
+import com.androidperformancestudio.platform.adb.AndroidDeviceInfo
 import com.androidperformancestudio.platform.adb.AdbDeviceState
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class DeviceSelectionUiStateTest {
+
+    @Test
+    fun `device choice does not duplicate a serial used as model fallback`() {
+        val choices =
+            deviceChoices(
+                listOf(AndroidDeviceInfo("serial-1", "serial-1", "serial-1", null, null, null, AdbDeviceState.ONLINE, null, "device", null)),
+            )
+
+        assertEquals(listOf(DeviceChoiceModel("serial-1", "serial-1")), choices)
+    }
+
     @Test
     fun `device choices prefer model label and keep serial identity`() {
         val choices = deviceChoices(
             listOf(
-                AdbDevice(serial = "emulator-5554", state = AdbDeviceState.ONLINE, model = "sdk_gphone"),
-                AdbDevice(serial = "R3CN30ABC", state = AdbDeviceState.ONLINE, model = "Pixel_8"),
+                AndroidDeviceInfo("emulator-5554", "sdk_gphone", "sdk_gphone(emulator-5554)", null, null, null, AdbDeviceState.ONLINE, null, "device", null),
+                AndroidDeviceInfo("R3CN30ABC", "Pixel_8", "Pixel_8(R3CN30ABC)", null, null, null, AdbDeviceState.ONLINE, null, "device", null),
             ),
         )
 
         assertEquals(
             listOf(
-                DeviceChoiceModel("emulator-5554", "sdk_gphone · emulator-5554"),
-                DeviceChoiceModel("R3CN30ABC", "Pixel_8 · R3CN30ABC"),
+                DeviceChoiceModel("emulator-5554", "sdk_gphone(emulator-5554)"),
+                DeviceChoiceModel("R3CN30ABC", "Pixel_8(R3CN30ABC)"),
             ),
             choices,
         )
@@ -31,14 +42,14 @@ class DeviceSelectionUiStateTest {
             "physical-1",
             sanitizeSelectedDeviceSerial(
                 "physical-1",
-                listOf(AdbDevice("physical-1", AdbDeviceState.ONLINE)),
+                listOf(AndroidDeviceInfo("physical-1", "physical-1", "physical-1", null, null, null, AdbDeviceState.ONLINE, null, "device", null)),
             ),
         )
         assertEquals(
             "physical-1",
             sanitizeSelectedDeviceSerial(
                 null,
-                listOf(AdbDevice("physical-1", AdbDeviceState.ONLINE)),
+                listOf(AndroidDeviceInfo("physical-1", "physical-1", "physical-1", null, null, null, AdbDeviceState.ONLINE, null, "device", null)),
             ),
         )
         assertEquals(
@@ -46,8 +57,8 @@ class DeviceSelectionUiStateTest {
             sanitizeSelectedDeviceSerial(
                 null,
                 listOf(
-                    AdbDevice("physical-1", AdbDeviceState.ONLINE),
-                    AdbDevice("physical-2", AdbDeviceState.ONLINE),
+                    AndroidDeviceInfo("physical-1", "physical-1", "physical-1", null, null, null, AdbDeviceState.ONLINE, null, "device", null),
+                    AndroidDeviceInfo("physical-2", "physical-2", "physical-2", null, null, null, AdbDeviceState.ONLINE, null, "device", null),
                 ),
             ),
         )

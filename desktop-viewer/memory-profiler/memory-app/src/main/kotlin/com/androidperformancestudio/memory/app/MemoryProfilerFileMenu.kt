@@ -4,14 +4,18 @@ package com.androidperformancestudio.memory.app
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.window.FrameWindowScope
-import com.androidperformancestudio.ui.ActiveWindowMenuBar
 import com.androidperformancestudio.memory.memory_app.generated.resources.Res
 import com.androidperformancestudio.memory.memory_app.generated.resources.export
 import com.androidperformancestudio.memory.memory_app.generated.resources.export_bitmap_comparison
 import com.androidperformancestudio.memory.memory_app.generated.resources.export_bitmap_dump
+import com.androidperformancestudio.memory.memory_app.generated.resources.export_class_instances
 import com.androidperformancestudio.memory.memory_app.generated.resources.export_csv
+import com.androidperformancestudio.memory.memory_app.generated.resources.export_diff
+import com.androidperformancestudio.memory.memory_app.generated.resources.export_investigation_report
 import com.androidperformancestudio.memory.memory_app.generated.resources.export_native_heap_trace
+import com.androidperformancestudio.memory.memory_app.generated.resources.export_object_investigation
 import com.androidperformancestudio.memory.memory_app.generated.resources.export_raw_hprof
+import com.androidperformancestudio.memory.memory_app.generated.resources.export_snapshot_json
 import com.androidperformancestudio.memory.memory_app.generated.resources.export_standard_hprof
 import com.androidperformancestudio.memory.memory_app.generated.resources.file
 import com.androidperformancestudio.memory.memory_app.generated.resources.import_hprof_menu
@@ -21,10 +25,13 @@ import com.androidperformancestudio.memory.memory_app.generated.resources.import
 import com.androidperformancestudio.memory.memory_app.generated.resources.no_recent_sessions
 import com.androidperformancestudio.memory.memory_app.generated.resources.recent_sessions
 import com.androidperformancestudio.memory.storage.MemorySessionMetadata
+import com.androidperformancestudio.ui.ActiveWindowMenuBar
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.localizedStringResource
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+
+private const val MAX_RECENT_SESSIONS_IN_MENU = 12
 
 internal data class MemoryProfilerFileMenuModel(
     val fileTitle: String,
@@ -39,6 +46,16 @@ internal data class MemoryProfilerFileMenuModel(
     val exportRawHprofLabel: String,
     val exportStandardHprofLabel: String,
     val exportCsvLabel: String,
+    val exportClassInstancesLabel: String = "Export Selected Class Instances CSV",
+    val exportClassInstancesEnabled: Boolean = false,
+    val exportObjectInvestigationLabel: String = "Export Object Investigation JSON",
+    val exportObjectInvestigationEnabled: Boolean = false,
+    val exportDiffLabel: String = "Export Class Diff CSV",
+    val exportSnapshotJsonLabel: String = "Export Snapshot JSON",
+    val exportInvestigationReportLabel: String = "Export Investigation Report",
+    val exportDiffEnabled: Boolean = false,
+    val exportSnapshotJsonEnabled: Boolean = false,
+    val exportInvestigationReportEnabled: Boolean = false,
     val importEnabled: Boolean,
     val rawHprofExportEnabled: Boolean,
     val standardHprofExportEnabled: Boolean,
@@ -62,6 +79,11 @@ internal fun memoryProfilerFileMenuModel(
     rawHprofExportEnabled: Boolean,
     standardHprofExportEnabled: Boolean,
     csvExportEnabled: Boolean,
+    exportClassInstancesEnabled: Boolean = false,
+    exportObjectInvestigationEnabled: Boolean = false,
+    exportDiffEnabled: Boolean = false,
+    exportSnapshotJsonEnabled: Boolean = false,
+    exportInvestigationReportEnabled: Boolean = false,
     bitmapDumpExportEnabled: Boolean = false,
     bitmapComparisonExportEnabled: Boolean = false,
     recentSessions: List<MemorySessionMetadata> = emptyList(),
@@ -85,6 +107,16 @@ internal fun memoryProfilerFileMenuModel(
         exportRawHprofLabel = localizedStringResource(Res.string.export_raw_hprof, language),
         exportStandardHprofLabel = localizedStringResource(Res.string.export_standard_hprof, language),
         exportCsvLabel = localizedStringResource(Res.string.export_csv, language),
+        exportClassInstancesLabel = localizedStringResource(Res.string.export_class_instances, language),
+        exportClassInstancesEnabled = exportClassInstancesEnabled,
+        exportObjectInvestigationLabel = localizedStringResource(Res.string.export_object_investigation, language),
+        exportObjectInvestigationEnabled = exportObjectInvestigationEnabled,
+        exportDiffLabel = localizedStringResource(Res.string.export_diff, language),
+        exportSnapshotJsonLabel = localizedStringResource(Res.string.export_snapshot_json, language),
+        exportInvestigationReportLabel = localizedStringResource(Res.string.export_investigation_report, language),
+        exportDiffEnabled = exportDiffEnabled,
+        exportSnapshotJsonEnabled = exportSnapshotJsonEnabled,
+        exportInvestigationReportEnabled = exportInvestigationReportEnabled,
         importEnabled = importEnabled,
         rawHprofExportEnabled = rawHprofExportEnabled,
         standardHprofExportEnabled = standardHprofExportEnabled,
@@ -95,7 +127,9 @@ internal fun memoryProfilerFileMenuModel(
         bitmapComparisonExportEnabled = bitmapComparisonExportEnabled,
         recentSessionsTitle = localizedStringResource(Res.string.recent_sessions, language),
         noRecentSessionsLabel = localizedStringResource(Res.string.no_recent_sessions, language),
-        recentSessions = recentSessions,
+        // Native desktop menus become noticeably slower when a large recent-session list is
+        // materialized at once. Keep the store history intact and only render the menu slice.
+        recentSessions = recentSessions.take(MAX_RECENT_SESSIONS_IN_MENU),
         recentSessionsEnabled = importEnabled && recentSessions.isNotEmpty(),
     )
 
@@ -110,6 +144,11 @@ internal fun FrameWindowScope.MemoryProfilerFileMenuBar(
     onExportRawHprof: () -> Unit,
     onExportStandardHprof: () -> Unit,
     onExportCsv: () -> Unit,
+    onExportClassInstances: () -> Unit = {},
+    onExportObjectInvestigation: () -> Unit = {},
+    onExportDiff: () -> Unit = {},
+    onExportSnapshotJson: () -> Unit = {},
+    onExportInvestigationReport: () -> Unit = {},
     onExportBitmapDump: () -> Unit = {},
     onExportBitmapComparison: () -> Unit = {},
     onExportNativeHeap: () -> Unit = {},
@@ -164,6 +203,31 @@ internal fun FrameWindowScope.MemoryProfilerFileMenuBar(
                     text = model.exportCsvLabel,
                     enabled = model.csvExportEnabled,
                     onClick = onExportCsv,
+                )
+                Item(
+                    text = model.exportClassInstancesLabel,
+                    enabled = model.exportClassInstancesEnabled,
+                    onClick = onExportClassInstances,
+                )
+                Item(
+                    text = model.exportObjectInvestigationLabel,
+                    enabled = model.exportObjectInvestigationEnabled,
+                    onClick = onExportObjectInvestigation,
+                )
+                Item(
+                    text = model.exportDiffLabel,
+                    enabled = model.exportDiffEnabled,
+                    onClick = onExportDiff,
+                )
+                Item(
+                    text = model.exportSnapshotJsonLabel,
+                    enabled = model.exportSnapshotJsonEnabled,
+                    onClick = onExportSnapshotJson,
+                )
+                Item(
+                    text = model.exportInvestigationReportLabel,
+                    enabled = model.exportInvestigationReportEnabled,
+                    onClick = onExportInvestigationReport,
                 )
                 Item(
                     text = model.exportBitmapDumpLabel,

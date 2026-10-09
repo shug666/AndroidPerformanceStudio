@@ -18,14 +18,9 @@ val userDocumentationEnglish = rootProject.layout.projectDirectory.dir("../docs-
 val userDocumentationChinese = rootProject.layout.projectDirectory.dir("../docs-user-zh")
 val profilerAppResources = layout.buildDirectory.dir("generated/profiler-app-resources")
 val traceProcessorManifestFile = rootProject.layout.projectDirectory.file("platform-perfetto/trace-processor-manifest.json")
-val traceProcessorManifest = JsonSlurper().parse(traceProcessorManifestFile.asFile) as Map<*, *>
-val traceProcessorVersion = checkNotNull(traceProcessorManifest["version"]) as String
-val traceProcessorChecksums =
-    (checkNotNull(traceProcessorManifest["artifacts"]) as Map<*, *>).mapValues { (_, artifact) ->
-        checkNotNull((artifact as Map<*, *>)["sha256"]) as String
-    }
 val prepareProfilerAppResources =
     tasks.register<Sync>("prepareProfilerAppResources") {
+        exclude("**/.DS_Store")
         inputs.file(firefoxProfilerDist.file("index.html"))
         inputs.file(perfettoUiDist.file("index.html"))
         inputs.dir(userDocumentationEnglish)
@@ -49,6 +44,25 @@ val prepareProfilerAppResources =
 tasks
     .matching { task -> task.name == "prepareAppResources" }
     .configureEach { dependsOn(prepareProfilerAppResources) }
+
+if (!System.getProperty("os.name").lowercase().contains("win")) {
+    tasks
+        .matching { task -> task.name == "createDistributable" || task.name == "createReleaseDistributable" }
+        .configureEach {
+            doLast {
+                val packagedBinaries =
+                    outputs.files.asFileTree
+                        .matching { include("**/resources/perfetto-tools/trace_processor_shell") }
+                        .files
+                check(packagedBinaries.isNotEmpty()) { "Packaged Trace Processor is missing from the distributable" }
+                packagedBinaries.forEach { binary ->
+                    check(binary.canExecute() || binary.setExecutable(true, false)) {
+                        "Unable to make the packaged Trace Processor executable: $binary"
+                    }
+                }
+            }
+        }
+}
 
 fun macOsPackageVersion(version: String): String {
     val numericComponents = version.split(".")
@@ -94,27 +108,29 @@ val verifyPackagedTraceProcessor =
     tasks.register("verifyPackagedTraceProcessor") {
         val binaryName = if (targetOs == "windows") "trace_processor_shell.exe" else "trace_processor_shell"
         val binary = perfettoTools.file(binaryName)
-        // Materialize script values into locals so the action stays serializable under the
-        // configuration cache: closing over script vals captures the script object.
-        val version = traceProcessorVersion
         val hostKey = "$targetOs-$targetArch"
-        val checksums = traceProcessorChecksums
         inputs.file(binary)
         inputs.file(traceProcessorManifestFile)
+        val manifestFile = traceProcessorManifestFile.asFile
         doLast {
+            val manifest = JsonSlurper().parse(manifestFile) as Map<*, *>
+            val version = checkNotNull(manifest["version"]) as String
+            val artifacts = checkNotNull(manifest["artifacts"]) as Map<*, *>
             val file = binary.asFile
             check(file.isFile) {
                 "Pinned Trace Processor $version is missing: $file. Run scripts/install-trace-processor.sh $hostKey."
             }
             val actual = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(file.readBytes()))
-            val expected = checkNotNull(checksums[hostKey]) {
+            val expected = checkNotNull((artifacts[hostKey] as? Map<*, *>)?.get("sha256")) {
                 "No pinned Trace Processor checksum for $hostKey"
-            }
+            }.toString()
             check(actual == expected) { "Pinned Trace Processor checksum mismatch for $hostKey" }
         }
     }
 
-prepareProfilerAppResources.configure { dependsOn(verifyPackagedTraceProcessor) }
+prepareProfilerAppResources.configure {
+    dependsOn(verifyPackagedTraceProcessor)
+}
 
 require(targetArch == "x64" || targetArch == "arm64") {
     "Unsupported target.arch=$targetArch. Compose Desktop supports x64 and arm64 desktop runtimes; Windows x86 is not supported."
@@ -124,21 +140,21 @@ require(targetArch == hostArch || targetJavaHome != null) {
 }
 
 dependencies {
-    implementation("com.androidperformancestudio:ai-core:0.1.0-SNAPSHOT")
-    implementation("com.androidperformancestudio:source-workspace:0.1.0-SNAPSHOT")
-    implementation("com.androidperformancestudio:ui-components:0.1.0-SNAPSHOT")
-    implementation("com.androidperformancestudio:presentation:0.1.0-SNAPSHOT")
-    implementation("com.androidperformancestudio:analysis-engine:0.1.0-SNAPSHOT")
-    implementation("com.androidperformancestudio:app-desktop:0.1.0-SNAPSHOT")
-    implementation("com.androidperformancestudio:method-recording-app:0.1.0-SNAPSHOT")
-    implementation("com.androidperformancestudio:perfetto-app:0.1.0-SNAPSHOT")
-    implementation("com.androidperformancestudio.memory:memory-app:0.1.0-SNAPSHOT")
-    implementation("com.androidperformancestudio.frame:frame-app:0.1.0-SNAPSHOT")
-    implementation("com.androidperformancestudio.startup:startup-app:0.1.0-SNAPSHOT")
-    implementation("com.androidperformancestudio.battery:battery-app:0.1.0-SNAPSHOT")
-    implementation("com.androidperformancestudio.network:network-app:0.1.0-SNAPSHOT")
-    implementation("com.androidperformancestudio.gpu:gpu-integration-app:0.1.0-SNAPSHOT")
-    implementation("com.androidperformancestudio.benchmark:benchmark-app:0.1.0-SNAPSHOT")
+    implementation(libs.aps.ai.core)
+    implementation(libs.aps.source.workspace)
+    implementation(libs.aps.ui.components)
+    implementation(libs.aps.presentation)
+    implementation(libs.aps.analysis.engine)
+    implementation(libs.aps.app.desktop)
+    implementation(libs.aps.method.recording.app)
+    implementation(libs.aps.perfetto.app)
+    implementation(libs.aps.memory.app)
+    implementation(libs.aps.frame.app)
+    implementation(libs.aps.startup.app)
+    implementation(libs.aps.battery.app)
+    implementation(libs.aps.network.app)
+    implementation(libs.aps.gpu.integration.app)
+    implementation(libs.aps.benchmark.app)
     when {
         hostOs.contains("mac") && targetArch == "x64" -> implementation(compose.desktop.macos_x64)
         hostOs.contains("mac") && targetArch == "arm64" -> implementation(compose.desktop.macos_arm64)
@@ -147,16 +163,16 @@ dependencies {
         hostOs.contains("linux") && targetArch == "arm64" -> implementation(compose.desktop.linux_arm64)
         else -> error("Unsupported Compose Desktop target: $hostOs-$targetArch")
     }
-    implementation("org.jetbrains.compose.components:components-resources:1.11.1")
-    implementation("org.jetbrains.compose.material3:material3:1.11.0-alpha07")
+    implementation(libs.compose.components.resources)
+    implementation(libs.compose.material3)
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
-    testImplementation("com.androidperformancestudio:platform-perfetto:0.1.0-SNAPSHOT")
-    testImplementation("com.androidperformancestudio:profiler-contracts:0.1.0-SNAPSHOT")
-    testImplementation("com.androidperformancestudio.memory:analysis-memory:0.1.0-SNAPSHOT")
-    testImplementation("com.androidperformancestudio.frame:analysis-frame:0.1.0-SNAPSHOT")
-    testImplementation("com.androidperformancestudio.startup:analysis-startup:0.1.0-SNAPSHOT")
-    testImplementation("com.androidperformancestudio.startup:startup-model:0.1.0-SNAPSHOT")
+    testImplementation(libs.aps.platform.perfetto)
+    testImplementation(libs.aps.profiler.contracts)
+    testImplementation(libs.aps.analysis.memory)
+    testImplementation(libs.aps.analysis.frame)
+    testImplementation(libs.aps.analysis.startup)
+    testImplementation(libs.aps.startup.model)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 

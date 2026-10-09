@@ -1,5 +1,7 @@
 package com.androidperformancestudio.memory.app
 
+import com.androidperformancestudio.adb.AndroidTargetListener
+import com.androidperformancestudio.adb.AndroidTargetSubscription
 import com.androidperformancestudio.memory.model.BitmapDumpSession
 import com.androidperformancestudio.memory.model.BitmapDumpSummary
 import com.androidperformancestudio.memory.model.ClassStats
@@ -23,6 +25,9 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+private typealias TargetListener = AndroidTargetListener
+private typealias TargetSubscription = AndroidTargetSubscription
+
 class MemoryProfilerControllerTest {
     @Test
     fun `the only online device is selected and its processes are loaded`() =
@@ -44,6 +49,33 @@ class MemoryProfilerControllerTest {
             assertNull(state.error)
             assertTrue(state.classes.all { it.retainedSize == null })
             assertEquals(listOf("listDevices", "listProcesses:serial-1", "capture:serial-1:42"), backend.events)
+        }
+
+    @Test
+    fun `saves and restores a complete class-list filter preset`() =
+        runTest {
+            val controller = MemoryProfilerController(FakeBackend())
+            controller.importHprof(Path.of("filters.hprof"))
+            controller.changeHeapFilter("App")
+            controller.changeClassScope(com.androidperformancestudio.memory.presentation.MemoryClassScope.PROJECT)
+            controller.changeLeakFilter(com.androidperformancestudio.memory.presentation.MemoryLeakFilter.ALL_ISSUE)
+            controller.changeArrangeBy(com.androidperformancestudio.memory.presentation.MemoryArrangeBy.PACKAGE)
+            controller.changeSearchText("Widget")
+            controller.changeMatchCase(true)
+            controller.changeUseRegex(true)
+            controller.saveFilterPreset()
+
+            val preset =
+                controller.state.value.savedFilterPresets
+                    .single()
+            controller.changeSearchText("")
+            controller.applyFilterPreset(preset)
+
+            assertEquals("App", controller.state.value.heapFilter)
+            assertEquals("Widget", controller.state.value.searchText)
+            assertTrue(controller.state.value.matchCase)
+            assertTrue(controller.state.value.useRegex)
+            assertEquals("filter-1", controller.state.value.activeFilterPresetId)
         }
 
     @Test
@@ -82,6 +114,26 @@ class MemoryProfilerControllerTest {
             importJob.join()
             assertFalse(controller.state.value.isDumping)
             assertNull(controller.state.value.operationMessage)
+        }
+
+    @Test
+    fun `cancelling an active hprof import publishes cancelled state`() =
+        runTest {
+            val started = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val controller = MemoryProfilerController(FakeBackend(importStarted = started, importRelease = release))
+
+            val importJob = launch { controller.importHprof(Path.of("cancelled.hprof")) }
+            started.await()
+            controller.cancelActiveOperation()
+            importJob.join()
+
+            assertFalse(controller.state.value.isDumping)
+            assertNull(controller.state.value.operationMessage)
+            assertEquals(
+                com.androidperformancestudio.memory.model.HeapLoadPhase.CANCELLED,
+                controller.state.value.loadPhase,
+            )
         }
 
     @Test
@@ -206,6 +258,9 @@ class MemoryProfilerControllerTest {
         private val importRelease: CompletableDeferred<Unit>? = null,
     ) : MemoryProfilerBackend {
         val events = mutableListOf<String>()
+        private val noOpTargetSubscription = TargetSubscription {}
+
+        override fun registerTargetListener(listener: TargetListener): TargetSubscription = noOpTargetSubscription
 
         override suspend fun listDevices(): MemoryBackendResult<List<MemoryDeviceOption>> {
             events += "listDevices"

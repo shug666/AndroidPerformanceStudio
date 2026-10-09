@@ -2,6 +2,7 @@
 
 package com.androidperformancestudio.memory.capture
 
+import com.androidperformancestudio.adb.AndroidDevicePropertyClient
 import com.androidperformancestudio.model.ErrorCategory
 import com.androidperformancestudio.model.StudioError
 import com.androidperformancestudio.model.StudioResult
@@ -44,8 +45,11 @@ class NativeHeapCaptureSession(
         val sessionDirectory = request.sessionRoot.resolve(request.sessionId)
         Files.createDirectories(sessionDirectory)
         val traceFile = sessionDirectory.resolve("${request.sessionId}.native-heap.pb")
-        val deviceConfigPath = "/data/local/tmp/heapprofd-${request.sessionId}.cfg"
-        val deviceTracePath = "/data/local/tmp/heapprofd-${request.sessionId}.pb"
+        // Perfetto rejects configs from /data/local/tmp on production devices (EACCES).
+        // The platform-managed config directory is writable by adb shell and readable by perfetto.
+        val deviceConfigPath = "/data/misc/perfetto-configs/heapprofd-${request.sessionId}.cfg"
+        // Perfetto also requires its output to live in the platform-managed trace directory.
+        val deviceTracePath = "/data/misc/perfetto-traces/heapprofd-${request.sessionId}.pb"
         val localConfigPath = sessionDirectory.resolve("${request.sessionId}.cfg")
         Files.writeString(localConfigPath, heapprofdConfig(request.pid))
 
@@ -124,21 +128,14 @@ class NativeHeapCaptureSession(
         serial: String,
         cancellationSignal: HostCancellationSignal,
     ): Int? =
-        try {
-            adbClient
-                .shell(
-                    serial = serial,
-                    arguments = listOf("getprop", "ro.build.version.sdk"),
-                    timeout = 30.seconds,
-                    isCancellationRequested = cancellationSignal::isCancelled,
-                ).stdout
-                .trim()
-                .toIntOrNull()
-        } catch (error: java.util.concurrent.CancellationException) {
-            throw error
-        } catch (_: RuntimeException) {
-            null
-        }
+        (
+            AndroidDevicePropertyClient(adbClient).sdkInt(
+                serial = serial,
+                timeout = 30.seconds,
+                isCancellationRequested = cancellationSignal::isCancelled,
+            ) as? StudioResult.Success
+        )?.value
+
 
     private suspend fun runAdb(
         serial: String,

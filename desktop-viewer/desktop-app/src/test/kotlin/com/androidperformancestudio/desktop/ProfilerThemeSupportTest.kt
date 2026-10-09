@@ -2,6 +2,7 @@ package com.androidperformancestudio.desktop
 
 import java.nio.file.Files
 import java.nio.file.Path
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -20,11 +21,30 @@ class ProfilerThemeSupportTest {
         val shell = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/DesktopAppMainPage.kt"))
 
         assertTrue(shell.contains("ViewerTheme("))
-        assertTrue(shell.contains("compactDesktopTypography()"))
-        assertTrue(shell.contains("compactDesktopShapes()"))
+        val viewerTheme =
+            Files.readString(
+                Path.of("../ui-components/src/main/kotlin/com/androidperformancestudio/ui/ViewerTheme.kt"),
+            )
+        assertTrue(viewerTheme.contains("private val ViewerMaterialTypography"))
+        assertTrue(viewerTheme.contains("headlineMedium = ViewerTypography.pageTitle"))
+        assertTrue(viewerTheme.contains("private val ViewerShapes"))
+        assertFalse(Files.exists(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/CompactDesktopTheme.kt")))
         assertTrue(shell.contains("LocalMinimumInteractiveComponentSize provides 32.dp"))
         assertTrue(shell.contains("color = MaterialTheme.colorScheme.background"))
         assertTrue(shell.contains("contentColor = MaterialTheme.colorScheme.onBackground"))
+    }
+
+    @Test
+    fun `feature pages inherit the unified shell viewer theme`() {
+        val shell = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/DesktopAppMainPage.kt"))
+
+        assertEquals(1, Regex("ViewerTheme\\(").findAll(shell).count())
+        featurePageSources().forEach { source ->
+            assertFalse(
+                Files.readString(source).contains("ViewerTheme("),
+                "$source must inherit ViewerTheme from DesktopAppMainPage",
+            )
+        }
     }
 
     @Test
@@ -123,11 +143,23 @@ class ProfilerThemeSupportTest {
                 ),
             )
 
+        assertTrue(shell.contains("WindowMenuBarHost("))
+        assertTrue(shell.contains("native_file_menu"))
+        assertTrue(shell.contains("native_method_recording_menu"))
+        assertTrue(shell.indexOf("    WindowMenuBarHost(") < shell.indexOf("    ViewerTheme("))
         assertTrue(shell.contains("LocalWindowMenuBarActive provides active"))
+        assertTrue(sharedMenuBar.contains("WindowMenuBarHost("))
+        assertTrue(sharedMenuBar.contains("preloadedMenuKey"))
+        assertTrue(sharedMenuBar.contains("onMenuBarReady"))
+        assertTrue(sharedMenuBar.contains("notifyNativeMenuBarReady()"))
         assertTrue(sharedMenuBar.contains("if (LocalWindowMenuBarActive.current)"))
-        assertTrue(sharedMenuBar.contains("startsWith(\"Windows\", ignoreCase = true)"))
+        assertTrue(sharedMenuBar.contains("SideEffect(::refreshNativeMenuBar)"))
         assertTrue(sharedMenuBar.contains("window.rootPane.revalidate()"))
         assertTrue(sharedMenuBar.contains("window.rootPane.repaint()"))
+        val nativeAttach = sharedMenuBar.indexOf("window.jMenuBar = menuBar")
+        val menuContent =
+            sharedMenuBar.indexOf("val composition = menuBar.setContent(parentComposition, content)")
+        assertTrue(nativeAttach >= 0 && nativeAttach < menuContent)
         profilerWindowMenuSources().forEach { source ->
             val content = Files.readString(source)
             assertTrue(content.contains("ActiveWindowMenuBar {"), "$source must gate its window menu bar")
@@ -141,6 +173,23 @@ class ProfilerThemeSupportTest {
         assertTrue(source.contains("RoundedCornerShape(ViewerDimensions.controlRadius)"))
         assertTrue(source.contains(".background("))
         assertTrue(source.contains(".border("))
+    }
+
+    private fun featurePageSources(): List<Path> {
+        val desktopViewer = Path.of("..").toAbsolutePath().normalize()
+        return listOf(
+            "layout-inspector/presentation/src/main/kotlin/com/androidperformancestudio/desktop/LayoutInspectorMainPage.kt",
+            "simpleperf-viewer/presentation/src/main/kotlin/com/androidperformancestudio/presentation/HomeScreen.kt",
+            "perfetto-viewer/perfetto-app/src/main/kotlin/com/androidperformancestudio/perfetto/app/PerfettoMainPage.kt",
+            "memory-profiler/memory-app/src/main/kotlin/com/androidperformancestudio/memory/app/MemoryProfilerMainPage.kt",
+            "frame-profiler/frame-app/src/main/kotlin/com/androidperformancestudio/frame/app/FrameProfilerMainPage.kt",
+            "startup-profiler/startup-app/src/main/kotlin/com/androidperformancestudio/startup/app/StartupProfilerMainPage.kt",
+            "battery-profiler/battery-app/src/main/kotlin/com/androidperformancestudio/battery/app/BatteryProfilerMainPage.kt",
+            "network-profiler/network-app/src/main/kotlin/com/androidperformancestudio/network/app/NetworkProfilerMainPage.kt",
+            "gpu-inspector-integration/gpu-integration-app/src/main/kotlin/com/androidperformancestudio/gpu/app/GpuIntegrationMainPage.kt",
+            "benchmark-regression/benchmark-app/src/main/kotlin/com/androidperformancestudio/benchmark/app/BenchmarkRegressionMainPage.kt",
+            "simpleperf-viewer/method-recording-app/src/main/kotlin/com/androidperformancestudio/methodrecording/app/MethodRecordingMainPage.kt",
+        ).map(desktopViewer::resolve)
     }
 
     private fun profilerHomeButtonConsumers(): List<Path> {

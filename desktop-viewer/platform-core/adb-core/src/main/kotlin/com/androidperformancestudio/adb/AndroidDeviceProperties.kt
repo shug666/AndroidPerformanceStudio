@@ -10,7 +10,20 @@ data class AndroidDeviceProperties(
     val abis: List<String>,
     val sdkInt: Int,
     val androidVersion: String,
-)
+    val manufacturer: String? = null,
+) {
+    /** Compact name for capability panels; uses the manufacturer when the model is a placeholder. */
+    val capabilityDisplayName: String
+        get() =
+            model.takeUnless(String::isPlaceholderDeviceIdentity)
+                ?: manufacturer?.takeUnless(String::isPlaceholderDeviceIdentity)
+                ?: model
+}
+
+private fun String.isPlaceholderDeviceIdentity(): Boolean =
+    trim().lowercase() in PLACEHOLDER_DEVICE_IDENTITIES
+
+private val PLACEHOLDER_DEVICE_IDENTITIES = setOf("", "unknown", "<unknown>", "null", "n/a", "na")
 
 class AndroidGetpropParser {
     fun parse(
@@ -19,6 +32,7 @@ class AndroidGetpropParser {
     ): StudioResult<AndroidDeviceProperties> {
         val properties = parseProperties(output)
         val model = properties[MODEL_PROPERTY].orEmpty().trim()
+        val manufacturer = properties[MANUFACTURER_PROPERTY]?.trim()?.ifEmpty { null }
         val abis = parseAbis(properties)
         val sdkInt = properties[SDK_PROPERTY]?.trim()?.toIntOrNull()?.takeIf { it > 0 }
         val androidVersion = properties[ANDROID_VERSION_PROPERTY].orEmpty().trim()
@@ -37,6 +51,7 @@ class AndroidGetpropParser {
                 abis = abis,
                 sdkInt = requireNotNull(sdkInt),
                 androidVersion = androidVersion,
+                manufacturer = manufacturer,
             ),
         )
     }
@@ -73,6 +88,7 @@ class AndroidGetpropParser {
 
     companion object {
         private const val MODEL_PROPERTY = "ro.product.model"
+        private const val MANUFACTURER_PROPERTY = "ro.product.manufacturer"
         private const val ABI_LIST_PROPERTY = "ro.product.cpu.abilist"
         private const val LEGACY_ABI_PROPERTY = "ro.product.cpu.abi"
         private const val SDK_PROPERTY = "ro.build.version.sdk"

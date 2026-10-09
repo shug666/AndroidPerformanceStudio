@@ -1,6 +1,7 @@
 package com.androidperformancestudio.presentation
 
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -13,7 +14,6 @@ import com.androidperformancestudio.application.DeviceTargetState
 import com.androidperformancestudio.application.ReportState
 import com.androidperformancestudio.capture.CaptureState
 import com.androidperformancestudio.ui.UiLanguage
-import com.androidperformancestudio.ui.ViewerTheme
 
 @Composable
 @Suppress("FunctionName", "LongParameterList", "ktlint:standard:function-naming")
@@ -53,26 +53,24 @@ fun HomeScreen(
             }
             onCaptureSettingsSectionChange(next)
         }
-        ViewerTheme(darkTheme = darkTheme) {
-            Surface(modifier = Modifier.fillMaxSize()) {
-                DeviceTargetPage(
-                    state,
-                    captureState,
-                    reportState,
-                    actions,
-                    reportActions,
-                    darkTheme,
-                    activeCaptureSettingsSection,
-                    updateCaptureSettingsSection,
-                    flameTooltipMode,
-                    onFlameTooltipModeChange,
-                    simpleperfEngine,
-                    onSimpleperfEngineChange,
-                    onOpenUserGuide,
-                    onNavigateHome,
-                    onRunAiAnalysis,
-                )
-            }
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            DeviceTargetPage(
+                state,
+                captureState,
+                reportState,
+                actions,
+                reportActions,
+                darkTheme,
+                activeCaptureSettingsSection,
+                updateCaptureSettingsSection,
+                flameTooltipMode,
+                onFlameTooltipModeChange,
+                simpleperfEngine,
+                onSimpleperfEngineChange,
+                onOpenUserGuide,
+                onNavigateHome,
+                onRunAiAnalysis,
+            )
         }
     }
 }

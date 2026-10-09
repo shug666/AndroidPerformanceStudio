@@ -3,6 +3,8 @@ package com.androidperformancestudio.desktop
 import com.androidperformancestudio.ui.LocalWindowMenuBarActive
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTheme
+import com.androidperformancestudio.ui.WindowMenuBarHost
+import com.androidperformancestudio.ui.rememberViewerThemeContext
 import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.desktop_app.generated.resources.Res
 import com.androidperformancestudio.desktop_app.generated.resources.*
@@ -30,6 +32,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -75,6 +79,7 @@ public fun FrameWindowScope.DesktopAppMainPage(
     var memoryHighlightClassName by remember { mutableStateOf<String?>(null) }
     var composeSourceCandidates by remember { mutableStateOf<List<ResolutionCandidate>>(emptyList()) }
     var archivedSourceToRebind by remember { mutableStateOf<AiSourceCandidateReference?>(null) }
+    var menuReadyDestination by remember { mutableStateOf<AppDestination?>(null) }
     val applicationSettingsStore = remember { ApplicationUiSettingsStore.desktop() }
     val simpleperfPreferencesStore = remember { SimpleperfPreferencesStore.desktop() }
     val externalAnalysisLauncher = remember { ExternalAnalysisLauncher() }
@@ -108,6 +113,22 @@ public fun FrameWindowScope.DesktopAppMainPage(
             simpleperfEngine = simpleperfPreferences.simpleperfEngine,
         )
 
+    // Install the native menu bar before composing any retained feature page. Preload the
+    // same first menu title that the feature will render so macOS never flashes the page title.
+    val preloadedMenuTitle =
+        when {
+            navigator.destination == AppDestination.METHOD_RECORDING ->
+                localizedStringResource(Res.string.native_method_recording_menu, language)
+            navigator.destination.hasNativeFeatureMenu() ->
+                localizedStringResource(Res.string.native_file_menu, language)
+            else -> null
+        }
+    WindowMenuBarHost(
+        preloadedMenuKey = navigator.destination,
+        preloadedMenuTitles = preloadedMenuTitle?.let(::listOf) ?: emptyList(),
+        onMenuBarReady = { menuReadyDestination = navigator.destination },
+    )
+
     LaunchedEffect(settingsRequest?.requestId) {
         if (shouldOpenSettingsForRequest(settingsRequest)) {
             settingsRequest?.let { openSettings(it.page) }
@@ -127,15 +148,18 @@ public fun FrameWindowScope.DesktopAppMainPage(
             navigator.clearPerfettoTrace()
         }
     }
-    LaunchedEffect(navigator.destination, language) {
-        windowTitle?.value = localizedStringResource(navigator.destination.titleResource, language)
+    LaunchedEffect(menuReadyDestination, navigator.destination, language) {
+        if (menuReadyDestination == navigator.destination) {
+            windowTitle?.value = localizedStringResource(navigator.destination.titleResource, language)
+        }
     }
 
     ViewerTheme(
         darkTheme = darkTheme,
-        typography = compactDesktopTypography(),
-        shapes = compactDesktopShapes(),
+        displayScale = applicationSettings.displayScale.multiplier,
+        accentColor = applicationSettings.themeColor.color,
     ) {
+        val viewerThemeContext = rememberViewerThemeContext()
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 32.dp) {
             Surface(
                 modifier = Modifier.fillMaxSize(),
@@ -152,6 +176,7 @@ public fun FrameWindowScope.DesktopAppMainPage(
                                         .fillMaxSize()
                                         .zIndex(if (active) 1f else 0f)
                                         .alpha(if (active) 1f else 0f)
+                                        .blockPointerInputWhenInactive(active)
                                         .then(if (active) Modifier else Modifier.clearAndSetSemantics {}),
                             ) {
                 when (destination) {
@@ -181,7 +206,6 @@ public fun FrameWindowScope.DesktopAppMainPage(
                         )
                     AppDestination.LAYOUT_INSPECTOR ->
                         LayoutInspectorMainPage(
-                            commonThemePreference = applicationSettings.theme.storageValue,
                             commonLanguagePreference = applicationSettings.language.storageValue,
                             settingsRevision = layoutInspectorSettingsRevision,
                             onNavigateHome = { navigator.open(AppDestination.HOME) },
@@ -250,11 +274,14 @@ public fun FrameWindowScope.DesktopAppMainPage(
                     AppDestination.PERFETTO ->
                         PerfettoMainPage(
                             language = language,
-                            darkTheme = darkTheme,
                             isActive = active,
+                            androidSdkPath = applicationSettings.androidSdkPath?.let { path ->
+                                runCatching { java.nio.file.Path.of(path) }.getOrNull()
+                            },
                             onNavigateHome = { navigator.open(AppDestination.HOME) },
                             initialTraceFile = navigator.perfettoTraceFile,
                             initialTraceNotice = navigator.perfettoTraceNotice,
+                            initialTraceTimestampNanos = navigator.perfettoTimestampNanos,
                             onOpenUserGuide = {
                                 coroutineScope.launch(Dispatchers.IO) {
                                     runCatching { userDocumentationLauncher.open(language) }
@@ -264,7 +291,6 @@ public fun FrameWindowScope.DesktopAppMainPage(
                     AppDestination.MEMORY_PROFILER ->
                         MemoryProfilerMainPage(
                             language = language,
-                            darkTheme = darkTheme,
                             highlightClassName = memoryHighlightClassName,
                             initialImportFile = navigator.memoryImportFile,
                             initialImportIsJavaHeap = navigator.memoryImportIsJavaHeap,
@@ -273,7 +299,6 @@ public fun FrameWindowScope.DesktopAppMainPage(
                     AppDestination.FRAME_PROFILER ->
                         FrameProfilerMainPage(
                             language = language,
-                            darkTheme = darkTheme,
                             onBack = { navigator.open(AppDestination.HOME) },
                             onOpenLayoutInspector = { request ->
                                 val activity =
@@ -309,25 +334,21 @@ public fun FrameWindowScope.DesktopAppMainPage(
                     AppDestination.STARTUP_PROFILER ->
                         StartupProfilerMainPage(
                             language = language,
-                            darkTheme = darkTheme,
                             onBack = { navigator.open(AppDestination.HOME) },
                         )
                     AppDestination.BATTERY_PROFILER ->
                         BatteryProfilerMainPage(
                             language = language,
-                            darkTheme = darkTheme,
                             onBack = { navigator.open(AppDestination.HOME) },
                         )
                     AppDestination.NETWORK_PROFILER ->
                         NetworkProfilerMainPage(
                             language = language,
-                            darkTheme = darkTheme,
                             onBack = { navigator.open(AppDestination.HOME) },
                         )
                     AppDestination.GPU_INSPECTOR ->
                         GpuIntegrationMainPage(
                             language = language,
-                            darkTheme = darkTheme,
                             onBack = { navigator.open(AppDestination.HOME) },
                             onOpenTrace = { path ->
                                 navigator.openPerfettoTrace(
@@ -343,7 +364,6 @@ public fun FrameWindowScope.DesktopAppMainPage(
                     AppDestination.BENCHMARK_REGRESSION ->
                         BenchmarkRegressionMainPage(
                             language = language,
-                            darkTheme = darkTheme,
                             onBack = { navigator.open(AppDestination.HOME) },
                             onOpenTrace = { path ->
                                 navigator.openPerfettoTrace(
@@ -359,7 +379,6 @@ public fun FrameWindowScope.DesktopAppMainPage(
                     AppDestination.METHOD_RECORDING ->
                         MethodRecordingMainPage(
                             language = language,
-                            darkTheme = darkTheme,
                             androidSdkPath = applicationSettings.androidSdkPath?.let { path -> runCatching { java.nio.file.Path.of(path) }.getOrNull() },
                             initialTraceFile = navigator.methodRecordingTraceFile,
                             onBack = { navigator.open(AppDestination.HOME) },
@@ -441,7 +460,7 @@ public fun FrameWindowScope.DesktopAppMainPage(
                         simpleperfSettings = simpleperfSettings,
                         simpleperfCaptureSettingsContext = simpleperfCaptureSettingsContext,
                         simpleperfInitialSection = simpleperfSettingsSection,
-                        darkTheme = darkTheme,
+                        viewerThemeContext = viewerThemeContext,
                         language = language,
                         simpleperfLocale = if (language == UiLanguage.SIMPLIFIED_CHINESE) java.util.Locale.SIMPLIFIED_CHINESE else java.util.Locale.ENGLISH,
                         sourceWorkspaceRuntime = sourceWorkspaceRuntime,
@@ -462,3 +481,16 @@ public fun FrameWindowScope.DesktopAppMainPage(
         }
     }
 }
+
+private fun Modifier.blockPointerInputWhenInactive(active: Boolean): Modifier =
+    if (active) {
+        this
+    } else {
+        pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) {
+                    awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+                }
+            }
+        }
+    }

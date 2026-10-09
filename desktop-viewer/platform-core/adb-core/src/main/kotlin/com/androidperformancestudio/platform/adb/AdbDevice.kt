@@ -12,6 +12,7 @@ data class AdbDevice(
     val serial: String,
     val state: AdbDeviceState,
     val product: String? = null,
+    val manufacturer: String? = null,
     val model: String? = null,
     val device: String? = null,
     val transportId: Int? = null,
@@ -21,6 +22,94 @@ data class AdbDevice(
 )
 
 typealias DeviceTarget = AdbDevice
+
+/** Parsed display identity from Android system properties. */
+data class AdbDeviceIdentity(
+    val manufacturer: String? = null,
+    val model: String? = null,
+)
+
+/**
+ * Canonical ADB device object delivered to UI subscribers.
+ *
+ * [serial] is the stable selection identity. [displayName] is presentation-ready, so pages never
+ * reconstruct manufacturer/model/serial strings independently.
+ */
+data class AndroidDeviceInfo(
+    val serial: String,
+    val deviceName: String,
+    val displayName: String,
+    val manufacturer: String?,
+    val product: String?,
+    val device: String?,
+    val state: AdbDeviceState,
+    val transportId: Int?,
+    val rawState: String,
+    val statusDetail: String?,
+) {
+    val online: Boolean get() = state == AdbDeviceState.ONLINE
+}
+
+fun AdbDevice.toDeviceInfo(): AndroidDeviceInfo {
+    val deviceName = model?.displayPart(allowUnknown = true) ?: serial
+    val manufacturerLabel = manufacturer?.displayPart(allowUnknown = false)
+    val visibleIdentity = listOfNotNull(manufacturerLabel, deviceName.takeIf { it != serial }).joinToString(" ")
+    return AndroidDeviceInfo(
+        serial = serial,
+        deviceName = deviceName,
+        displayName = if (visibleIdentity.isBlank()) serial else "$visibleIdentity($serial)",
+        manufacturer = manufacturerLabel,
+        product = product,
+        device = device,
+        state = state,
+        transportId = transportId,
+        rawState = rawState,
+        statusDetail = statusDetail,
+    )
+}
+
+/** Parses only device identity fields from `adb shell getprop` output. */
+fun parseAdbDeviceIdentity(output: String): AdbDeviceIdentity {
+    val properties =
+        output
+            .lineSequence()
+            .mapNotNull { line -> PROPERTY_LINE.matchEntire(line.trim()) }
+            .associate { match -> match.groupValues[1] to match.groupValues[2].trim() }
+    return AdbDeviceIdentity(
+        manufacturer = properties[MANUFACTURER_PROPERTY]?.usableManufacturer(),
+        model = properties[MODEL_PROPERTY]?.usableModel(),
+    )
+}
+
+/** Applies available Android system-property identity fields without losing ADB list metadata. */
+fun AdbDevice.withIdentity(identity: AdbDeviceIdentity): AdbDevice =
+    copy(
+        manufacturer = identity.manufacturer ?: manufacturer,
+        model = identity.model ?: model,
+    )
+
+private fun String.displayPart(allowUnknown: Boolean): String? =
+    trim().takeIf { value ->
+        value.isNotEmpty() &&
+            value.lowercase() !in UNUSABLE_DEVICE_VALUES &&
+            (allowUnknown || !value.equals("unknown", ignoreCase = true))
+    }
+
+private fun String.usableManufacturer(): String? =
+    takeIf { value ->
+        value.isNotBlank() &&
+            value.lowercase() !in UNUSABLE_DEVICE_VALUES &&
+            !value.equals("unknown", ignoreCase = true)
+    }
+
+private fun String.usableModel(): String? =
+    takeIf { value -> value.isNotBlank() && value.lowercase() !in UNUSABLE_MODEL_VALUES }
+
+private const val MANUFACTURER_PROPERTY = "ro.product.manufacturer"
+private const val MODEL_PROPERTY = "ro.product.model"
+private val PROPERTY_LINE = Regex("""^\[([^]]+)]\s*:\s*\[(.*)]$""")
+private val UNUSABLE_DEVICE_VALUES = setOf("<unknown>", "null", "n/a", "na")
+private val UNUSABLE_MODEL_VALUES = setOf("<unknown>", "null", "n/a", "na")
 
 private val AdbDeviceState.defaultRawState: String
     get() =
@@ -100,13 +189,22 @@ class AdbDevicesParser {
                     else -> AdbDeviceState.UNKNOWN
                 },
             product = attributes["product"],
-            model = attributes["model"],
+            model =
+                attributes["model"].usableDeviceLabel()
+                    ?: attributes["product"].usableDeviceLabel()
+                    ?: attributes["device"].usableDeviceLabel()
+                    ?: serial,
             device = attributes["device"],
             transportId = attributes["transport_id"]?.toIntOrNull(),
             attributes = attributes,
             rawState = rawState,
         )
     }
+
+    private fun String?.usableDeviceLabel(): String? =
+        this
+            ?.trim()
+            ?.takeIf { value -> value.isNotEmpty() && value.lowercase() !in UNUSABLE_DEVICE_LABELS }
 
     private fun parseAttribute(token: String): Pair<String, String>? {
         val delimiter = token.indexOf(':')
@@ -117,6 +215,7 @@ class AdbDevicesParser {
     private companion object {
         const val DEVICES_HEADER = "List of devices attached"
         const val NO_PERMISSIONS_STATE = "no permissions"
+        val UNUSABLE_DEVICE_LABELS = setOf("unknown", "<unknown>", "null", "n/a", "na")
         val WHITESPACE = Regex("\\s+")
     }
 }

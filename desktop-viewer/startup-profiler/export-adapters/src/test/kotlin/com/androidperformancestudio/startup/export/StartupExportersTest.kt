@@ -1,4 +1,4 @@
-@file:Suppress("MaxLineLength")
+@file:Suppress("LongMethod", "MaxLineLength")
 
 package com.androidperformancestudio.startup.export
 
@@ -10,6 +10,9 @@ import com.androidperformancestudio.startup.model.StartupCompilationEvidence
 import com.androidperformancestudio.startup.model.StartupEnvironmentEvidence
 import com.androidperformancestudio.startup.model.StartupMilestone
 import com.androidperformancestudio.startup.model.StartupMilestoneKind
+import com.androidperformancestudio.startup.model.StartupPerfettoPhaseAttribution
+import com.androidperformancestudio.startup.model.StartupPerfettoRootCauseEvidence
+import com.androidperformancestudio.startup.model.StartupPerfettoSlice
 import com.androidperformancestudio.startup.model.StartupProfileSource
 import com.androidperformancestudio.startup.model.StartupRawEvidence
 import com.androidperformancestudio.startup.model.StartupRun
@@ -76,8 +79,14 @@ class StartupExportersTest {
             assertEquals("compile", rawEvidence.compilationOutput)
             assertEquals(true, rawEvidence.agentAvailable)
             assertEquals(StartupProfileSource.BASELINE_PROFILE_PLUGIN, compilationEvidence?.profileSource)
+            assertEquals("baseline-prof.txt#abc", compilationEvidence?.baselineProfileArtifact)
             assertEquals("Pixel", environmentEvidence?.deviceModel)
             assertEquals(true, traceEvidence?.captured)
+            val rootCause = requireNotNull(traceEvidence?.rootCause)
+            assertEquals("sched", rootCause.schedulingSlices.single().name)
+            assertEquals("concurrent copying GC", rootCause.gcSlices.single().name)
+            assertEquals(30, rootCause.phaseAttributions.single().schedulingNs)
+            assertEquals(10, rootCause.phaseAttributions.single().gcNs)
         }
     }
 
@@ -160,9 +169,31 @@ private fun startupAnalysisFixture() =
                         verified = true,
                         profileSource = StartupProfileSource.BASELINE_PROFILE_PLUGIN,
                         profileSourceDeclared = true,
+                        baselineProfileArtifact = "baseline-prof.txt#abc",
                     ),
                 environmentEvidence = StartupEnvironmentEvidence(deviceModel = "Pixel"),
-                traceEvidence = StartupTraceEvidence(file = "run.perfetto-trace", captured = true),
+                traceEvidence =
+                    StartupTraceEvidence(
+                        file = "run.perfetto-trace",
+                        captured = true,
+                        rootCause =
+                            StartupPerfettoRootCauseEvidence(
+                                schedulingSlices = listOf(StartupPerfettoSlice(100, 30, "sched", "main")),
+                                gcSlices = listOf(StartupPerfettoSlice(130, 10, "concurrent copying GC", "HeapTaskDaemon")),
+                                phaseAttributions =
+                                    listOf(
+                                        StartupPerfettoPhaseAttribution(
+                                            phaseName = "PROCESS_START → FIRST_FRAME",
+                                            startNs = 100,
+                                            endNs = 200,
+                                            schedulingNs = 30,
+                                            gcNs = 10,
+                                        ),
+                                    ),
+                                correlated = true,
+                                correlationErrorBoundNs = 1_000,
+                            ),
+                    ),
             ),
         ),
     )

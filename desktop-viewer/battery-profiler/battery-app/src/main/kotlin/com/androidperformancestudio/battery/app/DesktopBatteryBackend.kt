@@ -7,18 +7,17 @@
 
 package com.androidperformancestudio.battery.app
 
-import com.androidperformancestudio.adb.AdbDeviceRefresher
-import com.androidperformancestudio.adb.SystemAdbLocator
+import com.androidperformancestudio.adb.AndroidTargetMonitor
+import com.androidperformancestudio.adb.AndroidTargetMonitors
+import com.androidperformancestudio.adb.defaultAdbExecutable
 import com.androidperformancestudio.battery.capture.BatteryExperimentRunner
 import com.androidperformancestudio.battery.historian.BatteryHistorianAdapter
 import com.androidperformancestudio.battery.model.BatteryDevice
 import com.androidperformancestudio.battery.model.BatteryTarget
 import com.androidperformancestudio.model.StudioResult
+import com.androidperformancestudio.platform.adb.AdbClient
 import com.androidperformancestudio.platform.adb.AdbDeviceState
-import com.androidperformancestudio.platform.toolchain.HostCommandResult
-import com.androidperformancestudio.platform.toolchain.HostProcessRequest
-import com.androidperformancestudio.platform.toolchain.StudioHostProcessExecutor
-import com.androidperformancestudio.platform.toolchain.SystemHostPlatformDetector
+import com.androidperformancestudio.platform.adb.DefaultAdbClient
 import java.nio.file.Path
 import kotlin.time.Duration.Companion.seconds
 
@@ -48,20 +47,21 @@ internal interface BatteryBackend {
 }
 
 internal class DesktopBatteryBackend(
-    private val adbLocator: () -> Path? = ::locateSystemAdb,
-    private val processRunner: StudioHostProcessExecutor = StudioHostProcessExecutor(),
+    private val adbLocator: () -> Path? = ::defaultAdbExecutable,
+    private val targetMonitorProvider: (Path) -> AndroidTargetMonitor = AndroidTargetMonitors::shared,
+    private val adbClientFactory: (Path) -> AdbClient = ::DefaultAdbClient,
 ) : BatteryBackend {
     override suspend fun listDevices(): BatteryBackendResult<List<BatteryDevice>> {
         val adb = adbLocator() ?: return missingAdb()
-        return when (val result = AdbDeviceRefresher(adb).refresh()) {
+        return when (val result = targetMonitorProvider(adb).refreshDevices()) {
             is StudioResult.Failure -> BatteryBackendResult.Failure(result.error.message)
             is StudioResult.Success ->
                 BatteryBackendResult.Success(
                     result.value.map {
                         BatteryDevice(
                             it.serial,
-                            it.model?.replace('_', ' ') ?: it.serial,
-                            it.state == AdbDeviceState.ONLINE,
+                            it.displayName,
+                            it.online,
                         )
                     },
                 )
@@ -122,26 +122,14 @@ internal class DesktopBatteryBackend(
         adb: Path,
         serial: String,
         arguments: List<String>,
-    ): String {
-        val request =
-            HostProcessRequest(
-                adb,
-                listOf("-s", serial, "shell") + arguments,
+    ): String =
+        adbClientFactory(adb)
+            .shell(
+                serial = serial,
+                arguments = arguments,
                 timeout = COMMAND_TIMEOUT,
                 maxOutputBytesPerStream = MAX_OUTPUT,
-            )
-        return when (val result = processRunner.run(request)) {
-            is HostCommandResult.Completed -> result.output.stdout.text
-            is HostCommandResult.Failed -> throw IllegalStateException(
-                result.output
-                    ?.stderr
-                    ?.text
-                    ?.trim()
-                    .orEmpty()
-                    .ifEmpty { result.error.message },
-            )
-        }
-    }
+            ).stdout
 
     private fun missingAdb() =
         BatteryBackendResult.Failure("Android SDK Platform Tools were not found. Configure ANDROID_HOME or ANDROID_SDK_ROOT.")
@@ -149,11 +137,6 @@ internal class DesktopBatteryBackend(
     private companion object {
         const val MAX_OUTPUT = 16 * 1024 * 1024
         val COMMAND_TIMEOUT = 60.seconds
-
-        fun locateSystemAdb(): Path? {
-            val platform = (SystemHostPlatformDetector().detect() as? StudioResult.Success)?.value ?: return null
-            return (SystemAdbLocator(platform).locate() as? StudioResult.Success)?.value?.executable
-        }
     }
 }
 

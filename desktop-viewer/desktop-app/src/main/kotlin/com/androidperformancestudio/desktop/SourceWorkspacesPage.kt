@@ -1,19 +1,34 @@
 package com.androidperformancestudio.desktop
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.HorizontalScrollbar
+import androidx.compose.foundation.LocalScrollbarStyle
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.VerticalScrollbar
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -21,7 +36,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -35,10 +49,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -47,6 +67,7 @@ import com.androidperformancestudio.desktop_app.generated.resources.Res
 import com.androidperformancestudio.source.ResolutionConfidence
 import com.androidperformancestudio.source.SourceContentState
 import com.androidperformancestudio.source.SourceProviderConfig
+import com.androidperformancestudio.source.SourceLanguage
 import com.androidperformancestudio.source.SourceLocation
 import com.androidperformancestudio.source.SourceProviderKind
 import com.androidperformancestudio.source.SourceSnapshotId
@@ -55,9 +76,13 @@ import com.androidperformancestudio.source.SourceWorkspacePhase
 import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.HEADER_TOOL_BAR_HEIGHT
 import com.androidperformancestudio.ui.UiLanguage
+import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.button.HomeButton
 import com.androidperformancestudio.ui.button.MacOSTextButton
 import com.androidperformancestudio.ui.localizedStringResource
+import com.androidperformancestudio.ui.search.CompactSearchField
+import com.androidperformancestudio.ui.viewerOutlinedTextFieldColors
+import java.awt.Cursor
 import java.awt.Desktop
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
@@ -93,6 +118,7 @@ internal fun SourceWorkspacesPage(
     var sourceState by remember { mutableStateOf<SourceContentState?>(null) }
     var dialog by remember { mutableStateOf<RemoteWorkspaceDialog?>(null) }
     var pageError by remember { mutableStateOf<String?>(null) }
+    var paneWidths by remember { mutableStateOf(SourceWorkspacePaneWidths()) }
     val colors = LocalViewerColors.current
 
     LaunchedEffect(initialLocation) {
@@ -111,7 +137,7 @@ internal fun SourceWorkspacesPage(
         }
     }
 
-    Surface(Modifier.fillMaxSize()) {
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize()) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(HEADER_TOOL_BAR_HEIGHT),
@@ -168,84 +194,91 @@ internal fun SourceWorkspacesPage(
                     modifier = Modifier.padding(12.dp),
                 )
             }
-            Row(Modifier.fillMaxSize()) {
-                LazyColumn(
-                    modifier = Modifier.width(360.dp).fillMaxSize().padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    if (visibleWorkspaces.isEmpty()) {
-                        item {
-                            Text(
-                                localizedStringResource(Res.string.source_empty_hint, language),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    items(visibleWorkspaces, key = { it.id.value }) { workspace ->
-                        WorkspaceCard(
-                            language = language,
-                            workspace = workspace,
-                            selected = selectedWorkspaceId == workspace.id,
-                            onSelect = {
-                                selectedWorkspaceId = workspace.id
-                                selectedFile = null
-                                selectedLocation = null
-                                sourceText = null
-                                sourceState = null
-                            },
-                            onRefresh = { scope.launch { withContext(Dispatchers.IO) { runtime.service.refresh(workspace.id) } } },
-                            onToggleAiUpload = {
-                                runtime.service.setAiSourceUploadAllowed(workspace.id, !workspace.allowAiSourceUpload)
-                            },
-                            onRemove = {
-                                runtime.service.remove(workspace.id)
-                                if (selectedWorkspaceId == workspace.id) selectedWorkspaceId = null
-                            },
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val availableWidthDp = maxWidth.value
+                val fittedPaneWidths = SourceWorkspacePaneLayout.fit(paneWidths, availableWidthDp)
+                Row(Modifier.fillMaxSize()) {
+                    WorkspaceListPane(
+                        language = language,
+                        workspaces = visibleWorkspaces,
+                        selectedWorkspaceId = selectedWorkspaceId,
+                        onSelect = { workspace ->
+                            selectedWorkspaceId = workspace.id
+                            selectedFile = null
+                            selectedLocation = null
+                            sourceText = null
+                            sourceState = null
+                        },
+                        onRefresh = { workspace ->
+                            scope.launch { withContext(Dispatchers.IO) { runtime.service.refresh(workspace.id) } }
+                        },
+                        onToggleAiUpload = { workspace ->
+                            runtime.service.setAiSourceUploadAllowed(workspace.id, !workspace.allowAiSourceUpload)
+                        },
+                        onRemove = { workspace ->
+                            runtime.service.remove(workspace.id)
+                            if (selectedWorkspaceId == workspace.id) selectedWorkspaceId = null
+                        },
+                        modifier = Modifier.width(fittedPaneWidths.workspaces.dp).fillMaxHeight(),
+                    )
+                    SourceWorkspaceResizeSeparator { deltaDp ->
+                        paneWidths = SourceWorkspacePaneLayout.dragWorkspaces(
+                            widths = SourceWorkspacePaneLayout.fit(paneWidths, availableWidthDp),
+                            deltaDp = deltaDp,
+                            availableWidthDp = availableWidthDp,
                         )
                     }
-                }
-                VerticalDivider()
-                val active = visibleWorkspaces.firstOrNull { it.id == selectedWorkspaceId }
-                if (active?.activeSnapshotId == null) {
-                    Box(Modifier.weight(1f).fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(localizedStringResource(Res.string.source_select_indexed_workspace, language))
+                    val active = visibleWorkspaces.firstOrNull { it.id == selectedWorkspaceId }
+                    if (active?.activeSnapshotId == null) {
+                        Box(Modifier.weight(1f).fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(localizedStringResource(Res.string.source_select_indexed_workspace, language))
+                        }
+                    } else {
+                        val activeSnapshotId = requireNotNull(active.activeSnapshotId)
+                        val browserSnapshotId = selectedLocation?.snapshotId ?: activeSnapshotId
+                        SourceBrowser(
+                            language = language,
+                            snapshotId = browserSnapshotId,
+                            runtime = runtime,
+                            selectedFile = selectedFile,
+                            sourceText = sourceText,
+                            sourceState = sourceState,
+                            selectedLocation = selectedLocation,
+                            workspace = active,
+                            filesPaneWidth = fittedPaneWidths.files,
+                            onResizeFilesPane = { deltaDp ->
+                                paneWidths = SourceWorkspacePaneLayout.dragFiles(
+                                    widths = SourceWorkspacePaneLayout.fit(paneWidths, availableWidthDp),
+                                    deltaDp = deltaDp,
+                                    availableWidthDp = availableWidthDp,
+                                )
+                            },
+                            onOpen = { path ->
+                                selectedFile = path
+                                val file = runtime.repository.files(browserSnapshotId).first { it.relativePath == path }
+                                selectedLocation = SourceLocation(active.id, browserSnapshotId, path, null, file.contentHash)
+                                scope.launch {
+                                    sourceText = null
+                                    sourceState = null
+                                    runCatching {
+                                        withContext(Dispatchers.IO) { runtime.service.read(
+                                            com.androidperformancestudio.source.SourceLocation(
+                                                active.id,
+                                                browserSnapshotId,
+                                                path,
+                                                null,
+                                                file.contentHash,
+                                            ),
+                                        ) }
+                                    }.onSuccess {
+                                        sourceText = it.text
+                                        sourceState = it.state
+                                    }.onFailure { pageError = it.message }
+                                }
+                            },
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                        )
                     }
-                } else {
-                    val activeSnapshotId = requireNotNull(active.activeSnapshotId)
-                    val browserSnapshotId = selectedLocation?.snapshotId ?: activeSnapshotId
-                    SourceBrowser(
-                        language = language,
-                        snapshotId = browserSnapshotId,
-                        runtime = runtime,
-                        selectedFile = selectedFile,
-                        sourceText = sourceText,
-                        sourceState = sourceState,
-                        selectedLocation = selectedLocation,
-                        workspace = active,
-                        onOpen = { path ->
-                            selectedFile = path
-                            val file = runtime.repository.files(browserSnapshotId).first { it.relativePath == path }
-                            selectedLocation = SourceLocation(active.id, browserSnapshotId, path, null, file.contentHash)
-                            scope.launch {
-                                sourceText = null
-                                sourceState = null
-                                runCatching {
-                                    withContext(Dispatchers.IO) { runtime.service.read(
-                                        com.androidperformancestudio.source.SourceLocation(
-                                            active.id,
-                                            browserSnapshotId,
-                                            path,
-                                            null,
-                                            file.contentHash,
-                                        ),
-                                    ) }
-                                }.onSuccess {
-                                    sourceText = it.text
-                                    sourceState = it.state
-                                }.onFailure { pageError = it.message }
-                            }
-                        },
-                    )
                 }
             }
         }
@@ -272,6 +305,340 @@ internal fun SourceWorkspacesPage(
 internal const val REMOTE_SOURCE_WORKSPACES_VISIBLE = false
 
 @Composable
+private fun WorkspaceListPane(
+    language: UiLanguage,
+    workspaces: List<SourceWorkspace>,
+    selectedWorkspaceId: com.androidperformancestudio.source.SourceWorkspaceId?,
+    onSelect: (SourceWorkspace) -> Unit,
+    onRefresh: (SourceWorkspace) -> Unit,
+    onToggleAiUpload: (SourceWorkspace) -> Unit,
+    onRemove: (SourceWorkspace) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val listState = rememberLazyListState()
+    val horizontalScrollState = rememberScrollState()
+    BoxWithConstraints(modifier) {
+        val contentWidthDp = maxOf(
+            maxWidth.value,
+            workspaces.maxOfOrNull { workspace -> workspace.displayName.length * 8f + 48f } ?: 0f,
+        )
+        Box(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxSize().horizontalScroll(horizontalScrollState)) {
+                LazyColumn(
+                    state = listState,
+                    modifier =
+                        Modifier
+                            .width(contentWidthDp.dp)
+                            .fillMaxHeight()
+                            .padding(end = 12.dp, bottom = 12.dp)
+                            .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (workspaces.isEmpty()) {
+                        item {
+                            Text(
+                                localizedStringResource(Res.string.source_empty_hint, language),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    items(workspaces, key = { it.id.value }) { workspace ->
+                        WorkspaceCard(
+                            language = language,
+                            workspace = workspace,
+                            selected = selectedWorkspaceId == workspace.id,
+                            onSelect = { onSelect(workspace) },
+                            onRefresh = { onRefresh(workspace) },
+                            onToggleAiUpload = { onToggleAiUpload(workspace) },
+                            onRemove = { onRemove(workspace) },
+                        )
+                    }
+                }
+            }
+            SourceWorkspacePaneScrollbars(listState, horizontalScrollState)
+        }
+    }
+}
+
+@Composable
+private fun SourceFileListPane(
+    language: UiLanguage,
+    files: List<com.androidperformancestudio.source.SourceFile>,
+    selectedFile: String?,
+    onOpen: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var fileSearchQuery by remember(files) { mutableStateOf("") }
+    val matchingFiles = remember(files, fileSearchQuery) {
+        SourceFileTree.matchingFiles(files, fileSearchQuery)
+    }
+    val defaultCollapsedDirectories = remember(files) {
+        SourceFileTree.defaultCollapsedDirectories(files)
+    }
+    var collapsedDirectories by remember(files) { mutableStateOf(defaultCollapsedDirectories) }
+    LaunchedEffect(files, selectedFile) {
+        collapsedDirectories -= SourceFileTree.ancestorDirectories(selectedFile.orEmpty())
+    }
+    val searchResultDirectories = remember(matchingFiles, fileSearchQuery) {
+        if (fileSearchQuery.isBlank()) {
+            emptySet()
+        } else {
+            matchingFiles.flatMapTo(linkedSetOf()) { file ->
+                SourceFileTree.ancestorDirectories(file.relativePath)
+            }
+        }
+    }
+    val effectiveCollapsedDirectories = remember(collapsedDirectories, searchResultDirectories) {
+        collapsedDirectories - searchResultDirectories
+    }
+    val treeRows = remember(matchingFiles, effectiveCollapsedDirectories) {
+        SourceFileTree.rows(matchingFiles, effectiveCollapsedDirectories)
+    }
+    val listState = rememberLazyListState()
+    val horizontalScrollState = rememberScrollState()
+    LaunchedEffect(fileSearchQuery) {
+        listState.scrollToItem(0)
+    }
+    Column(modifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth().height(28.dp).padding(horizontal = 6.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CompactSearchField(
+                value = fileSearchQuery,
+                placeholder = localizedStringResource(Res.string.source_search_files, language),
+                onValueChange = { fileSearchQuery = it },
+                modifier = Modifier.weight(1f),
+            )
+        }
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val contentWidthDp = maxOf(
+                maxWidth.value,
+                treeRows.maxOfOrNull { row ->
+                    row.name.length * 8f +
+                        8f +
+                        row.depth * SourceFileTreeRowLayout.INDENT_DP +
+                        12f +
+                        4f +
+                        14f +
+                        5f +
+                        8f
+                } ?: 0f,
+            )
+            Box(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxSize().horizontalScroll(horizontalScrollState)) {
+                    LazyColumn(
+                        state = listState,
+                        modifier =
+                            Modifier
+                                .width(contentWidthDp.dp)
+                                .fillMaxHeight()
+                                .padding(top = 6.dp, end = 12.dp, bottom = 12.dp),
+                    ) {
+                        items(treeRows, key = { it.key }) { row ->
+                            when (row) {
+                                is SourceFileTreeRow.Directory -> {
+                                    SourceDirectoryTreeRow(
+                                        row = row,
+                                        onToggle = {
+                                            collapsedDirectories =
+                                                if (row.expanded) collapsedDirectories + row.path else collapsedDirectories - row.path
+                                        },
+                                    )
+                                }
+                                is SourceFileTreeRow.File -> {
+                                    SourceFileTreeFileRow(
+                                        row = row,
+                                        selected = selectedFile == row.sourceFile.relativePath,
+                                        onOpen = { onOpen(row.sourceFile.relativePath) },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                SourceWorkspacePaneScrollbars(listState, horizontalScrollState)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SourceDirectoryTreeRow(
+    row: SourceFileTreeRow.Directory,
+    onToggle: () -> Unit,
+) {
+    SourceFileTreeRowContainer(
+        depth = row.depth,
+        selected = false,
+        onClick = onToggle,
+    ) {
+        SourceFileTreeDisclosure(
+            hasChildren = true,
+            expanded = row.expanded,
+            onToggle = onToggle,
+        )
+        Spacer(Modifier.width(4.dp))
+        SourceFileTreeFolderIcon(expanded = row.expanded)
+        Spacer(Modifier.width(5.dp))
+        SourceFileTreeLabel(row.name)
+    }
+}
+
+@Composable
+private fun SourceFileTreeFileRow(
+    row: SourceFileTreeRow.File,
+    selected: Boolean,
+    onOpen: () -> Unit,
+) {
+    SourceFileTreeRowContainer(
+        depth = row.depth,
+        selected = selected,
+        onClick = onOpen,
+    ) {
+        SourceFileTreeDisclosure(
+            hasChildren = false,
+            expanded = false,
+            onToggle = {},
+        )
+        Spacer(Modifier.width(4.dp))
+        SourceFileTreeFileIcon(row.sourceFile.language.sourceFileTreeIconKind())
+        Spacer(Modifier.width(5.dp))
+        SourceFileTreeLabel(row.name)
+    }
+}
+
+@Composable
+private fun SourceFileTreeRowContainer(
+    depth: Int,
+    selected: Boolean,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val colors = LocalViewerColors.current
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(SourceFileTreeRowLayout.HEIGHT_DP.dp)
+                .background(if (selected) colors.selectedRow else colors.transparent)
+                .clickable(onClick = onClick)
+                .padding(
+                    start = (8 + depth * SourceFileTreeRowLayout.INDENT_DP).dp,
+                    end = 8.dp,
+                ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun SourceFileTreeDisclosure(
+    hasChildren: Boolean,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val colors = LocalViewerColors.current
+    Box(
+        modifier =
+            Modifier
+                .width(12.dp)
+                .fillMaxHeight()
+                .let { base -> if (hasChildren) base.clickable(onClick = onToggle) else base },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (hasChildren) {
+            Canvas(Modifier.size(8.dp)) {
+                val strokeWidth = 1.2.dp.toPx()
+                if (expanded) {
+                    drawLine(
+                        color = colors.accent,
+                        start = Offset(0.5.dp.toPx(), 2.dp.toPx()),
+                        end = Offset(4.dp.toPx(), 5.5.dp.toPx()),
+                        strokeWidth = strokeWidth,
+                    )
+                    drawLine(
+                        color = colors.accent,
+                        start = Offset(4.dp.toPx(), 5.5.dp.toPx()),
+                        end = Offset(7.5.dp.toPx(), 2.dp.toPx()),
+                        strokeWidth = strokeWidth,
+                    )
+                } else {
+                    drawLine(
+                        color = colors.accent,
+                        start = Offset(2.dp.toPx(), 0.5.dp.toPx()),
+                        end = Offset(5.5.dp.toPx(), 4.dp.toPx()),
+                        strokeWidth = strokeWidth,
+                    )
+                    drawLine(
+                        color = colors.accent,
+                        start = Offset(5.5.dp.toPx(), 4.dp.toPx()),
+                        end = Offset(2.dp.toPx(), 7.5.dp.toPx()),
+                        strokeWidth = strokeWidth,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SourceFileTreeLabel(name: String) {
+    val colors = LocalViewerColors.current
+    Text(
+        text = name,
+        color = colors.rowText,
+        fontSize = ViewerTypography.secondary.fontSize,
+        lineHeight = ViewerTypography.dense.lineHeight,
+        maxLines = 1,
+        softWrap = false,
+    )
+}
+
+@Composable
+private fun BoxScope.SourceWorkspacePaneScrollbars(
+    listState: LazyListState,
+    horizontalScrollState: ScrollState,
+) {
+    val scrollbarStyle = LocalScrollbarStyle.current
+    HorizontalScrollbar(
+        adapter = rememberScrollbarAdapter(horizontalScrollState),
+        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(end = 12.dp),
+        style = scrollbarStyle,
+    )
+    VerticalScrollbar(
+        adapter = rememberScrollbarAdapter(listState),
+        modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(bottom = 12.dp),
+        style = scrollbarStyle,
+    )
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun SourceWorkspaceResizeSeparator(onDrag: (Float) -> Unit) {
+    val colors = LocalViewerColors.current
+    val density = LocalDensity.current
+    val currentOnDrag by rememberUpdatedState(onDrag)
+    Box(
+        modifier =
+            Modifier
+                .fillMaxHeight()
+                .width(SourceWorkspacePaneLayout.SPLITTER_WIDTH_DP.dp)
+                .pointerHoverIcon(PointerIcon(Cursor(Cursor.E_RESIZE_CURSOR)))
+                .pointerInput(density) {
+                    detectHorizontalDragGestures { change, dragAmount ->
+                        change.consume()
+                        currentOnDrag(dragAmount / density.density)
+                    }
+                },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.fillMaxHeight().width(1.dp).background(colors.border))
+    }
+}
+
+@Composable
 private fun WorkspaceCard(
     language: UiLanguage,
     workspace: SourceWorkspace,
@@ -288,7 +655,12 @@ private fun WorkspaceCard(
         ),
     ) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(workspace.displayName, fontWeight = FontWeight.SemiBold)
+            Text(
+                workspace.displayName,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                softWrap = false,
+            )
             Text(
                 localizedStringResource(
                     Res.string.source_status_summary,
@@ -330,18 +702,21 @@ private fun SourceBrowser(
     sourceState: SourceContentState?,
     selectedLocation: SourceLocation?,
     workspace: SourceWorkspace,
+    filesPaneWidth: Float,
+    onResizeFilesPane: (Float) -> Unit,
     onOpen: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val files = remember(snapshotId) { runtime.repository.files(snapshotId) }
-    Row(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.width(320.dp).fillMaxSize().padding(8.dp)) {
-            items(files, key = { it.relativePath }) { file ->
-                TextButton(onClick = { onOpen(file.relativePath) }, modifier = Modifier.fillMaxWidth()) {
-                    Text(file.relativePath, modifier = Modifier.fillMaxWidth(), maxLines = 2)
-                }
-            }
-        }
-        VerticalDivider()
+    Row(modifier) {
+        SourceFileListPane(
+            language = language,
+            files = files,
+            selectedFile = selectedFile,
+            onOpen = onOpen,
+            modifier = Modifier.width(filesPaneWidth.dp).fillMaxHeight(),
+        )
+        SourceWorkspaceResizeSeparator(onResizeFilesPane)
         Column(Modifier.weight(1f).fillMaxSize().padding(12.dp)) {
             val snapshot = runtime.repository.snapshot(snapshotId)
             val candidate = selectedLocation?.let(runtime::candidate)
@@ -404,11 +779,16 @@ private fun SourceBrowser(
             when {
                 selectedFile == null -> Unit
                 sourceText == null -> CircularProgressIndicator()
-                else -> Text(
-                    sourceText,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                )
+                else -> {
+                    val selectedSourceFile = files.firstOrNull { it.relativePath == selectedFile }
+                    SourceCodeViewer(
+                        sourceText = requireNotNull(sourceText),
+                        language = selectedSourceFile?.language ?: SourceLanguage.OTHER,
+                        uiLanguage = language,
+                        highlightedRange = selectedLocation?.range,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
         }
     }
@@ -470,13 +850,14 @@ private fun AddRemoteWorkspaceDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
-                    name,
-                    { name = it },
+                    value = name,
+                    onValueChange = { name = it },
                     label = { Text(localizedStringResource(Res.string.source_name, language)) },
+                    colors = viewerOutlinedTextFieldColors(),
                 )
                 OutlinedTextField(
-                    first,
-                    { first = it },
+                    value = first,
+                    onValueChange = { first = it },
                     label = {
                         Text(
                             localizedStringResource(
@@ -489,24 +870,28 @@ private fun AddRemoteWorkspaceDialog(
                             ),
                         )
                     },
+                    colors = viewerOutlinedTextFieldColors(),
                 )
                 if (kind == RemoteWorkspaceDialog.GITHUB) {
                     OutlinedTextField(
-                        second,
-                        { second = it },
+                        value = second,
+                        onValueChange = { second = it },
                         label = { Text(localizedStringResource(Res.string.source_repository, language)) },
+                        colors = viewerOutlinedTextFieldColors(),
                     )
                     OutlinedTextField(
-                        token,
-                        { token = it },
+                        value = token,
+                        onValueChange = { token = it },
                         label = { Text(localizedStringResource(Res.string.source_token_optional, language)) },
                         visualTransformation = PasswordVisualTransformation(),
+                        colors = viewerOutlinedTextFieldColors(),
                     )
                 }
                 OutlinedTextField(
-                    ref,
-                    { ref = it },
+                    value = ref,
+                    onValueChange = { ref = it },
                     label = { Text(localizedStringResource(Res.string.source_revision_hint, language)) },
+                    colors = viewerOutlinedTextFieldColors(),
                 )
             }
         },

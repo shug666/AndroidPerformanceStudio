@@ -9,6 +9,8 @@
 
 package com.androidperformancestudio.presentation
 
+import com.androidperformancestudio.ui.ViewerTypography
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,7 +25,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -46,9 +47,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.androidperformancestudio.application.CaptureSetup
@@ -70,7 +69,6 @@ import com.androidperformancestudio.ui.ViewerDimensions
 import com.androidperformancestudio.ui.button.MacOSTextButton
 import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.radiobutton.MacOSChoiceChip
-import com.androidperformancestudio.ui.viewerColors
 
 enum class CaptureSettingsSection {
     SAMPLING_TEMPLATE,
@@ -100,7 +98,7 @@ fun SimpleperfSettingsContent(
     modifier: Modifier = Modifier,
 ) {
     val locale = currentSimpleperfLanguage().locale
-    val style = viewerColors(darkTheme)
+    val style = currentSimpleperfViewerColors(darkTheme)
     var section by remember(initialSection) { mutableStateOf(initialSection) }
     Row(
         modifier =
@@ -158,7 +156,7 @@ fun SimpleperfSettingsSectionContent(
         section = section,
         setup = setup,
         availableEvents = availableEvents,
-        style = viewerColors(darkTheme),
+        style = currentSimpleperfViewerColors(darkTheme),
         enabled = enabled,
         onSelectTemplate = onSelectTemplate,
         onUpdate = onUpdate,
@@ -252,10 +250,10 @@ private fun SettingsNavigation(
         Text(
             localizedStringResource(SimpleperfViewerRes.sp_target_settings, locale),
             color = style.text,
-            fontSize = 16.sp,
+            fontSize = ViewerTypography.sectionTitle.fontSize,
             fontWeight = FontWeight.SemiBold,
         )
-        Text(localizedStringResource(SimpleperfViewerRes.sp_target_application, locale), color = style.secondaryText, fontSize = 10.sp)
+        Text(localizedStringResource(SimpleperfViewerRes.sp_target_application, locale), color = style.secondaryText, fontSize = ViewerTypography.label.fontSize)
         Spacer(Modifier.height(8.dp))
         CaptureSettingsSection.entries.filter { item -> item != CaptureSettingsSection.USER_GUIDE || showUserGuide }.forEach { item ->
             val selected = item == section
@@ -278,7 +276,7 @@ private fun SettingsNavigation(
                 Text(
                     label,
                     color = if (selected) style.accent else style.text,
-                    fontSize = 11.sp,
+                    fontSize = ViewerTypography.secondary.fontSize,
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                 )
             }
@@ -313,7 +311,7 @@ private fun SettingsPanel(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Text(section.subtitle(locale), color = style.secondaryText, fontSize = 10.sp)
+                Text(section.subtitle(locale), color = style.secondaryText, fontSize = ViewerTypography.label.fontSize)
             }
             onDismiss?.let {
                 MacOSTextButton(
@@ -399,13 +397,13 @@ private fun UserGuideSettingsPanel(
         Text(
             localizedStringResource(SimpleperfViewerRes.sp_settings_user_guide, locale),
             color = style.text,
-            fontSize = 12.sp,
+            fontSize = ViewerTypography.bodyCompact.fontSize,
             fontWeight = FontWeight.SemiBold,
         )
         Text(
             localizedStringResource(SimpleperfViewerRes.sp_settings_user_guide_description, locale),
             color = style.secondaryText,
-            fontSize = 10.sp,
+            fontSize = ViewerTypography.label.fontSize,
         )
         MacOSTextButton(
             localizedStringResource(SimpleperfViewerRes.sp_settings_open_user_guide_browser, locale),
@@ -427,13 +425,13 @@ private fun FlameGraphSettingsPanel(
         Text(
             localizedStringResource(SimpleperfViewerRes.sp_settings_frame_information_box, locale),
             color = style.text,
-            fontSize = 12.sp,
+            fontSize = ViewerTypography.bodyCompact.fontSize,
             fontWeight = FontWeight.SemiBold,
         )
         Text(
             localizedStringResource(SimpleperfViewerRes.sp_settings_frame_information_behavior_description, locale),
             color = style.secondaryText,
-            fontSize = 10.sp,
+            fontSize = ViewerTypography.label.fontSize,
         )
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             MacOSChoiceChip(
@@ -559,7 +557,7 @@ private fun CaptureConfigurationPanel(
         Text(
             localizedStringResource(SimpleperfViewerRes.sp_capture_event_rate, locale),
             color = style.text,
-            fontSize = 12.sp,
+            fontSize = ViewerTypography.bodyCompact.fontSize,
             fontWeight = FontWeight.SemiBold,
         )
         MacOsTextField(localizedStringResource(SimpleperfViewerRes.sp_capture_event, locale), event, enabled, {
@@ -581,7 +579,7 @@ private fun CaptureConfigurationPanel(
                 Text(
                     localizedStringResource(SimpleperfViewerRes.sp_capture_rate_mode, locale),
                     color = style.secondaryText,
-                    fontSize = 9.sp,
+                    fontSize = ViewerTypography.dense.fontSize,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     MacOSChoiceChip(
@@ -665,11 +663,11 @@ private fun EmptyParametersPanel(
     locale: java.util.Locale,
 ) {
     MacOsPanel(modifier, style) {
-        Text(localizedStringResource(title, locale), color = style.text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        Text(localizedStringResource(title, locale), color = style.text, fontSize = ViewerTypography.bodyCompact.fontSize, fontWeight = FontWeight.SemiBold)
         Text(
             localizedStringResource(SimpleperfViewerRes.sp_capture_sampling_target_required_hint, locale),
             color = style.secondaryText,
-            fontSize = 10.sp,
+            fontSize = ViewerTypography.label.fontSize,
         )
     }
 }
@@ -684,13 +682,13 @@ internal fun MacOsTextField(
     modifier: Modifier,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(label, color = style.secondaryText, fontSize = 9.sp, maxLines = 1)
+        Text(label, color = style.secondaryText, fontSize = ViewerTypography.dense.fontSize, maxLines = 1)
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
             enabled = enabled,
             singleLine = true,
-            textStyle = TextStyle(color = style.text, fontSize = 11.sp, lineHeight = 14.sp),
+            textStyle = TextStyle(color = style.text, fontSize = ViewerTypography.secondary.fontSize, lineHeight = ViewerTypography.label.lineHeight),
             cursorBrush = SolidColor(style.accent),
             modifier =
                 Modifier
@@ -699,46 +697,10 @@ internal fun MacOsTextField(
                     .background(style.field, RoundedCornerShape(ViewerDimensions.controlRadius))
                     .border(
                         ViewerDimensions.hairline,
-                        style.strongBorder,
+                        style.accent,
                         RoundedCornerShape(ViewerDimensions.controlRadius),
                     ).semantics { contentDescription = label }
                     .padding(horizontal = 8.dp, vertical = 7.dp),
-        )
-    }
-}
-
-@Composable
-internal fun MacOsInlineTextField(
-    label: String,
-    value: String,
-    enabled: Boolean,
-    onValueChange: (String) -> Unit,
-    style: ViewerColors,
-    fieldWidth: Dp,
-) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, color = style.secondaryText, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            enabled = enabled,
-            singleLine = true,
-            textStyle = TextStyle(color = style.text, fontSize = 11.sp, lineHeight = 14.sp),
-            cursorBrush = SolidColor(style.accent),
-            modifier =
-                Modifier
-                    .requiredWidth(fieldWidth)
-                    .height(20.dp)
-                    .background(style.field, RoundedCornerShape(ViewerDimensions.controlRadius))
-                    .border(
-                        ViewerDimensions.hairline,
-                        style.strongBorder,
-                        RoundedCornerShape(ViewerDimensions.controlRadius),
-                    ).semantics { contentDescription = label }
-                    .padding(horizontal = 8.dp, vertical = 2.dp),
         )
     }
 }
@@ -758,7 +720,7 @@ private fun <T : Enum<T>> ParameterChoices(
             localizedStringResource(label, locale),
             modifier = Modifier.widthIn(min = 66.dp),
             color = style.secondaryText,
-            fontSize = 10.sp,
+            fontSize = ViewerTypography.label.fontSize,
         )
         values.forEach { value ->
             val valueLabel =
@@ -802,14 +764,14 @@ private fun TemplateChoice(
             Text(
                 template.localizedTemplateName(locale),
                 color = style.text.copy(alpha = if (enabled) 1f else DISABLED_CHIP_ALPHA),
-                fontSize = 10.sp,
+                fontSize = ViewerTypography.label.fontSize,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                 maxLines = 1,
             )
             Text(
                 template.localizedTemplateDescription(locale),
                 color = style.secondaryText.copy(alpha = if (enabled) 1f else DISABLED_CHIP_ALPHA),
-                fontSize = 8.sp,
+                fontSize = ViewerTypography.micro.fontSize,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

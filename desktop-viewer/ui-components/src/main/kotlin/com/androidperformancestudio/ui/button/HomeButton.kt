@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.ViewerColors
 import com.androidperformancestudio.ui.ViewerDimensions
 
@@ -35,8 +36,9 @@ fun HomeButton(
 ) {
     val shape = RoundedCornerShape(ViewerDimensions.controlRadius)
     val background = colors?.panel ?: MaterialTheme.colorScheme.surface
-    val outline = colors?.strongBorder ?: MaterialTheme.colorScheme.outline
-    val iconColor = colors?.secondaryText ?: MaterialTheme.colorScheme.onSurfaceVariant
+    val accent = colors?.accent ?: LocalViewerColors.current.accent
+    val outline = accent
+    val iconColor = accent
     Box(
         modifier =
             modifier

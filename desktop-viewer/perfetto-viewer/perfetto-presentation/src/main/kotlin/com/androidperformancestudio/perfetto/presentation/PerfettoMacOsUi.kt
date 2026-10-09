@@ -1,5 +1,7 @@
 package com.androidperformancestudio.perfetto.presentation
 
+import com.androidperformancestudio.ui.ViewerTypography
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,7 +32,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 @Composable
 @Suppress("ktlint:standard:function-naming")
@@ -39,13 +41,8 @@ fun PerfettoWorkspacePanel(
     actions: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val shape = RoundedCornerShape(4.dp)
     Column(
-        modifier =
-            modifier
-                .clip(shape)
-                .background(MaterialTheme.colorScheme.surface)
-                .border(1.dp, MaterialTheme.colorScheme.outline, shape),
+        modifier = modifier.background(MaterialTheme.colorScheme.surface),
     ) {
         Row(
             modifier =
@@ -53,23 +50,21 @@ fun PerfettoWorkspacePanel(
                     .fillMaxWidth()
                     .height(28.dp)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    ).padding(horizontal = 8.dp),
+                    .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = title,
                 modifier = Modifier.weight(1f),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 11.sp,
+                fontSize = ViewerTypography.secondary.fontSize,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             actions()
         }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         content()
     }
 }
@@ -94,7 +89,7 @@ fun PerfettoCompactTextField(
                 .height(height)
                 .clip(shape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(1.dp, MaterialTheme.colorScheme.outline, shape)
+                .border(1.dp, MaterialTheme.colorScheme.primary, shape)
                 .padding(horizontal = 7.dp, vertical = if (singleLine) 4.dp else 6.dp),
         enabled = enabled,
         singleLine = singleLine,
@@ -106,7 +101,7 @@ fun PerfettoCompactTextField(
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
-                fontSize = 11.sp,
+                fontSize = ViewerTypography.secondary.fontSize,
             ),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         decorationBox = { innerTextField ->
@@ -115,7 +110,7 @@ fun PerfettoCompactTextField(
                     Text(
                         text = placeholder,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 11.sp,
+                        fontSize = ViewerTypography.secondary.fontSize,
                         maxLines = if (singleLine) 1 else Int.MAX_VALUE,
                     )
                 }
@@ -137,7 +132,7 @@ fun PerfettoCompactButton(
     val shape = RoundedCornerShape(4.dp)
     val background =
         if (selected) {
-            MaterialTheme.colorScheme.primaryContainer
+            MaterialTheme.colorScheme.primary
         } else {
             MaterialTheme.colorScheme.surfaceVariant
         }
@@ -148,7 +143,7 @@ fun PerfettoCompactButton(
                 .height(24.dp)
                 .clip(shape)
                 .background(background)
-                .border(1.dp, MaterialTheme.colorScheme.outline, shape)
+                .border(1.dp, MaterialTheme.colorScheme.primary, shape)
                 .clickable(
                     enabled = enabled,
                     interactionSource = interactionSource,
@@ -162,10 +157,10 @@ fun PerfettoCompactButton(
             color =
                 when {
                     !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                    selected -> MaterialTheme.colorScheme.onPrimaryContainer
-                    else -> MaterialTheme.colorScheme.onSurface
+                    selected -> MaterialTheme.colorScheme.onPrimary
+                    else -> MaterialTheme.colorScheme.primary
                 },
-            fontSize = 11.sp,
+            fontSize = ViewerTypography.secondary.fontSize,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

@@ -6,19 +6,36 @@
     "MaxLineLength",
     "TooManyFunctions",
     "ktlint:standard:function-naming",
+    "ktlint:standard:import-ordering",
+    "ktlint:standard:no-unused-imports",
+    "ktlint:standard:argument-list-wrapping",
+    "ktlint:standard:function-literal",
+    "ktlint:standard:chain-method-continuation",
+    "ktlint:standard:blank-line-before-declaration",
+    "ktlint:standard:no-consecutive-blank-lines",
 )
 
 package com.androidperformancestudio.memory.presentation
 
+import com.androidperformancestudio.ui.LocalViewerColors
+import com.androidperformancestudio.ui.ViewerTypography
+
+import androidx.compose.foundation.HorizontalScrollbar
+import androidx.compose.foundation.LocalScrollbarStyle
+import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,27 +43,33 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.androidperformancestudio.memory.model.ObjectReference
 import com.androidperformancestudio.memory.presentation.generated.resources.Res
 import com.androidperformancestudio.memory.presentation.generated.resources.activity_fragment_leak
@@ -59,17 +82,19 @@ import com.androidperformancestudio.memory.presentation.generated.resources.allo
 import com.androidperformancestudio.memory.presentation.generated.resources.allocations_size
 import com.androidperformancestudio.memory.presentation.generated.resources.arrange_by
 import com.androidperformancestudio.memory.presentation.generated.resources.array_elements
+import com.androidperformancestudio.memory.presentation.generated.resources.back
+import com.androidperformancestudio.memory.presentation.generated.resources.forward
 import com.androidperformancestudio.memory.presentation.generated.resources.callstack_name
 import com.androidperformancestudio.memory.presentation.generated.resources.callstack_option
-import com.androidperformancestudio.memory.presentation.generated.resources.class_list
 import com.androidperformancestudio.memory.presentation.generated.resources.class_name
 import com.androidperformancestudio.memory.presentation.generated.resources.class_option
 import com.androidperformancestudio.memory.presentation.generated.resources.class_scope
 import com.androidperformancestudio.memory.presentation.generated.resources.classes
+import com.androidperformancestudio.memory.presentation.generated.resources.copy_object_id
 import com.androidperformancestudio.memory.presentation.generated.resources.count
-import com.androidperformancestudio.memory.presentation.generated.resources.dashboard
 import com.androidperformancestudio.memory.presentation.generated.resources.deallocations
 import com.androidperformancestudio.memory.presentation.generated.resources.deallocations_size
+import com.androidperformancestudio.memory.presentation.generated.resources.delete_filter
 import com.androidperformancestudio.memory.presentation.generated.resources.depth
 import com.androidperformancestudio.memory.presentation.generated.resources.duplicate_bitmaps
 import com.androidperformancestudio.memory.presentation.generated.resources.duplicates_summary
@@ -82,6 +107,7 @@ import com.androidperformancestudio.memory.presentation.generated.resources.inst
 import com.androidperformancestudio.memory.presentation.generated.resources.instance_details
 import com.androidperformancestudio.memory.presentation.generated.resources.instance_list
 import com.androidperformancestudio.memory.presentation.generated.resources.leaks_summary
+import com.androidperformancestudio.memory.presentation.generated.resources.load_more_array_elements
 import com.androidperformancestudio.memory.presentation.generated.resources.match_case
 import com.androidperformancestudio.memory.presentation.generated.resources.module_name
 import com.androidperformancestudio.memory.presentation.generated.resources.native_size
@@ -90,6 +116,8 @@ import com.androidperformancestudio.memory.presentation.generated.resources.no_r
 import com.androidperformancestudio.memory.presentation.generated.resources.none
 import com.androidperformancestudio.memory.presentation.generated.resources.package_name
 import com.androidperformancestudio.memory.presentation.generated.resources.package_option
+import com.androidperformancestudio.memory.presentation.generated.resources.pin_object
+import com.androidperformancestudio.memory.presentation.generated.resources.pinned_objects
 import com.androidperformancestudio.memory.presentation.generated.resources.project_classes
 import com.androidperformancestudio.memory.presentation.generated.resources.reference_chain
 import com.androidperformancestudio.memory.presentation.generated.resources.references
@@ -98,11 +126,15 @@ import com.androidperformancestudio.memory.presentation.generated.resources.reta
 import com.androidperformancestudio.memory.presentation.generated.resources.select_a_class_to_view_its_instances
 import com.androidperformancestudio.memory.presentation.generated.resources.select_an_instance_to_view_details
 import com.androidperformancestudio.memory.presentation.generated.resources.shallow
+import com.androidperformancestudio.memory.presentation.generated.resources.save_filter
+import com.androidperformancestudio.memory.presentation.generated.resources.saved_filters
 import com.androidperformancestudio.memory.presentation.generated.resources.shallow_size_change
 import com.androidperformancestudio.memory.presentation.generated.resources.system_classes
 import com.androidperformancestudio.memory.presentation.generated.resources.total_count
 import com.androidperformancestudio.memory.presentation.generated.resources.unreachable
+import com.androidperformancestudio.memory.presentation.generated.resources.unpin_object
 import com.androidperformancestudio.ui.DropdownSelector
+import com.androidperformancestudio.ui.ProfilerCompactButton
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.localizedStringResource
 
@@ -111,6 +143,7 @@ import com.androidperformancestudio.ui.localizedStringResource
  * filter bar → summary → class table → instance list of the selected class.
  */
 @Composable
+@Suppress("CyclomaticComplexMethod")
 public fun MemoryProfilerClassListPane(
     state: MemoryProfilerState,
     actions: MemoryProfilerActions,
@@ -119,59 +152,148 @@ public fun MemoryProfilerClassListPane(
 ) {
     val leakClasses = MemoryProfilerPresenter.leakClassNames(state)
     val duplicateClasses = MemoryProfilerPresenter.duplicateBitmapClasses(state)
+    val leftPaneFraction = remember { mutableStateOf(INITIAL_LEFT_PANE_FRACTION) }
     Column(modifier.fillMaxSize()) {
         FilterBar(state, actions, language)
         HorizontalDivider()
         SummaryBar(summary = state.classListSummary, language = language)
         HorizontalDivider()
-        Box(Modifier.fillMaxWidth().weight(1.5f).horizontalScroll(rememberScrollState())) {
-            Column(Modifier.requiredWidth(CLASSIFIER_TABLE_WIDTH).fillMaxSize()) {
-                ClassTableHeader(
-                    language,
-                    state.arrangeBy,
-                    state.classifierSortColumn,
-                    state.classifierSortDirection,
-                    actions.onClassifierSort,
-                )
-                ClassTable(
-                    rows = state.classifierRows,
-                    selectedClassifierId = state.selectedClassifierId,
-                    leakClasses = leakClasses,
-                    duplicateClasses = duplicateClasses,
-                    onSelectClassifier = actions.onSelectClassifier,
-                    language = language,
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                )
-            }
-        }
-        HorizontalDivider()
-        InstanceListTitle(className = state.selectedClassifierLabel ?: state.selectedClassName, language = language)
-        HorizontalDivider()
-        Row(Modifier.fillMaxWidth().weight(1f)) {
-            Column(Modifier.weight(1f)) {
-                InstanceTableHeader(language)
-                InstanceTable(
-                    className = state.selectedClassifierLabel ?: state.selectedClassName,
-                    instances = state.selectedClassInstances,
-                    selectedDetail = state.selectedInstanceDetail,
-                    onSelectInstance = actions.onSelectInstance,
-                    language = language,
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                )
-            }
-            VerticalDivider()
-            val detail = state.selectedInstanceDetail
-            if (detail != null) {
-                InstanceDetailPane(
-                    detail = detail,
-                    language = language,
-                    modifier = Modifier.weight(1.2f),
-                )
-            } else {
-                EmptyPaneHint(
-                    text = localizedStringResource(Res.string.select_an_instance_to_view_details, language),
-                    modifier = Modifier.weight(1.2f),
-                )
+        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val availableWidth = maxWidth
+            val totalWidthPx = with(density) { availableWidth.toPx() }
+            Row(Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier.width(availableWidth * leftPaneFraction.value).fillMaxHeight(),
+                ) {
+                    val classifierHorizontalScrollState = rememberScrollState()
+                    val classifierListState = rememberLazyListState()
+                    val scrollbarStyle =
+                        LocalScrollbarStyle.current.copy(
+                            unhoverColor = LocalViewerColors.current.accent.copy(alpha = 0.65f),
+                            hoverColor = LocalViewerColors.current.accent,
+                        )
+                    val scrollbarThickness = scrollbarStyle.thickness
+                    Box(Modifier.fillMaxWidth().weight(1f)) {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .padding(end = scrollbarThickness, bottom = scrollbarThickness),
+                        ) {
+                            Column(
+                                Modifier
+                                    .fillMaxSize()
+                                    .horizontalScroll(classifierHorizontalScrollState),
+                            ) {
+                                Column(Modifier.requiredWidth(CLASSIFIER_TABLE_WIDTH).fillMaxHeight()) {
+                                    ClassTableHeader(
+                                        language,
+                                        state.arrangeBy,
+                                        state.classifierSortColumn,
+                                        state.classifierSortDirection,
+                                        state.visibleClassifierColumns,
+                                        actions.onClassifierSort,
+                                        modifier = Modifier.height(CLASSIFIER_HEADER_HEIGHT),
+                                    )
+                                    Box(Modifier.fillMaxWidth().weight(1f)) {
+                                        ClassTable(
+                                            rows = state.classifierRows,
+                                            selectedClassifierId = state.selectedClassifierId,
+                                            leakClasses = leakClasses,
+                                            duplicateClasses = duplicateClasses,
+                                            visibleColumns = state.visibleClassifierColumns,
+                                            onSelectClassifier = actions.onSelectClassifier,
+                                            language = language,
+                                            listState = classifierListState,
+                                            modifier = Modifier.fillMaxSize(),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        HorizontalScrollbar(
+                            adapter = rememberScrollbarAdapter(classifierHorizontalScrollState),
+                            modifier =
+                                Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .padding(end = scrollbarThickness),
+                            style = scrollbarStyle,
+                        )
+                        VerticalScrollbar(
+                            adapter = rememberScrollbarAdapter(classifierListState),
+                            modifier =
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .fillMaxHeight()
+                                    .padding(top = CLASSIFIER_HEADER_HEIGHT, bottom = scrollbarThickness),
+                            style = scrollbarStyle,
+                        )
+                    }
+                }
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxHeight()
+                            .width(8.dp)
+                            .testTag("memory-profiler-class-list-resizer")
+                            .pointerInput(totalWidthPx) {
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    if (totalWidthPx > 0f) {
+                                        leftPaneFraction.value =
+                                            (leftPaneFraction.value + dragAmount.x / totalWidthPx)
+                                                .coerceIn(MIN_LEFT_PANE_FRACTION, MAX_LEFT_PANE_FRACTION)
+                                    }
+                                }
+                            },
+                ) {
+                    VerticalDivider(Modifier.align(Alignment.Center))
+                }
+                Column(Modifier.weight(1f)) {
+                    InstanceListTitle(
+                        className = state.selectedClassifierLabel ?: state.selectedClassName,
+                        language = language,
+                    )
+                    HorizontalDivider()
+                    Row(Modifier.fillMaxWidth().weight(1f)) {
+                        Column(Modifier.weight(1f)) {
+                            InstanceTableHeader(language)
+                            InstanceTable(
+                                className = state.selectedClassifierLabel ?: state.selectedClassName,
+                                instances = state.selectedClassInstances,
+                                selectedDetail = state.selectedInstanceDetail,
+                                onSelectInstance = actions.onSelectInstance,
+                                language = language,
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                            )
+                        }
+                        VerticalDivider()
+                        val detail = state.selectedInstanceDetail
+                        if (detail != null) {
+                            InstanceDetailPane(
+                                detail = detail,
+                                language = language,
+                                modifier = Modifier.weight(1.2f),
+                                canNavigateBack = state.instanceHistoryIndex > 0,
+                                canNavigateForward = state.instanceHistoryIndex in 0 until (state.instanceHistory.lastIndex),
+                                isPinned = detail.objectId in state.pinnedInstanceIds,
+                                pinnedInstanceIds = state.pinnedInstanceIds.toList(),
+                                onNavigateBack = actions.onNavigateInstanceBack,
+                                onNavigateForward = actions.onNavigateInstanceForward,
+                                onTogglePinned = { actions.onTogglePinnedInstance(detail.objectId) },
+                                onCopyObjectId = actions.onCopyObjectId,
+                                onFollowObject = actions.onSelectInstance,
+                                onLoadArrayRange = actions.onLoadArrayRange,
+                            )
+                        } else {
+                            EmptyPaneHint(
+                                text = localizedStringResource(Res.string.select_an_instance_to_view_details, language),
+                                modifier = Modifier.weight(1.2f),
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -225,13 +347,34 @@ private fun FilterBar(
             placeholder = localizedStringResource(Res.string.class_option, language),
             selectorDescription = localizedStringResource(Res.string.arrange_by, language),
         )
-        OutlinedTextField(
+        BasicTextField(
             value = state.searchText,
             onValueChange = actions.onSearchChange,
-            placeholder = { Text(localizedStringResource(Res.string.filter_classes, language), fontSize = 12.sp) },
             singleLine = true,
-            textStyle = TextStyle(fontSize = 12.sp),
-            modifier = Modifier.weight(1f).height(36.dp),
+            textStyle =
+                TextStyle(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = ViewerTypography.bodyCompact.fontSize,
+                ),
+            modifier =
+                Modifier
+                    .widthIn(min = 160.dp, max = 220.dp)
+                    .height(32.dp)
+                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(4.dp))
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 8.dp),
+            decorationBox = { innerTextField ->
+                Box(contentAlignment = Alignment.CenterStart) {
+                    if (state.searchText.isEmpty()) {
+                        Text(
+                            localizedStringResource(Res.string.filter_classes, language),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = ViewerTypography.bodyCompact.fontSize,
+                        )
+                    }
+                    innerTextField()
+                }
+            },
         )
         FilterCheckbox(
             label = localizedStringResource(Res.string.match_case, language),
@@ -243,6 +386,39 @@ private fun FilterBar(
             checked = state.useRegex,
             onChecked = actions.onUseRegexChange,
         )
+        FilterCheckbox(
+            label = localizedStringResource(Res.string.native_size, language),
+            checked = MemoryClassifierColumn.NATIVE_SIZE in state.visibleClassifierColumns,
+            onChecked = { actions.onToggleClassifierColumn(MemoryClassifierColumn.NATIVE_SIZE) },
+        )
+        FilterCheckbox(
+            label = localizedStringResource(Res.string.retained, language),
+            checked = MemoryClassifierColumn.RETAINED_SIZE in state.visibleClassifierColumns,
+            onChecked = { actions.onToggleClassifierColumn(MemoryClassifierColumn.RETAINED_SIZE) },
+        )
+        FilterCheckbox(
+            label = localizedStringResource(Res.string.shallow, language),
+            checked = MemoryClassifierColumn.SHALLOW_SIZE in state.visibleClassifierColumns,
+            onChecked = { actions.onToggleClassifierColumn(MemoryClassifierColumn.SHALLOW_SIZE) },
+        )
+        DropdownSelector(
+            items = state.savedFilterPresets,
+            selectedItem = state.savedFilterPresets.firstOrNull { it.id == state.activeFilterPresetId },
+            onItemSelected = actions.onApplyFilterPreset,
+            itemLabel = { it.label },
+            selectedItemLabel = { it.label },
+            placeholder = localizedStringResource(Res.string.saved_filters, language),
+            selectorDescription = localizedStringResource(Res.string.saved_filters, language),
+        )
+        ProfilerCompactButton(
+            text = localizedStringResource(Res.string.save_filter, language),
+            onClick = actions.onSaveFilterPreset,
+        )
+        ProfilerCompactButton(
+            text = localizedStringResource(Res.string.delete_filter, language),
+            enabled = state.activeFilterPresetId != null,
+            onClick = actions.onDeleteFilterPreset,
+        )
     }
 }
 
@@ -253,6 +429,7 @@ private fun FilterCheckbox(
     onChecked: (Boolean) -> Unit,
 ) {
     Row(
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.clickable { onChecked(!checked) },
     ) {
@@ -261,7 +438,7 @@ private fun FilterCheckbox(
             onCheckedChange = onChecked,
             modifier = Modifier.size(18.dp),
         )
-        Text(label, fontSize = 12.sp)
+        Text(label, fontSize = ViewerTypography.bodyCompact.fontSize)
     }
 }
 
@@ -288,7 +465,7 @@ private fun SummaryBar(
 
 @Composable
 private fun SummaryMetric(text: String) {
-    Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+    Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = ViewerTypography.bodyCompact.fontSize)
 }
 
 @Composable
@@ -297,17 +474,19 @@ private fun ClassTableHeader(
     arrangeBy: MemoryArrangeBy,
     sortColumn: MemoryClassifierColumn,
     sortDirection: MemorySortDirection,
+    visibleColumns: Set<MemoryClassifierColumn>,
     onSort: (MemoryClassifierColumn) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
             headerTitle(firstColumnLabel(arrangeBy, language), MemoryClassifierColumn.NAME, sortColumn, sortDirection),
             Modifier.weight(1f).clickable { onSort(MemoryClassifierColumn.NAME) },
             fontWeight = FontWeight.Bold,
-            fontSize = 12.sp,
+            fontSize = ViewerTypography.bodyCompact.fontSize,
         )
         listOf(
             MemoryClassifierColumn.MODULE_NAME to localizedStringResource(Res.string.module_name, language),
@@ -320,14 +499,14 @@ private fun ClassTableHeader(
             MemoryClassifierColumn.ALLOCATIONS_SIZE to localizedStringResource(Res.string.allocations_size, language),
             MemoryClassifierColumn.DEALLOCATIONS_SIZE to localizedStringResource(Res.string.deallocations_size, language),
             MemoryClassifierColumn.SHALLOW_SIZE_CHANGE to localizedStringResource(Res.string.shallow_size_change, language),
-        ).forEach { (column, title) ->
+        ).filter { (column, _) -> column in visibleColumns }.forEach { (column, title) ->
             Text(
                 headerTitle(title, column, sortColumn, sortDirection),
                 Modifier.width(96.dp).clickable {
                     onSort(column)
                 },
                 fontWeight = FontWeight.Bold,
-                fontSize = 12.sp,
+                fontSize = ViewerTypography.bodyCompact.fontSize,
             )
         }
     }
@@ -346,43 +525,55 @@ private fun ClassTable(
     selectedClassifierId: String?,
     leakClasses: Set<String>,
     duplicateClasses: Set<String>,
+    visibleColumns: Set<MemoryClassifierColumn>,
     onSelectClassifier: (MemoryClassifierRow) -> Unit,
     language: UiLanguage,
+    listState: LazyListState,
     modifier: Modifier,
 ) {
     if (rows.isEmpty()) {
         EmptyPaneHint(localizedStringResource(Res.string.import_or_dump_an_hprof_file_to_show_class_histogram, language), modifier)
     } else {
         val expanded = remember { mutableStateMapOf<String, Boolean>() }
-        LazyColumn(modifier) {
-            fun emitRows(nodes: List<MemoryClassifierRow>) {
-                nodes.forEach { row ->
-                    item(key = row.id) {
-                        ClassifierTableRow(
-                            row,
-                            row.id == selectedClassifierId,
-                            row.className?.let { it in leakClasses } == true,
-                            row.className?.let { it in duplicateClasses } == true,
-                            row.depth,
-                            onSelectClassifier,
-                            expanded[row.id] != false,
-                        ) { expanded[row.id] = !(expanded[row.id] ?: true) }
+        val visibleRows =
+            buildList {
+                fun appendRows(nodes: List<MemoryClassifierRow>) {
+                    nodes.forEach { row ->
+                        add(row)
+                        if (row.children.isNotEmpty() && expanded[row.id] != false) appendRows(row.children)
                     }
-                    if (row.children.isNotEmpty() && expanded[row.id] != false) emitRows(row.children)
                 }
+                appendRows(rows)
             }
-            emitRows(rows)
+        LazyColumn(state = listState, modifier = modifier) {
+            itemsIndexed(visibleRows, key = { _, row -> row.id }) { index, row ->
+                ClassifierTableRow(
+                    row = row,
+                    selected = row.id == selectedClassifierId,
+                    isLeak = row.className?.let { it in leakClasses } == true,
+                    isDuplicateBitmap = row.className?.let { it in duplicateClasses } == true,
+                    depth = row.depth,
+                    rowIndex = index,
+                    visibleColumns = visibleColumns,
+                    onSelectClassifier = onSelectClassifier,
+                    expanded = expanded[row.id] != false,
+                    onToggle = { expanded[row.id] = !(expanded[row.id] ?: true) },
+                )
+            }
         }
     }
 }
 
 @Composable
+@Suppress("CyclomaticComplexMethod")
 private fun ClassifierTableRow(
     row: MemoryClassifierRow,
     selected: Boolean,
     isLeak: Boolean,
     isDuplicateBitmap: Boolean,
     depth: Int,
+    rowIndex: Int,
+    visibleColumns: Set<MemoryClassifierColumn>,
     onSelectClassifier: (MemoryClassifierRow) -> Unit,
     expanded: Boolean,
     onToggle: () -> Unit,
@@ -392,7 +583,8 @@ private fun ClassifierTableRow(
             selected -> MaterialTheme.colorScheme.primaryContainer
             isLeak -> MaterialTheme.colorScheme.errorContainer.copy(alpha = .45f)
             isDuplicateBitmap -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = .45f)
-            else -> Color.Transparent
+            rowIndex % 2 == 0 -> MaterialTheme.colorScheme.surfaceContainerLow
+            else -> MaterialTheme.colorScheme.surface
         }
     Row(
         Modifier
@@ -420,25 +612,37 @@ private fun ClassifierTableRow(
                 "▸"
             },
             Modifier.width(14.dp).clickable(enabled = !row.isLeaf, onClick = onToggle),
-            fontSize = 12.sp,
+            fontSize = ViewerTypography.bodyCompact.fontSize,
         )
-        Text(row.label, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
-        classifierCell(row.moduleName)
-        classifierCell(row.allocations?.let(::integer))
-        classifierCell(row.deallocations?.let(::integer))
-        classifierCell(integer(row.totalCount))
-        classifierCell(row.nativeSize?.let(::formatBytes))
-        classifierCell(formatBytes(row.shallowSize))
-        classifierCell(row.retainedSize?.let(::formatBytes))
-        classifierCell(row.allocationsSize?.let(::formatBytes))
-        classifierCell(row.deallocationsSize?.let(::formatBytes))
-        classifierCell(row.shallowSizeChange?.let(::formatBytes))
+        Text(
+            row.label,
+            Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            fontSize = ViewerTypography.bodyCompact.fontSize,
+        )
+        if (MemoryClassifierColumn.MODULE_NAME in visibleColumns) classifierCell(row.moduleName)
+        if (MemoryClassifierColumn.ALLOCATIONS in visibleColumns) classifierCell(row.allocations?.let(::integer))
+        if (MemoryClassifierColumn.DEALLOCATIONS in visibleColumns) classifierCell(row.deallocations?.let(::integer))
+        if (MemoryClassifierColumn.TOTAL_COUNT in visibleColumns) classifierCell(integer(row.totalCount))
+        if (MemoryClassifierColumn.NATIVE_SIZE in visibleColumns) classifierCell(row.nativeSize?.let(::formatBytes))
+        if (MemoryClassifierColumn.SHALLOW_SIZE in visibleColumns) classifierCell(formatBytes(row.shallowSize))
+        if (MemoryClassifierColumn.RETAINED_SIZE in visibleColumns) classifierCell(row.retainedSize?.let(::formatBytes))
+        if (MemoryClassifierColumn.ALLOCATIONS_SIZE in visibleColumns) classifierCell(row.allocationsSize?.let(::formatBytes))
+        if (MemoryClassifierColumn.DEALLOCATIONS_SIZE in visibleColumns) classifierCell(row.deallocationsSize?.let(::formatBytes))
+        if (MemoryClassifierColumn.SHALLOW_SIZE_CHANGE in visibleColumns) classifierCell(row.shallowSizeChange?.let(::formatBytes))
     }
 }
 
 @Composable
 private fun RowScope.classifierCell(value: String?) {
-    Text(value ?: "—", Modifier.width(96.dp), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Text(
+        value ?: "—",
+        Modifier.width(96.dp),
+        fontSize = ViewerTypography.bodyCompact.fontSize,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 @Composable
@@ -464,16 +668,36 @@ private fun InstanceTableHeader(language: UiLanguage) {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(localizedStringResource(Res.string.instance, language), Modifier.weight(1f), fontWeight = FontWeight.Bold, fontSize = 12.sp)
-        Text(localizedStringResource(Res.string.depth, language), Modifier.width(52.dp), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Text(
+            localizedStringResource(Res.string.instance, language),
+            Modifier.weight(1f),
+            fontWeight = FontWeight.Bold,
+            fontSize = ViewerTypography.bodyCompact.fontSize,
+        )
+        Text(
+            localizedStringResource(Res.string.depth, language),
+            Modifier.width(52.dp),
+            fontWeight = FontWeight.Bold,
+            fontSize = ViewerTypography.bodyCompact.fontSize,
+        )
         Text(
             localizedStringResource(Res.string.native_size, language),
             Modifier.width(96.dp),
             fontWeight = FontWeight.Bold,
-            fontSize = 12.sp,
+            fontSize = ViewerTypography.bodyCompact.fontSize,
         )
-        Text(localizedStringResource(Res.string.shallow, language), Modifier.width(88.dp), fontWeight = FontWeight.Bold, fontSize = 12.sp)
-        Text(localizedStringResource(Res.string.retained, language), Modifier.width(112.dp), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Text(
+            localizedStringResource(Res.string.shallow, language),
+            Modifier.width(88.dp),
+            fontWeight = FontWeight.Bold,
+            fontSize = ViewerTypography.bodyCompact.fontSize,
+        )
+        Text(
+            localizedStringResource(Res.string.retained, language),
+            Modifier.width(112.dp),
+            fontWeight = FontWeight.Bold,
+            fontSize = ViewerTypography.bodyCompact.fontSize,
+        )
     }
 }
 
@@ -493,10 +717,11 @@ private fun InstanceTable(
             EmptyPaneHint(localizedStringResource(Res.string.no_instances_for_class, language), modifier)
         else ->
             LazyColumn(modifier) {
-                items(instances, key = { it.objectId }) { row ->
+                itemsIndexed(instances, key = { _, row -> row.objectId }) { index, row ->
                     val selected = row.objectId == selectedDetail?.objectId
                     InstanceTableRow(
                         row = row,
+                        rowIndex = index,
                         selected = selected,
                         chain = selectedDetail?.takeIf { it.objectId == row.objectId }?.referenceChain,
                         onClick = { onSelectInstance(row.objectId) },
@@ -510,6 +735,7 @@ private fun InstanceTable(
 @Composable
 private fun InstanceTableRow(
     row: MemoryInstanceRow,
+    rowIndex: Int,
     selected: Boolean,
     chain: List<ObjectReference>?,
     onClick: () -> Unit,
@@ -521,7 +747,11 @@ private fun InstanceTableRow(
                 .fillMaxWidth()
                 .height(28.dp)
                 .background(
-                    if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                    when {
+                        selected -> MaterialTheme.colorScheme.primaryContainer
+                        rowIndex % 2 == 0 -> MaterialTheme.colorScheme.surfaceContainerLow
+                        else -> MaterialTheme.colorScheme.surface
+                    },
                     RoundedCornerShape(3.dp),
                 ).clickable(onClick = onClick)
                 .padding(horizontal = 8.dp),
@@ -531,21 +761,21 @@ private fun InstanceTableRow(
             Text(
                 text = "${if (selected) "▾" else "▸"} #${row.index}",
                 modifier = Modifier.weight(1f),
-                fontSize = 12.sp,
+                fontSize = ViewerTypography.bodyCompact.fontSize,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = row.depth?.toString() ?: localizedStringResource(Res.string.unreachable, language),
                 Modifier.width(52.dp),
-                fontSize = 12.sp,
+                fontSize = ViewerTypography.bodyCompact.fontSize,
             )
-            Text(row.nativeSize?.let(::formatBytes) ?: "—", Modifier.width(96.dp), fontSize = 12.sp)
-            Text(formatBytes(row.shallowSize), Modifier.width(88.dp), fontSize = 12.sp)
+            Text(row.nativeSize?.let(::formatBytes) ?: "—", Modifier.width(96.dp), fontSize = ViewerTypography.bodyCompact.fontSize)
+            Text(formatBytes(row.shallowSize), Modifier.width(88.dp), fontSize = ViewerTypography.bodyCompact.fontSize)
             Text(
                 text = row.retainedSize?.let(::formatBytes) ?: localizedStringResource(Res.string.unreachable, language),
                 modifier = Modifier.width(112.dp),
-                fontSize = 12.sp,
+                fontSize = ViewerTypography.bodyCompact.fontSize,
             )
         }
         if (selected && !chain.isNullOrEmpty()) {
@@ -561,7 +791,7 @@ private fun InstanceTableRow(
                                     append(reference.targetClassName)
                                 }
                             },
-                        fontSize = 11.sp,
+                        fontSize = ViewerTypography.secondary.fontSize,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -573,16 +803,73 @@ private fun InstanceTableRow(
 }
 
 @Composable
+@Suppress("CyclomaticComplexMethod")
 private fun InstanceDetailPane(
     detail: MemoryInstanceDetail,
     language: UiLanguage,
     modifier: Modifier,
+    canNavigateBack: Boolean,
+    canNavigateForward: Boolean,
+    isPinned: Boolean,
+    pinnedInstanceIds: List<Long>,
+    onNavigateBack: () -> Unit,
+    onNavigateForward: () -> Unit,
+    onTogglePinned: () -> Unit,
+    onCopyObjectId: (Long) -> Unit,
+    onFollowObject: (Long) -> Unit,
+    onLoadArrayRange: (Long, Int) -> Unit,
 ) {
     Column(modifier.padding(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ProfilerCompactButton(
+                text = localizedStringResource(Res.string.back, language),
+                enabled = canNavigateBack,
+                onClick = onNavigateBack,
+            )
+            ProfilerCompactButton(
+                text = localizedStringResource(Res.string.forward, language),
+                enabled = canNavigateForward,
+                onClick = onNavigateForward,
+            )
+            Spacer(Modifier.weight(1f))
+            ProfilerCompactButton(
+                text = localizedStringResource(if (isPinned) Res.string.unpin_object else Res.string.pin_object, language),
+                selected = isPinned,
+                onClick = onTogglePinned,
+            )
+            ProfilerCompactButton(
+                text = localizedStringResource(Res.string.copy_object_id, language),
+                onClick = { onCopyObjectId(detail.objectId) },
+            )
+        }
+        if (pinnedInstanceIds.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    localizedStringResource(Res.string.pinned_objects, language),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = ViewerTypography.secondary.fontSize,
+                )
+                pinnedInstanceIds.forEach { objectId ->
+                    ProfilerCompactButton(
+                        text = "0x${java.lang.Long.toHexString(objectId)}",
+                        selected = objectId == detail.objectId,
+                        onClick = { onFollowObject(objectId) },
+                    )
+                }
+            }
+        }
         Text(
             text = "${localizedStringResource(Res.string.instance_details, language)} — ${detail.className}",
             fontWeight = FontWeight.Bold,
-            fontSize = 13.sp,
+            fontSize = ViewerTypography.body.fontSize,
         )
         Text(
             text =
@@ -591,20 +878,24 @@ private fun InstanceDetailPane(
                     detail.depth?.let { append(" · ${localizedStringResource(Res.string.depth, language)} $it") }
                     detail.retainedSize?.let { append(" · ${localizedStringResource(Res.string.retained, language)} ${formatBytes(it)}") }
                 },
-            fontSize = 11.sp,
+            fontSize = ViewerTypography.secondary.fontSize,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         HorizontalDivider(Modifier.padding(vertical = 4.dp))
         Row(Modifier.fillMaxWidth().weight(1f)) {
             Column(Modifier.weight(1f)) {
-                Text(localizedStringResource(Res.string.fields, language), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text(
+                    localizedStringResource(Res.string.fields, language),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = ViewerTypography.bodyCompact.fontSize,
+                )
                 if (detail.fields.isEmpty()) {
                     Text(
                         text =
                             detail.elementCount?.let { localizedStringResource(Res.string.array_elements, language, integer(it)) }
                                 ?: localizedStringResource(Res.string.unreachable, language),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 11.sp,
+                        fontSize = ViewerTypography.secondary.fontSize,
                     )
                 } else {
                     LazyColumn(Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp)) {
@@ -613,48 +904,80 @@ private fun InstanceDetailPane(
                                 Text(
                                     text = field.name,
                                     modifier = Modifier.width(110.dp),
-                                    fontSize = 11.sp,
+                                    fontSize = ViewerTypography.secondary.fontSize,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
                                     text = field.displayValue,
-                                    modifier = Modifier.weight(1f),
-                                    fontSize = 11.sp,
+                                    modifier =
+                                        Modifier
+                                            .weight(1f)
+                                            .clickable(enabled = field.targetObjectId != null) {
+                                                field.targetObjectId?.let(onFollowObject)
+                                            },
+                                    color =
+                                        if (field.targetObjectId != null) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        },
+                                    fontSize = ViewerTypography.secondary.fontSize,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         }
                     }
+                    if (detail.isArray && detail.elementCount != null && detail.arrayStart + detail.fields.size < detail.elementCount) {
+                        ProfilerCompactButton(
+                            text = localizedStringResource(Res.string.load_more_array_elements, language),
+                            onClick = { onLoadArrayRange(detail.objectId, detail.arrayStart + detail.arrayPageSize) },
+                        )
+                    }
                 }
             }
             VerticalDivider(Modifier.padding(horizontal = 6.dp))
             Column(Modifier.weight(1f)) {
-                Text(localizedStringResource(Res.string.references, language), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text(
+                    localizedStringResource(Res.string.references, language),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = ViewerTypography.bodyCompact.fontSize,
+                )
                 if (detail.references.isEmpty()) {
                     Text(
                         text = localizedStringResource(Res.string.no_references, language),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 11.sp,
+                        fontSize = ViewerTypography.secondary.fontSize,
                     )
                 } else {
                     LazyColumn(Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp)) {
                         items(detail.references) { reference ->
                             Text(
                                 text = "${reference.name} ← ${reference.displayValue}",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.clickable { reference.targetObjectId?.let(onFollowObject) },
+                                fontSize = ViewerTypography.secondary.fontSize,
+                                color = MaterialTheme.colorScheme.primary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
                 }
-                Text(localizedStringResource(Res.string.reference_chain, language), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text(
+                    localizedStringResource(Res.string.reference_chain, language),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = ViewerTypography.bodyCompact.fontSize,
+                )
                 detail.referenceChain.forEach { reference ->
-                    Text("↳ ${reference.fieldName} → ${reference.targetClassName}", fontSize = 11.sp, maxLines = 1)
+                    Text(
+                        text = "↳ ${reference.fieldName} → ${reference.targetClassName}",
+                        modifier = Modifier.clickable { onFollowObject(reference.targetObjectId) },
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = ViewerTypography.secondary.fontSize,
+                        maxLines = 1,
+                    )
                 }
             }
         }
@@ -670,7 +993,7 @@ private fun EmptyPaneHint(
         modifier = modifier.padding(8.dp),
         contentAlignment = Alignment.TopStart,
     ) {
-        Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+        Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = ViewerTypography.bodyCompact.fontSize)
     }
 }
 
@@ -717,4 +1040,9 @@ private fun firstColumnLabel(
         MemoryArrangeBy.ALLOCATION_METHOD -> localizedStringResource(Res.string.allocation_method, language)
     }
 
+private val CLASSIFIER_HEADER_HEIGHT = 24.dp
 private val CLASSIFIER_TABLE_WIDTH = 1_580.dp
+
+private const val INITIAL_LEFT_PANE_FRACTION = 0.535f
+private const val MIN_LEFT_PANE_FRACTION = 0.25f
+private const val MAX_LEFT_PANE_FRACTION = 0.72f

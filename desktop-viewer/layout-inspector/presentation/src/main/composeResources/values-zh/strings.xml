@@ -36,25 +36,18 @@
     <string name="show_visible_view_bounds">显示全部可见视图边缘</string>
     <string name="dismiss">确定</string>
     <string name="cancel">取消</string>
-    <string name="full_compose_off">完整 Compose</string>
-    <string name="full_compose_on">完整 Compose：已启用</string>
-    <string name="system_composables">系统 Composable</string>
+    <string name="system_composables">显示系统 Composable（包含 Box）</string>
     <string name="start_recomposition">开始计数</string>
     <string name="stop_recomposition">停止计数</string>
     <string name="reset_recomposition">重置</string>
-    <string name="compose_preflight_title">Compose 检查预检</string>
-    <string name="compose_preflight_running">正在检查目标、API、ABI、PID、Agent 包和 Inspector 冲突…</string>
-    <string name="compose_preflight_failed">Compose 检查不可用</string>
-    <string name="compose_authorize_title">授权运行时 Compose 检查</string>
-    <string name="compose_authorize_message">目标：%1$s（PID %2$d）\nAndroid：API %3$d / %4$s\nCompose：%5$s\nInspector 来源：%6$s\n需要下载：%7$s\n已验证 APS Agent 包：%8$s\n应用不会重启；设备设置不会更改。\n\n%9$s</string>
-    <string name="authorize_attach">授权并附加</string>
     <string name="compose_export_title">导出 Compose 检查</string>
     <string name="compose_export_safe_default">默认安全导出：运行时参数和语义值会被脱敏；保留树形、源码位置、覆盖范围和计数。</string>
     <string name="compose_export_full_fidelity">包含完整运行时值（敏感）</string>
-    <string name="download_required">是</string>
-    <string name="download_not_required">否（已验证缓存）</string>
     <string name="open_compose_source">打开源码</string>
     <string name="auto_scan">自动扫描</string>
+    <string name="package_name">包名</string>
+    <string name="metrics">指标</string>
+    <string name="timeline">时间线</string>
     <string name="auto_device">自动设备</string>
     <string name="capture_target">目标</string>
     <string name="window">窗口</string>
@@ -257,4 +250,11 @@
 
     <string name="select_source_candidate">选择源码候选项</string>
     <string name="source_candidate">候选项 %1$d · %2$s</string>
+    <string name="import_compose_compiler_reports">导入 Compose 报告</string>
+    <string name="compose_compiler_report">Compose 编译器</string>
+    <string name="loaded">已加载</string>
+    <string name="detail_section_compose_compiler">Compose 编译器稳定性</string>
+    <string name="detail_label_restartable">可重启</string>
+    <string name="detail_label_skippable">可跳过</string>
+    <string name="detail_label_unstable_parameters">不稳定参数</string>
 </resources>

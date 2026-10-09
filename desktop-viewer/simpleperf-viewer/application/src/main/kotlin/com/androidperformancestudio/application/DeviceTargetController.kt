@@ -1,5 +1,6 @@
 package com.androidperformancestudio.application
 
+import com.androidperformancestudio.adb.AndroidProcessSelection
 import com.androidperformancestudio.capture.CaptureRequest
 import com.androidperformancestudio.capture.CaptureSession
 import com.androidperformancestudio.capture.CaptureState
@@ -12,6 +13,7 @@ import com.androidperformancestudio.model.StudioResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
 import java.nio.file.Path
 import java.util.UUID
 
@@ -167,16 +169,48 @@ class DeviceTargetController(
     private val sessionIdProvider: () -> String = { "capture-${UUID.randomUUID()}" },
 ) {
     private val mutableState = MutableStateFlow(DeviceTargetState())
+    private val processSelection = AndroidProcessSelection(ProcessOption::pid)
+    private val processSelectionSubscription = processSelection.register { choice ->
+        val current = mutableState.value
+        val target = current.selectedTarget
+        if (choice.selectedPid == null && (target is CaptureTarget.Process || target is CaptureTarget.Thread)) {
+            mutableState.value =
+                current.copy(
+                    selectedTarget = current.selectedPackageName?.let(CaptureTarget::App),
+                    captureSetup = null,
+                    threads = emptyList(),
+                ).withDefaultCaptureSetup()
+        } else if (choice.selectedPid != null && current.selectedProcessId != choice.selectedPid) {
+            val process = choice.processes.firstOrNull { it.pid == choice.selectedPid }
+            if (process != null) {
+                mutableState.value =
+                    current.copy(
+                        selectedTarget = CaptureTarget.Process(process.pid, process.name),
+                        captureSetup = null,
+                        threads = emptyList(),
+                    ).withDefaultCaptureSetup()
+            }
+        }
+    }
     private val idleCaptureState = MutableStateFlow<CaptureState>(CaptureState.Idle)
+    private val captureStartMutex = Mutex()
     val state: StateFlow<DeviceTargetState> = mutableState.asStateFlow()
     val captureState: StateFlow<CaptureState> = captureSession?.state ?: idleCaptureState.asStateFlow()
     val cancelCapture: () -> Unit = { captureSession?.cancel() }
+
+    fun close() {
+        processSelectionSubscription.close()
+    }
 
     suspend fun stopCapture() {
         captureSession?.stop()
     }
 
-    suspend fun refreshDevices() {
+    /**
+     * Refreshes the device list. Explicit user refreshes reload the selected device;
+     * workspace re-entry can keep the already loaded selection to avoid repeating ADB probes.
+     */
+    suspend fun refreshDevices(reloadSelection: Boolean = true) {
         mutableState.value = mutableState.value.copy(isLoading = true, error = null)
         when (val result = gateway.refreshDevices()) {
             is StudioResult.Success -> {
@@ -190,6 +224,7 @@ class DeviceTargetController(
                         .filter(DeviceOption::isOnline)
                         .singleOrNull()
                         ?.serial
+                if (retainedSerial == null) processSelection.selectDevice(null)
                 mutableState.value =
                     current.copy(
                         devices = result.value,
@@ -201,8 +236,12 @@ class DeviceTargetController(
                         threads = current.threads.takeIf { retainedSerial != null }.orEmpty(),
                         isLoading = false,
                     )
-                if (retainedSerial == null && automaticSerial != null) {
-                    selectDevice(automaticSerial)
+                val serialToLoad = retainedSerial ?: automaticSerial
+                val selectionNeedsLoad =
+                    serialToLoad != null &&
+                        (reloadSelection || current.selection == null || current.selectedSerial != serialToLoad)
+                if (selectionNeedsLoad) {
+                    selectDevice(serialToLoad)
                 }
             }
             is StudioResult.Failure ->
@@ -214,7 +253,8 @@ class DeviceTargetController(
         mutableState.value = mutableState.value.copy(isLoading = true, error = null)
         mutableState.value =
             when (val result = gateway.loadSelection(serial)) {
-                is StudioResult.Success ->
+                is StudioResult.Success -> {
+                    processSelection.selectDevice(serial)
                     mutableState.value.copy(
                         selectedSerial = serial,
                         selection = result.value,
@@ -224,6 +264,7 @@ class DeviceTargetController(
                         threads = emptyList(),
                         isLoading = false,
                     )
+                }
                 is StudioResult.Failure -> mutableState.value.copy(isLoading = false, error = result.error)
             }
     }
@@ -243,23 +284,25 @@ class DeviceTargetController(
                 threads = emptyList(),
             )
         mutableState.value = selected.withDefaultCaptureSetup()
+        selected.selectedSerial?.let { serial ->
+            processSelection.updateProcesses(serial, selected.processesForSelectedPackage)
+        }
     }
 
     suspend fun selectProcess(pid: Int) {
         val current = mutableState.value
         val serial = current.selectedSerial
         val packageName = current.selectedPackageName
-        val process = current.processesForSelectedPackage.firstOrNull { it.pid == pid }
-        if (serial == null || packageName == null || process == null) return
-        val selected =
-            current.copy(
+        if (serial == null || packageName == null || !processSelection.selectProcess(pid)) return
+        val process = processSelection.snapshot.processes.first { it.pid == pid }
+        mutableState.value =
+            mutableState.value.copy(
                 selectedTarget = CaptureTarget.Process(process.pid, process.name),
                 captureSetup = null,
                 threads = emptyList(),
                 isLoading = true,
                 error = null,
-            )
-        mutableState.value = selected.withDefaultCaptureSetup()
+            ).withDefaultCaptureSetup()
         val result = gateway.loadThreads(serial, pid)
         val latest = mutableState.value
         if (latest.selectedPackageName == packageName && latest.selectedProcessId == pid) {
@@ -315,7 +358,13 @@ class DeviceTargetController(
 
     suspend fun startCapture(): CaptureState? {
         val request = mutableState.value.createCaptureRequest(sessionIdProvider(), sessionRoot)
-        return captureSession?.let { session -> request?.let { session.capture(it) } }
+        val session = captureSession
+        if (request == null || session == null || !captureStartMutex.tryLock()) return null
+        return try {
+            session.capture(request)
+        } finally {
+            captureStartMutex.unlock()
+        }
     }
 }
 

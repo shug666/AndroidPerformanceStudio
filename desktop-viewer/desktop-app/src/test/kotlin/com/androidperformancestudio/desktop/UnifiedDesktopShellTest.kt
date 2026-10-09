@@ -52,7 +52,7 @@ class UnifiedDesktopShellTest {
         assertTrue(perfettoRoute.contains("onNavigateHome = { navigator.open(AppDestination.HOME) }"))
         assertTrue(shell.contains("MemoryProfilerMainPage("))
         assertTrue(shell.contains("onOpenUserGuide"))
-        assertTrue(shell.contains("commonThemePreference = applicationSettings.theme.storageValue"))
+        assertTrue(shell.contains("val viewerThemeContext = rememberViewerThemeContext()"))
         assertTrue(shell.contains("commonLanguagePreference = applicationSettings.language.storageValue"))
         assertFalse(shell.contains("返回主页"))
         assertFalse(shell.contains("RetainedFeatureLayer"))
@@ -90,6 +90,14 @@ class UnifiedDesktopShellTest {
             "Res.string.java_kotlin_allocations",
         ).forEach { resource -> assertFalse(home.contains(resource), "Hidden home resource reference: $resource") }
         assertFalse(shell.contains("ComingSoonPage("))
+    }
+
+    @Test
+    fun `inactive retained destinations block pointer input`() {
+        val shell = Files.readString(sourceRoot.resolve("DesktopAppMainPage.kt"))
+
+        assertTrue(shell.contains(".blockPointerInputWhenInactive(active)"))
+        assertTrue(shell.contains("awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }"))
     }
 
     @Test

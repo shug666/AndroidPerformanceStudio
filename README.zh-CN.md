@@ -54,8 +54,9 @@ AndroidPerfermanceStudio 是一个基于 Compose Desktop 的 Android 性能分�
 - JDK 21
 - Git
 - Android SDK Platform Tools / `adb`（设备采集功能需要）
-- 构建内置 Firefox Profiler 静态资源时需要 Node.js 24 和 Yarn Classic 1.x
-- 准备内置 Perfetto 资源和 trace processor 时需要 `curl`、`unzip` 与 Python 3
+- 构建内置 Firefox Profiler 静态资源需要 Node.js 与 Yarn Classic 1.x
+- 内置 Perfetto 准备脚本需要 Python 3.11–3.13
+- 准备内置 Perfetto 资源和 trace processor 需要 `curl` 与 `unzip`
 
 ### 克隆并准备内置分析器资源
 
@@ -121,8 +122,6 @@ cd desktop-viewer
 ## 项目结构
 
 ```text
-android-studio-plugin/   规划中的 Android Studio 插件集成
-web-ui-http-server/      规划中的 Web UI 与应用内 HTTP Server 集成
 desktop-viewer/          Compose Desktop 应用和功能模块
   desktop-app/           应用外壳、设置、资源与原生打包
   layout-inspector/      View 层级采集与分析
@@ -138,7 +137,7 @@ desktop-viewer/          Compose Desktop 应用和功能模块
   ui-components/         共享的公共 Compose 控件
   ai-core/               共享的 AI Provider 与结构化响应基础设施
   source-workspace/      Local/GitHub/AOSP 源码快照、缓存、索引与定位
-third_party/             固定版本的 Firefox Profiler 和 Perfetto 子模块
+third_party/             固定版本的 Firefox Profiler 与 Perfetto 子模块
 scripts/                 内置分析器和 trace processor 的准备脚本
 docs/                    架构、需求与设计记录
 ```
@@ -148,7 +147,6 @@ docs/                    架构、需求与设计记录
 - `desktop-viewer/desktop-app/` 只负责统一应用外壳、设置和原生打包；每个分析器拥有各自的实现，功能实现之间不互相依赖。
 - Layout Inspector 在调试构建中使用 Android Agent 获得高保真采集；不需要 root、隐藏 API、系统签名或网络权限。回退路径受 UI Automator 的可见性和性能限制。
 - 跨分析工具的跳转仅用于关联排查，不能作为因果关系证明。
-- Android Studio 插件和 Web UI 目录目前是规划占位；已经实现的产品形态是桌面应用。
 
 ## 更多文档
 
@@ -156,4 +154,5 @@ docs/                    架构、需求与设计记录
 - [Layout Inspector 协议](desktop-viewer/docs/architecture/PROTOCOL.md)
 - [桌面端设计](desktop-viewer/docs/design/2026-07-02-desktop-viewer-design.md)
 - [文档索引](docs/README.md)
+- [功能介绍目录](docs/features/README.md)
 - [第三方资源构建说明](third_party/README.md)

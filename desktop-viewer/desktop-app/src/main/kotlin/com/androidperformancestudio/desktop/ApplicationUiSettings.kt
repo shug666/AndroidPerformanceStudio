@@ -4,6 +4,8 @@ import com.androidperformancestudio.desktop.SimpleperfUiSettings
 import com.androidperformancestudio.presentation.FlameTooltipMode
 import com.androidperformancestudio.presentation.SimpleperfEngine
 import com.androidperformancestudio.ui.UiLanguage
+import androidx.compose.ui.graphics.Color
+import com.androidperformancestudio.ui.ViewerAccentPalette
 import java.util.Locale
 import java.util.prefs.Preferences
 
@@ -23,6 +25,44 @@ internal enum class ApplicationThemePreference(val storageValue: String) {
     companion object {
         fun parse(value: String?): ApplicationThemePreference =
             entries.firstOrNull { it.storageValue == value?.lowercase() } ?: SYSTEM
+    }
+}
+
+internal enum class ApplicationDisplayScale(
+    val storageValue: String,
+    val multiplier: Float,
+) {
+    PERCENT_80("80", 0.80f),
+    PERCENT_90("90", 0.90f),
+    PERCENT_100("100", 1.00f),
+    PERCENT_110("110", 1.10f),
+    PERCENT_125("125", 1.25f),
+    PERCENT_150("150", 1.50f),
+    ;
+
+    companion object {
+        fun parse(value: String?): ApplicationDisplayScale =
+            entries.firstOrNull { it.storageValue == value } ?: PERCENT_100
+    }
+}
+
+internal enum class ApplicationThemeColor(
+    val storageValue: String,
+    val color: Color,
+) {
+    BANANA_RED("banana_red", ViewerAccentPalette.bananaRed),
+    WARM_SUN_ORANGE("warm_sun_orange", ViewerAccentPalette.warmSunOrange),
+    CORNFLOWER_BLUE("cornflower_blue", ViewerAccentPalette.cornflowerBlue),
+    JADE_GREEN("jade_green", ViewerAccentPalette.jadeGreen),
+    MERLOT_PINK("merlot_pink", ViewerAccentPalette.merlotPink),
+    AZURE("azure", ViewerAccentPalette.azure),
+    LEMON_YELLOW("lemon_yellow", ViewerAccentPalette.lemonYellow),
+    ROYAL_PURPLE("royal_purple", ViewerAccentPalette.royalPurple),
+    ;
+
+    companion object {
+        fun parse(value: String?): ApplicationThemeColor =
+            entries.firstOrNull { it.storageValue == value?.lowercase() } ?: CORNFLOWER_BLUE
     }
 }
 
@@ -47,6 +87,8 @@ internal enum class ApplicationLanguagePreference(val storageValue: String) {
 
 internal data class ApplicationUiSettings(
     val theme: ApplicationThemePreference = ApplicationThemePreference.SYSTEM,
+    val displayScale: ApplicationDisplayScale = ApplicationDisplayScale.PERCENT_100,
+    val themeColor: ApplicationThemeColor = ApplicationThemeColor.CORNFLOWER_BLUE,
     val language: ApplicationLanguagePreference = ApplicationLanguagePreference.SYSTEM,
     val androidSdkPath: String? = null,
 )
@@ -59,6 +101,8 @@ internal class ApplicationUiSettingsStore(
     fun load(): ApplicationUiSettings =
         ApplicationUiSettings(
             theme = ApplicationThemePreference.parse(readValue(THEME_KEY)),
+            displayScale = ApplicationDisplayScale.parse(readValue(DISPLAY_SCALE_KEY)),
+            themeColor = ApplicationThemeColor.parse(readValue(THEME_COLOR_KEY)),
             language = ApplicationLanguagePreference.parse(readValue(LANGUAGE_KEY)),
             androidSdkPath = readValue(ANDROID_SDK_PATH_KEY)?.trim()?.takeIf(String::isNotEmpty),
         )
@@ -66,6 +110,8 @@ internal class ApplicationUiSettingsStore(
     fun save(settings: ApplicationUiSettings): Boolean =
         runCatching {
             writeValue(THEME_KEY, settings.theme.storageValue)
+            writeValue(DISPLAY_SCALE_KEY, settings.displayScale.storageValue)
+            writeValue(THEME_COLOR_KEY, settings.themeColor.storageValue)
             writeValue(LANGUAGE_KEY, settings.language.storageValue)
             writeValue(ANDROID_SDK_PATH_KEY, settings.androidSdkPath.orEmpty())
             flush()
@@ -73,6 +119,8 @@ internal class ApplicationUiSettingsStore(
 
     companion object {
         private const val THEME_KEY = "application.theme"
+        private const val DISPLAY_SCALE_KEY = "application.displayScale"
+        private const val THEME_COLOR_KEY = "application.themeColor"
         private const val LANGUAGE_KEY = "application.language"
         private const val ANDROID_SDK_PATH_KEY = "application.androidSdkPath"
 

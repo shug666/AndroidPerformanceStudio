@@ -1,11 +1,15 @@
 package com.androidperformancestudio.perfetto.presentation
 
+import com.androidperformancestudio.ui.ViewerTypography
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +24,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,7 +36,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.androidperformancestudio.perfetto.model.PerfettoCaptureConfig
 import com.androidperformancestudio.perfetto.model.PerfettoCaptureState
 import com.androidperformancestudio.perfetto.model.PerfettoDeviceCapabilities
@@ -97,52 +101,71 @@ fun PerfettoCapturePage(
     var customConfigText by remember { mutableStateOf("") }
     var enabledProbes by remember { mutableStateOf(selectedTemplate.defaultProbes()) }
 
-    Row(
-        modifier = modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        PerfettoTemplatePanel(
-            selectedTemplate = selectedTemplate,
-            onSelectTemplate = {
-                selectedTemplate = it
-                enabledProbes = it.defaultProbes()
-            },
-            modifier = Modifier.width(220.dp).fillMaxHeight(),
-            language = language,
-        )
-        PerfettoDataSourcesPanel(
-            selectedTemplate = selectedTemplate,
-            enabledProbes = enabledProbes,
-            onProbeChange = { probe, enabled ->
-                enabledProbes = if (enabled) enabledProbes + probe else enabledProbes - probe
-            },
-            targetPackage = targetPackage,
-            capabilities = deviceCapabilities,
-            modifier = Modifier.width(300.dp).fillMaxHeight(),
-            language = language,
-        )
-        PerfettoConfigurationPanel(
-            captureState = captureState,
-            selectedTemplate = selectedTemplate,
-            selectedDeviceSerial = selectedDeviceSerial,
-            targetPackage = targetPackage,
-            onTargetPackageChange = { targetPackage = it },
-            durationSeconds = durationSeconds,
-            onDurationSecondsChange = { durationSeconds = it },
-            bufferSizeKb = bufferSizeKb,
-            onBufferSizeKbChange = { bufferSizeKb = it },
-            additionalCategories = additionalCategories,
-            onAdditionalCategoriesChange = { additionalCategories = it },
-            customConfigText = customConfigText,
-            onCustomConfigTextChange = { customConfigText = it },
-            enabledProbes = enabledProbes,
-            deviceCapabilities = deviceCapabilities,
-            onStartCapture = onStartCapture,
-            onStopCapture = onStopCapture,
-            onOpenTrace = onOpenTrace,
-            modifier = Modifier.weight(1f).fillMaxHeight(),
-            language = language,
-        )
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        val currentConfigurationWidth =
+            (
+                maxWidth -
+                    BASE_TEMPLATE_PANEL_WIDTH -
+                    BASE_DATA_SOURCES_PANEL_WIDTH -
+                    PANEL_DIVIDER_WIDTH -
+                    PANEL_DIVIDER_WIDTH
+            ).coerceAtLeast(0.dp)
+        val redistributedWidth = currentConfigurationWidth / 3f
+        val addedPanelWidth = redistributedWidth / 2f
+        val configurationWidth = currentConfigurationWidth - redistributedWidth
+
+        Row(Modifier.fillMaxSize()) {
+            PerfettoTemplatePanel(
+                selectedTemplate = selectedTemplate,
+                onSelectTemplate = {
+                    selectedTemplate = it
+                    enabledProbes = it.defaultProbes()
+                },
+                modifier = Modifier.width(BASE_TEMPLATE_PANEL_WIDTH + addedPanelWidth).fillMaxHeight(),
+                language = language,
+            )
+            VerticalDivider(
+                modifier = Modifier.fillMaxHeight(),
+                color = MaterialTheme.colorScheme.outline,
+            )
+            PerfettoDataSourcesPanel(
+                selectedTemplate = selectedTemplate,
+                enabledProbes = enabledProbes,
+                onProbeChange = { probe, enabled ->
+                    enabledProbes = if (enabled) enabledProbes + probe else enabledProbes - probe
+                },
+                targetPackage = targetPackage,
+                capabilities = deviceCapabilities,
+                modifier = Modifier.width(BASE_DATA_SOURCES_PANEL_WIDTH + addedPanelWidth).fillMaxHeight(),
+                language = language,
+            )
+            VerticalDivider(
+                modifier = Modifier.fillMaxHeight(),
+                color = MaterialTheme.colorScheme.outline,
+            )
+            PerfettoConfigurationPanel(
+                captureState = captureState,
+                selectedTemplate = selectedTemplate,
+                selectedDeviceSerial = selectedDeviceSerial,
+                targetPackage = targetPackage,
+                onTargetPackageChange = { targetPackage = it },
+                durationSeconds = durationSeconds,
+                onDurationSecondsChange = { durationSeconds = it },
+                bufferSizeKb = bufferSizeKb,
+                onBufferSizeKbChange = { bufferSizeKb = it },
+                additionalCategories = additionalCategories,
+                onAdditionalCategoriesChange = { additionalCategories = it },
+                customConfigText = customConfigText,
+                onCustomConfigTextChange = { customConfigText = it },
+                enabledProbes = enabledProbes,
+                deviceCapabilities = deviceCapabilities,
+                onStartCapture = onStartCapture,
+                onStopCapture = onStopCapture,
+                onOpenTrace = onOpenTrace,
+                modifier = Modifier.width(configurationWidth).fillMaxHeight(),
+                language = language,
+            )
+        }
     }
 }
 
@@ -169,8 +192,8 @@ private fun PerfettoDataSourcesPanel(
                 Text(
                     text = localizedStringResource(Res.string.capability_query_failed, language, error),
                     color = MaterialTheme.colorScheme.error,
-                    fontSize = 9.sp,
-                    lineHeight = 11.sp,
+                    fontSize = ViewerTypography.dense.fontSize,
+                    lineHeight = ViewerTypography.dense.lineHeight,
                 )
             }
             if (selectedTemplate != PerfettoTraceTemplate.CUSTOM) {
@@ -179,50 +202,80 @@ private fun PerfettoDataSourcesPanel(
                     Text(
                         text = group.displayName.uppercase(),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 9.sp,
+                        fontSize = ViewerTypography.dense.fontSize,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(top = 4.dp),
                     )
-                    probes.forEach { probe ->
-                        val reason =
-                            capabilities?.unsupportedReason(probe)
-                                ?: if (probe.requiresTargetPackage && targetPackage.isBlank()) "Requires a target package" else null
+                    probes.chunked(2).forEach { probeRow ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Checkbox(
-                                checked = probe in enabledProbes && reason == null,
-                                onCheckedChange = { onProbeChange(probe, it) },
-                                enabled = reason == null,
-                                modifier = Modifier.size(22.dp),
-                            )
-                            Column(modifier = Modifier.weight(1f).padding(start = 5.dp)) {
-                                Text(
-                                    text = probe.displayName,
-                                    color =
-                                        if (reason ==
-                                            null
-                                        ) {
-                                            MaterialTheme.colorScheme.onSurface
+                            probeRow.forEach { probe ->
+                                val reason =
+                                    capabilities?.unsupportedReason(probe)
+                                        ?: if (probe.requiresTargetPackage && targetPackage.isBlank()) {
+                                            "Requires a target package"
                                         } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        },
-                                    fontSize = 10.sp,
-                                    lineHeight = 12.sp,
+                                            null
+                                        }
+                                PerfettoProbeOption(
+                                    probe = probe,
+                                    checked = probe in enabledProbes && reason == null,
+                                    reason = reason,
+                                    onProbeChange = onProbeChange,
+                                    modifier = Modifier.weight(1f),
                                 )
-                                reason?.let {
-                                    Text(
-                                        text = it,
-                                        color = MaterialTheme.colorScheme.error,
-                                        fontSize = 8.sp,
-                                        lineHeight = 10.sp,
-                                    )
-                                }
+                            }
+                            if (probeRow.size == 1) {
+                                Spacer(Modifier.weight(1f))
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+@Suppress("ktlint:standard:function-naming")
+private fun PerfettoProbeOption(
+    probe: PerfettoProbe,
+    checked: Boolean,
+    reason: String?,
+    onProbeChange: (PerfettoProbe, Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = { onProbeChange(probe, it) },
+            enabled = reason == null,
+            modifier = Modifier.size(22.dp),
+        )
+        Column(modifier = Modifier.weight(1f).padding(start = 5.dp)) {
+            Text(
+                text = probe.displayName,
+                color =
+                    if (reason == null) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                fontSize = ViewerTypography.label.fontSize,
+                lineHeight = ViewerTypography.label.lineHeight,
+            )
+            reason?.let {
+                Text(
+                    text = it,
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = ViewerTypography.micro.fontSize,
+                    lineHeight = ViewerTypography.micro.lineHeight,
+                )
             }
         }
     }
@@ -276,11 +329,11 @@ private fun PerfettoTemplateOption(
                 .clip(shape)
                 .background(
                     if (selected) {
-                        MaterialTheme.colorScheme.primaryContainer
+                        MaterialTheme.colorScheme.primary
                     } else {
                         MaterialTheme.colorScheme.surfaceVariant
                     },
-                ).border(1.dp, MaterialTheme.colorScheme.outline, shape)
+                ).border(1.dp, MaterialTheme.colorScheme.primary, shape)
                 .clickable(onClick = onClick)
                 .padding(horizontal = 8.dp, vertical = 7.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -289,11 +342,11 @@ private fun PerfettoTemplateOption(
             text = template.displayName(language),
             color =
                 if (selected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
+                    MaterialTheme.colorScheme.onPrimary
                 } else {
-                    MaterialTheme.colorScheme.onSurface
+                    MaterialTheme.colorScheme.primary
                 },
-            fontSize = 11.sp,
+            fontSize = ViewerTypography.secondary.fontSize,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -302,12 +355,12 @@ private fun PerfettoTemplateOption(
             text = template.description(language),
             color =
                 if (selected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
+                    MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.82f)
                 } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.78f)
                 },
-            fontSize = 10.sp,
-            lineHeight = 13.sp,
+            fontSize = ViewerTypography.label.fontSize,
+            lineHeight = ViewerTypography.secondary.lineHeight,
         )
     }
 }
@@ -370,35 +423,27 @@ private fun PerfettoConfigurationPanel(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            Row(
+            CompactFieldLabel(localizedStringResource(Res.string.duration_seconds, language))
+            PerfettoCompactTextField(
+                value = durationSeconds.toString(),
+                onValueChange = {
+                    it.toIntOrNull()?.let { value ->
+                        onDurationSecondsChange(value.coerceIn(1, 600))
+                    }
+                },
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    CompactFieldLabel(localizedStringResource(Res.string.duration_seconds, language))
-                    PerfettoCompactTextField(
-                        value = durationSeconds.toString(),
-                        onValueChange = {
-                            it.toIntOrNull()?.let { value ->
-                                onDurationSecondsChange(value.coerceIn(1, 600))
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    CompactFieldLabel(localizedStringResource(Res.string.buffer_mb, language))
-                    PerfettoCompactTextField(
-                        value = (bufferSizeKb / 1024).toString(),
-                        onValueChange = {
-                            it.toIntOrNull()?.let { value ->
-                                onBufferSizeKbChange((value * 1024).coerceIn(1024, 1048576))
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
+            )
+
+            CompactFieldLabel(localizedStringResource(Res.string.buffer_mb, language))
+            PerfettoCompactTextField(
+                value = (bufferSizeKb / 1024).toString(),
+                onValueChange = {
+                    it.toIntOrNull()?.let { value ->
+                        onBufferSizeKbChange((value * 1024).coerceIn(1024, 1048576))
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
 
             CompactFieldLabel(localizedStringResource(Res.string.additional_categories_events, language))
             PerfettoCompactTextField(
@@ -471,7 +516,7 @@ private fun CompactFieldLabel(text: String) {
     Text(
         text = text,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        fontSize = 10.sp,
+        fontSize = ViewerTypography.label.fontSize,
         fontWeight = FontWeight.Medium,
     )
 }
@@ -506,9 +551,13 @@ private fun CaptureStatus(
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             },
-        fontSize = 11.sp,
+        fontSize = ViewerTypography.secondary.fontSize,
     )
 }
+
+private val BASE_TEMPLATE_PANEL_WIDTH = 180.dp
+private val BASE_DATA_SOURCES_PANEL_WIDTH = 280.dp
+private val PANEL_DIVIDER_WIDTH = 1.dp
 
 private fun createCaptureConfig(
     selectedTemplate: PerfettoTraceTemplate,
