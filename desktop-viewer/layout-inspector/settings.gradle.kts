@@ -25,6 +25,7 @@ include(
     ":compose-inspection-host",
     ":analysis-engine",
     ":test-fixtures",
+    ":mcp-server",
 )
 
 project(":adb-gateway").projectDir = file("adb-gateway")
@@ -35,6 +36,7 @@ project(":compose-inspection-model").projectDir = file("shared-kernel/compose-in
 project(":compose-inspection-host").projectDir = file("compose-inspection-host")
 project(":analysis-engine").projectDir = file("shared-kernel/analysis-engine")
 project(":test-fixtures").projectDir = file("shared-kernel/test-fixtures")
+project(":mcp-server").projectDir = file("mcp-server")
 
 // Shared composite builds for dependency resolution
 includeBuild("../ui-components") {
