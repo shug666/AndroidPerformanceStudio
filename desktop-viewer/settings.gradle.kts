@@ -1,12 +1,16 @@
 pluginManagement {
     repositories {
-        mavenCentral()
         // Prefer the Alibaba Cloud mirror when Google's Maven endpoint is unavailable.
         maven {
             name = "AliyunGoogle"
             url = uri("https://maven.aliyun.com/repository/google")
         }
         google()
+        maven {
+            name = "Aliyun"
+            url = uri("https://maven.aliyun.com/repository/public")
+        }
+        mavenCentral()
         gradlePluginPortal()
     }
 }
@@ -14,13 +18,17 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
-        mavenCentral()
         // Prefer the Alibaba Cloud mirror when Google's Maven endpoint is unavailable.
         maven {
             name = "AliyunGoogle"
             url = uri("https://maven.aliyun.com/repository/google")
         }
         google()
+        maven {
+            name = "Aliyun"
+            url = uri("https://maven.aliyun.com/repository/public")
+        }
+        mavenCentral()
     }
 }
 
