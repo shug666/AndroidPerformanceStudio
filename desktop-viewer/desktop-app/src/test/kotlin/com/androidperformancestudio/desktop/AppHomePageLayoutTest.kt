@@ -43,6 +43,37 @@ class AppHomePageLayoutTest {
     }
 
     @Test
+    fun `recent session rows stay compact`() {
+        val row =
+            source
+                .substringAfter("private fun RecentSessionRow(")
+                .substringBefore("private fun StudioRecentItem.featureLabel(")
+
+        assertTrue(row.contains("vertical = 3.dp"))
+        // Material's 40 dp minimum button height made every row tall.
+        assertFalse(row.contains("TextButton("))
+        assertTrue(row.contains(".clickable(onClick = onOpen)"))
+    }
+
+    @Test
+    fun `device refresh updates in place instead of flashing the loading state`() {
+        val effect =
+            source
+                .substringAfter("LaunchedEffect(active, deviceOverviewSource, deviceRefreshRevision)")
+                .substringBefore("val entries =")
+
+        assertTrue(effect.contains("deviceOverview = deviceOverviewSource.load()"))
+        // Clearing the state before loading swapped the panel to the loading state on every refresh.
+        assertFalse(effect.contains("deviceOverview = null"))
+        // The very first load still shows loading because the state starts empty.
+        assertTrue(
+            source.contains(
+                "var deviceOverview by remember { mutableStateOf<StudioDeviceOverview?>(null) }",
+            ),
+        )
+    }
+
+    @Test
     fun `quick actions stay a four up row until the column narrows`() {
         assertEquals(4, homeQuickActionColumnCount(1020))
         assertEquals(4, homeQuickActionColumnCount(720))
@@ -103,7 +134,7 @@ class AppHomePageLayoutTest {
             Files.readString(
                 Path.of("src/main/kotlin/com/androidperformancestudio/desktop/shell/CommercialAppShell.kt"),
             )
-        assertTrue(shell.contains("listOf(AppDestination.SOURCE_WORKSPACES, AppDestination.METHOD_RECORDING)"))
+        assertTrue(shell.contains("listOf(AppDestination.METHOD_RECORDING)"))
         assertTrue(shell.contains("navigator.open(destination)"))
     }
 }

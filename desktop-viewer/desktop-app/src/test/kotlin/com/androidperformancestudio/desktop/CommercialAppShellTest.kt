@@ -100,6 +100,22 @@ class CommercialAppShellTest {
     }
 
     @Test
+    fun `primary rail lists source workspaces`() {
+        val shell =
+            Files.readString(
+                Path.of("src/main/kotlin/com/androidperformancestudio/desktop/shell/CommercialAppShell.kt"),
+            )
+        val rail =
+            shell
+                .substringAfter("val navigationItems =")
+                .substringBefore("val commandItems =")
+
+        assertTrue(rail.contains("AppDestination.SOURCE_WORKSPACES"))
+        // It must not be reachable only from the command palette.
+        assertFalse(rail.contains("AppDestination.METHOD_RECORDING"))
+    }
+
+    @Test
     fun `collapsed rail reveals the entry title on hover`() {
         val shell =
             Files.readString(

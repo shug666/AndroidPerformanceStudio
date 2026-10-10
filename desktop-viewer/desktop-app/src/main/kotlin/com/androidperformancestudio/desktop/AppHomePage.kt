@@ -150,7 +150,9 @@ internal fun AppHomePage(
     }
     LaunchedEffect(active, deviceOverviewSource, deviceRefreshRevision) {
         if (active) {
-            deviceOverview = null
+            // Keep the current projection visible while refreshing so pressing refresh does not
+            // swap the panel to the loading state and back. The first load still shows loading
+            // because the state starts as null.
             deviceOverview = deviceOverviewSource.load()
         }
     }
@@ -631,7 +633,7 @@ private fun RecentSessionRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = StudioTokens.compactContentPadding, vertical = 5.dp),
+                .padding(horizontal = StudioTokens.compactContentPadding, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -665,14 +667,19 @@ private fun RecentSessionRow(
             overflow = TextOverflow.Ellipsis,
         )
         Box(modifier = Modifier.weight(0.8f), contentAlignment = Alignment.CenterEnd) {
-            TextButton(onClick = onOpen) {
-                Text(
-                    text = localizedStringResource(Res.string.open_artifact, language),
-                    color = colors.accent,
-                    fontSize = ViewerTypography.bodyCompact.fontSize,
-                    lineHeight = ViewerTypography.bodyCompact.lineHeight,
-                )
-            }
+            // A plain clickable label instead of a TextButton: Material's 40 dp minimum height was
+            // what made every session row so tall.
+            Text(
+                text = localizedStringResource(Res.string.open_artifact, language),
+                modifier =
+                    Modifier
+                        .clip(RoundedCornerShape(StudioTokens.smallRadius))
+                        .clickable(onClick = onOpen)
+                        .padding(horizontal = 6.dp, vertical = 3.dp),
+                color = colors.accent,
+                fontSize = ViewerTypography.bodyCompact.fontSize,
+                lineHeight = ViewerTypography.bodyCompact.lineHeight,
+            )
         }
     }
 }

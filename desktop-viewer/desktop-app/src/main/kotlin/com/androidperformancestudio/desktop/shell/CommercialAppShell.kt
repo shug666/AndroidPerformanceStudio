@@ -135,6 +135,7 @@ internal fun CommercialAppShell(
             AppDestination.NETWORK_PROFILER,
             AppDestination.GPU_INSPECTOR,
             AppDestination.BENCHMARK_REGRESSION,
+            AppDestination.SOURCE_WORKSPACES,
         ).map {
             StudioNavigationItem(
                 destination = it,
@@ -144,7 +145,7 @@ internal fun CommercialAppShell(
         }
     val commandItems =
         (navigationItems +
-            listOf(AppDestination.SOURCE_WORKSPACES, AppDestination.METHOD_RECORDING)
+            listOf(AppDestination.METHOD_RECORDING)
                 .map {
                     StudioNavigationItem(
                         destination = it,

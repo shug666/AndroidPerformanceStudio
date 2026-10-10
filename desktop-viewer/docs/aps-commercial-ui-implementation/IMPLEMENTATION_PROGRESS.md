@@ -2,6 +2,56 @@
 
 This is a continuation checkpoint for the [phased implementation plan](android-performance-studio-commercial-ui-implementation.md), not an assertion that the full commercial UI is finished.
 
+## 2026-10-11: Source Workspaces added to the primary rail
+
+### Implemented
+
+- `AppDestination.SOURCE_WORKSPACES` is now a primary rail entry, placed after Benchmark Regression and
+  before the divider that separates Settings, reusing the destination's existing title and icon.
+- The command palette no longer adds it a second time; only Method Recording stays palette-only.
+
+### Verification
+
+- Rendered the shell: 源码工作区 appears in the expanded rail with the code-brackets icon.
+- `CommercialAppShellTest` asserts the primary rail contains Source Workspaces and still excludes
+  Method Recording; `AppHomePageLayoutTest` follows the simplified palette list.
+- `:desktop-app:test` passes 155 tests, zero failures.
+- This intentionally departs from the plan's "Source Workspaces does not occupy a primary navigation
+  slot" note; the plan document was left unchanged.
+
+## 2026-10-11: Compact recent-session rows
+
+### Implemented
+
+- The home page's recent-session rows no longer use a Material `TextButton` for "Open artifact"; the
+  button's minimum height was what made every row tall. The action is now a plain clickable label with
+  a small hit area, and the row's vertical padding dropped from 5 dp to 3 dp.
+
+### Verification
+
+- Rendered the home page before and after with the app's `LocalMinimumInteractiveComponentSize`
+  (32 dp) applied, and measured the row pitch: 58 px -> 36 px, roughly 38% shorter. The first
+  comparison used a render without that composition local, which overstated the before height.
+- `AppHomePageLayoutTest` asserts the compact row (3 dp padding, no `TextButton`, clickable label).
+- `:desktop-app:test` passes 154 tests, zero failures.
+
+## 2026-10-11: Device refresh no longer flashes the loading state
+
+### Implemented
+
+- `AppHomePage` no longer clears `deviceOverview` before reloading it. Pressing "Refresh devices"
+  now updates the panel in place; only the very first load shows the loading state, because the state
+  still starts empty.
+
+### Verification
+
+- A temporary UI test clicked the refresh control and counted loading-state nodes. With the old code
+  the count went 0 -> 1 -> 0 (the visible flash); with the fix it stayed 0 before, during, and after
+  the refresh. The test was validated by temporarily restoring the bug.
+- `AppHomePageLayoutTest` now asserts the effect never nulls the projection and that the initial
+  state stays empty, so first-load feedback is preserved.
+- `:desktop-app:test` passes 153 tests, zero failures.
+
 ## 2026-10-11: Hover titles on the collapsed rail
 
 ### Implemented
