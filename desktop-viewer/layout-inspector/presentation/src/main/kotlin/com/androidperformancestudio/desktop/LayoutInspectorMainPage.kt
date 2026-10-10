@@ -1056,7 +1056,13 @@ fun FrameWindowScope.LayoutInspectorMainPage(
                 Column(modifier = Modifier.fillMaxSize()) {
                     BoxWithConstraints(modifier = Modifier.weight(1f)) {
                         val availableWidthDp = maxWidth.value
-                        val normalizedPaneWidths = PaneLayout.fit(paneWidths, availableWidthDp)
+                            val normalizedPaneWidths =
+                                PaneLayout.fit(
+                                    widths = paneWidths,
+                                    availableWidthDp = availableWidthDp,
+                                    showHierarchy = panelVisibility.showHierarchy,
+                                    showDetails = panelVisibility.showDetails,
+                                )
                         SideEffect {
                             val rows = InspectorPresenter.present(state, uiLanguage).rows
                             val sanitizedHiddenLayerState = hiddenLayerState.sanitize(rows)
@@ -1100,11 +1106,14 @@ fun FrameWindowScope.LayoutInspectorMainPage(
                                             .fillMaxHeight(),
                                 )
                                 ResizableSeparator { deltaDp ->
-                                    paneWidths = PaneLayout.dragHierarchy(
-                                        widths = PaneLayout.fit(paneWidths, availableWidthDp),
-                                        deltaDp = deltaDp,
-                                        availableWidthDp = availableWidthDp,
-                                    )
+                                        paneWidths =
+                                            PaneLayout.dragHierarchy(
+                                                widths = paneWidths,
+                                                deltaDp = deltaDp,
+                                                availableWidthDp = availableWidthDp,
+                                                showHierarchy = panelVisibility.showHierarchy,
+                                                showDetails = panelVisibility.showDetails,
+                                            )
                                 }
                             }
                             PreviewPane(
@@ -1132,11 +1141,14 @@ fun FrameWindowScope.LayoutInspectorMainPage(
                             )
                             if (panelVisibility.showDetails) {
                                 ResizableSeparator { deltaDp ->
-                                    paneWidths = PaneLayout.dragProperties(
-                                        widths = PaneLayout.fit(paneWidths, availableWidthDp),
-                                        deltaDp = deltaDp,
-                                        availableWidthDp = availableWidthDp,
-                                    )
+                                        paneWidths =
+                                            PaneLayout.dragProperties(
+                                                widths = paneWidths,
+                                                deltaDp = deltaDp,
+                                                availableWidthDp = availableWidthDp,
+                                                showHierarchy = panelVisibility.showHierarchy,
+                                                showDetails = panelVisibility.showDetails,
+                                            )
                                 }
                                 DetailsPane(
                                     state = state,
