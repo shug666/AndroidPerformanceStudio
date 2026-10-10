@@ -50,6 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -64,6 +65,7 @@ import com.androidperformancestudio.ui.ProvideViewerThemeContext
 import com.androidperformancestudio.ui.ViewerThemeContext
 import com.androidperformancestudio.ui.viewerOutlinedTextFieldColors
 import com.androidperformancestudio.ui.studio.StudioPanel
+import com.androidperformancestudio.ui.switch.MacOSSwitch
 import com.androidperformancestudio.ui.DropdownSelector
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
@@ -406,7 +408,7 @@ private fun SettingsSidebarRow(
             Modifier
                 .fillMaxWidth()
                 .background(
-                    if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                    if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
                     MaterialTheme.shapes.small,
                 )
                 .clickable(onClick = onClick)
@@ -431,8 +433,6 @@ private fun SettingsSidebarRow(
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
             )
-        } else {
-            Spacer(Modifier.width(16.dp))
         }
         Text(
             text = label,
@@ -440,6 +440,30 @@ private fun SettingsSidebarRow(
             style = MaterialTheme.typography.titleMedium,
             fontWeight = if (selected) FontWeight.SemiBold else fontWeight,
         )
+    }
+}
+
+@Composable
+private fun SettingsToggleRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    val colors = LocalViewerColors.current
+    Row(
+        // The label reads as a section label: it uses the accent and lines up with the section
+        // titles, which carry no horizontal inset. Only the switch keeps the row inset.
+        modifier = Modifier.fillMaxWidth().padding(end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            color = colors.accent,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        MacOSSwitch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
@@ -478,6 +502,14 @@ private fun GeneralSettingsContent(
             options = ApplicationDisplayScale.entries,
             optionLabel = ::displayScalePreferenceLabel,
             onSelected = { onSettingsChanged(settings.copy(displayScale = it)) },
+        )
+        // Checked shows the sidebar labels (expanded); unchecked keeps the icon-only collapsed rail.
+        SettingsToggleRow(
+            label = localizedStringResource(Res.string.show_sidebar_titles, language),
+            checked = !settings.navigationRailCollapsed,
+            onCheckedChange = { showSidebarTitles ->
+                onSettingsChanged(settings.copy(navigationRailCollapsed = !showSidebarTitles))
+            },
         )
         ThemeColorSettingsContent(
             settings = settings,
@@ -807,18 +839,4 @@ private fun themeColorPreferenceLabel(color: ApplicationThemeColor, language: Ui
 
 private const val OPENAI_API_KEY = "openai:api-key"
 
-private fun CaptureSettingsSection.settingsLabel(language: UiLanguage): String =
-    when (this) {
-        CaptureSettingsSection.SAMPLING_TEMPLATE -> localizedStringResource(Res.string.sampling_template, language)
-        CaptureSettingsSection.CAPTURE_CONFIGURATION -> localizedStringResource(
-            Res.string.capture_configuration,
-            language
-        )
-
-        CaptureSettingsSection.ADVANCED_PARAMETERS -> localizedStringResource(Res.string.advanced_parameters, language)
-        CaptureSettingsSection.FLAME_GRAPH -> localizedStringResource(Res.string.flame_graph, language)
-        CaptureSettingsSection.SIMPLEPERF_ENGINE -> localizedStringResource(Res.string.simpleperf_engine, language)
-        CaptureSettingsSection.USER_GUIDE -> localizedStringResource(Res.string.user_guide, language)
-    }
-
-internal const val UNIFIED_SETTINGS_SIDEBAR_WIDTH_DP = 220
+internal const val UNIFIED_SETTINGS_SIDEBAR_WIDTH_DP = 176

@@ -167,7 +167,10 @@ class ProfilerThemeSupportTest {
         // flash or stay empty.
         assertTrue(sharedMenuBar.contains("import androidx.compose.ui.window.MenuBar"))
         assertTrue(sharedMenuBar.contains("MenuBar {"))
-        assertTrue(sharedMenuBar.contains("content.content?.invoke(this)"))
+        // A page without a feature menu must not leave the native bar with zero menus.
+        assertTrue(sharedMenuBar.contains("fallbackMenu"))
+        assertTrue(shell.contains("fallbackMenu = {"))
+        assertTrue(sharedMenuBar.contains("pageContent.invoke(this)"))
         assertFalse(sharedMenuBar.contains("JMenuBar()"))
         assertFalse(sharedMenuBar.contains("setContent("))
         assertFalse(sharedMenuBar.contains("window.jMenuBar = null"))

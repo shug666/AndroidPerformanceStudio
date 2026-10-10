@@ -2,6 +2,58 @@
 
 This is a continuation checkpoint for the [phased implementation plan](android-performance-studio-commercial-ui-implementation.md), not an assertion that the full commercial UI is finished.
 
+## 2026-10-11: macOS title bar painted with the theme background
+
+### Implemented
+
+- `MacOsWindowChrome` sets `apple.awt.fullWindowContent`, `apple.awt.transparentTitleBar` and
+  `apple.awt.windowTitleVisible=false` on the window root pane, so the native macOS title bar turns
+  transparent, the content view covers it, and the native title text (which cannot be recoloured) is
+  hidden. The close/minimize/maximize buttons stay native, so dragging, double-click zoom and the
+  green full-screen button keep working.
+- `MacOsTitleBar` paints the 28pt strip itself: `ViewerColors.canvasBackground` as the background,
+  `ViewerColors.primaryText` for the title (so it inverts against the strip in either theme), and a
+  `ViewerColors.border` hairline along the bottom edge.
+- The strip is composed outside `ViewerTheme` so the fixed point height does not follow the user's
+  display scale. Windows and Linux keep their native window frame unchanged.
+
+### Verification
+
+- `:desktop-app:compileKotlin` and `:desktop-app:test` pass.
+- `MacOsWindowChromeTest` covers the platform check, the three AWT client properties, the hidden
+  native title and the strip binding to the theme background, text and divider.
+
+## 2026-10-11: Menu bar probe - measured cause of the remaining flicker
+
+### Measurement
+
+A throwaway probe drove 24 rapid destination switches in a real window (AWT is available in this
+environment) and instrumented the native bar: a property-change listener on `window.jMenuBar` plus a
+container listener counting component add/remove, sampling the visible menu count after every switch.
+
+- `window.jMenuBar` changed only twice in total (window startup): the bar is never replaced or
+  cleared any more.
+- Destinations without a feature menu left the bar with **zero menus**, and crossing that boundary
+  removed and re-added the top-level menu every time. A zero-menu native bar is what reads as a
+  missing menu bar on macOS and flashes on every visit.
+- Switching between pages with different menu structures recreates the top-level `JMenu` every time
+  (new identity per switch), because each page's `Menu(...)` is a distinct composable call site.
+  Wrapping the published content in `key(...)` did not change that; reusing one menu node needs a
+  shared menu shape across pages, which is a larger refactor and was not attempted.
+
+### Implemented
+
+- `WindowMenuBarHost` takes a `fallbackMenu` that is composed whenever the active page publishes no
+  menu, so the native bar always has at least one menu. `DesktopAppMainPage` passes a File menu built
+  from app-level actions it already owns: open Trace file, analyze HPROF, settings.
+- The same probe after the change reports `menus=1` at every sample, including Home and Settings.
+
+### Verification
+
+- Probe output before/after the change (recorded above).
+- `ProfilerThemeSupportTest` asserts the fallback wiring so the empty bar cannot come back.
+- `:desktop-app:test` passes.
+
 ## 2026-10-11: Simpleperf settings merged into one card page
 
 ### Implemented

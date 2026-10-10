@@ -1,6 +1,7 @@
 package com.androidperformancestudio.desktop
 
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -23,6 +24,8 @@ fun main() = application {
         title = windowTitle.value,
         state = windowState,
     ) {
+        // Let the app paint the strip behind the native macOS window buttons with the theme.
+        SideEffect { MacOsWindowChrome.install(window) }
         var settingsRequest by remember { mutableStateOf<SettingsRequest?>(null) }
         var nextSettingsRequestId by remember { mutableStateOf(0L) }
         val settingsMenuInstaller = remember {

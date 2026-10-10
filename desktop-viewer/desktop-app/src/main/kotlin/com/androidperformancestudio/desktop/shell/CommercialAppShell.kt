@@ -62,8 +62,6 @@ import com.androidperformancestudio.desktop.navigationLabelResource
 import com.androidperformancestudio.desktop.titleResource
 import com.androidperformancestudio.desktop_app.generated.resources.Res
 import com.androidperformancestudio.desktop_app.generated.resources.command_palette
-import com.androidperformancestudio.desktop_app.generated.resources.collapse_navigation
-import com.androidperformancestudio.desktop_app.generated.resources.expand_navigation
 import com.androidperformancestudio.desktop_app.generated.resources.no_active_artifact
 import com.androidperformancestudio.desktop_app.generated.resources.no_matching_commands
 import com.androidperformancestudio.desktop_app.generated.resources.search_commands
@@ -109,7 +107,6 @@ internal fun CommercialAppShell(
     navigator: AppNavigator,
     language: UiLanguage,
     navigationRailCollapsed: Boolean,
-    onNavigationRailCollapsedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     workspaceContext: WorkspaceContext = WorkspaceContext(),
     content: @Composable BoxScope.() -> Unit,
@@ -191,14 +188,8 @@ internal fun CommercialAppShell(
                     items = navigationItems,
                     selectedDestination = navigator.destination,
                     collapsed = collapsed,
-                    collapseActionLabel =
-                        localizedStringResource(
-                            if (collapsed) Res.string.expand_navigation else Res.string.collapse_navigation,
-                            language,
-                        ),
                     settingsLabel = settingsLabel,
                     settingsSelected = navigator.destination == AppDestination.SETTINGS,
-                    onToggleCollapse = { onNavigationRailCollapsedChange(!collapsed) },
                     onDestinationSelected = navigator::open,
                     onOpenSettings = { navigator.open(AppDestination.SETTINGS) },
                 )
@@ -235,10 +226,8 @@ private fun StudioNavigationRail(
     items: List<StudioNavigationItem>,
     selectedDestination: AppDestination,
     collapsed: Boolean,
-    collapseActionLabel: String,
     settingsLabel: String,
     settingsSelected: Boolean,
-    onToggleCollapse: () -> Unit,
     onDestinationSelected: (AppDestination) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
@@ -279,54 +268,10 @@ private fun StudioNavigationRail(
             collapsed = collapsed,
             onClick = onOpenSettings,
         )
-        if (collapsed) {
-            TooltipArea(tooltip = { RailTooltip(collapseActionLabel) }, delayMillis = TOOLTIP_DELAY_MILLIS) {
-                RailCollapseToggle(collapsed, collapseActionLabel, onToggleCollapse)
-            }
-        } else {
-            RailCollapseToggle(collapsed, collapseActionLabel, onToggleCollapse)
-        }
     }
 }
 
 private const val TOOLTIP_DELAY_MILLIS = 400
-
-@Composable
-private fun RailCollapseToggle(
-    collapsed: Boolean,
-    collapseActionLabel: String,
-    onToggleCollapse: () -> Unit,
-) {
-    val colors = LocalViewerColors.current
-    TextButton(
-        modifier = Modifier.fillMaxWidth().semantics { contentDescription = collapseActionLabel },
-        onClick = onToggleCollapse,
-        contentPadding =
-            PaddingValues(
-                horizontal = if (collapsed) 0.dp else StudioTokens.navigationItemHorizontalPadding,
-            ),
-    ) {
-        // Shares the entry geometry so the collapse icon sits on the same vertical axis as the
-        // navigation icons in both states.
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement =
-                if (collapsed) {
-                    Arrangement.Center
-                } else {
-                    Arrangement.spacedBy(StudioTokens.navigationIconGap)
-                },
-        ) {
-            Icon(
-                painter = painterResource(navigationRailToggleIcon(collapsed)),
-                contentDescription = collapseActionLabel,
-                modifier = Modifier.size(StudioTokens.navigationIconSize),
-                tint = colors.secondaryText,
-            )
-        }
-    }
-}
 
 /**
  * One rail row shared by destinations and the settings action, so every entry keeps the same icon

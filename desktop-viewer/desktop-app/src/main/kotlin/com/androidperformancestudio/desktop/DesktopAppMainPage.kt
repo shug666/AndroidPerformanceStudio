@@ -6,6 +6,7 @@ import com.androidperformancestudio.ui.ViewerTheme
 import com.androidperformancestudio.ui.WindowMenuBarHost
 import com.androidperformancestudio.ui.rememberViewerThemeContext
 import com.androidperformancestudio.ui.localizedStringResource
+import com.androidperformancestudio.ui.viewerColors
 import com.androidperformancestudio.desktop_app.generated.resources.Res
 import com.androidperformancestudio.desktop_app.generated.resources.*
 
@@ -13,6 +14,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.Text
@@ -105,6 +107,12 @@ fun FrameWindowScope.DesktopAppMainPage(
         settingsPage = page
         navigator.open(AppDestination.SETTINGS)
     }
+    val openTraceFile: () -> Unit = {
+        chooseHomeArtifact()?.let { navigator.openPerfettoTrace(it) }
+    }
+    val analyzeHprof: () -> Unit = {
+        chooseHomeArtifact()?.let { navigator.openMemoryProfiler(it) }
+    }
     val language = applicationSettings.language.resolve(Locale.getDefault())
     val darkTheme = applicationSettings.theme.resolveDark(isSystemInDarkTheme())
     val simpleperfSettings =
@@ -129,6 +137,18 @@ fun FrameWindowScope.DesktopAppMainPage(
         preloadedMenuKey = navigator.destination,
         preloadedMenuTitles = preloadedMenuTitle?.let(::listOf) ?: emptyList(),
         onMenuBarReady = { menuReadyDestination = navigator.destination },
+        // Pages without a feature menu would otherwise leave the native bar with zero menus, which
+        // reads as a missing menu bar on macOS and flashes on every visit.
+        fallbackMenu = {
+            Menu(localizedStringResource(Res.string.native_file_menu, language)) {
+                Item(localizedStringResource(Res.string.open_trace_file, language)) { openTraceFile() }
+                Item(localizedStringResource(Res.string.analyze_hprof, language)) { analyzeHprof() }
+                Separator()
+                Item(localizedStringResource(Res.string.settings, language)) {
+                    openSettings(SettingsPage.GENERAL)
+                }
+            }
+        },
     )
 
     LaunchedEffect(settingsRequest?.requestId) {
@@ -156,369 +176,376 @@ fun FrameWindowScope.DesktopAppMainPage(
         }
     }
 
-    ViewerTheme(
-        darkTheme = darkTheme,
-        displayScale = applicationSettings.displayScale.multiplier,
-        accentColor = applicationSettings.themeColor.color,
-    ) {
-        val viewerThemeContext = rememberViewerThemeContext()
-        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 32.dp) {
-            CommercialAppShell(
-                navigator = navigator,
-                language = language,
-                navigationRailCollapsed = applicationSettings.navigationRailCollapsed,
-                onNavigationRailCollapsedChange = { collapsed ->
-                    updateApplicationSettings(
-                        applicationSettings.copy(navigationRailCollapsed = collapsed),
-                    )
-                },
+    val windowColors =
+        viewerColors(
+            darkTheme = darkTheme,
+            accentColor = applicationSettings.themeColor.color,
+        )
+    Column(modifier = Modifier.fillMaxSize()) {
+        MacOsTitleBar(
+            title = windowTitle?.value ?: APP_DISPLAY_NAME,
+            background = windowColors.canvasBackground,
+            // The title text inverts against its own strip so it stays legible in either theme.
+            contentColor = windowColors.primaryText,
+            dividerColor = windowColors.border,
+        )
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            ViewerTheme(
+                darkTheme = darkTheme,
+                displayScale = applicationSettings.displayScale.multiplier,
+                accentColor = applicationSettings.themeColor.color,
             ) {
-                navigator.retainedDestinations.forEach { destination ->
-                    key(destination) {
-                        val active = destination == navigator.destination
-                        CompositionLocalProvider(LocalWindowMenuBarActive provides active) {
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .fillMaxSize()
-                                        .zIndex(if (active) 1f else 0f)
-                                        .alpha(if (active) 1f else 0f)
-                                        .blockPointerInputWhenInactive(active)
-                                        .blockKeyboardInputWhenInactive(active)
-                                        .then(if (active) Modifier else Modifier.clearAndSetSemantics {}),
-                            ) {
-                when (destination) {
-                    AppDestination.HOME ->
-                        AppHomePage(
-                            language = language,
-                            onOpenSourceWorkspaces = { navigator.open(AppDestination.SOURCE_WORKSPACES) },
-                            onOpenLayoutInspector = { navigator.open(AppDestination.LAYOUT_INSPECTOR) },
-                            onOpenSimpleperf = { navigator.open(AppDestination.SIMPLEPERF) },
-                            onOpenPerfetto = { navigator.open(AppDestination.PERFETTO) },
-                            onOpenMemoryProfiler = { navigator.open(AppDestination.MEMORY_PROFILER) },
-                            onOpenFrameProfiler = { navigator.open(AppDestination.FRAME_PROFILER) },
-                            onOpenStartupProfiler = { navigator.open(AppDestination.STARTUP_PROFILER) },
-                            onOpenBatteryProfiler = { navigator.open(AppDestination.BATTERY_PROFILER) },
-                            onOpenNetworkProfiler = { navigator.open(AppDestination.NETWORK_PROFILER) },
-                            onOpenGpuInspector = { navigator.open(AppDestination.GPU_INSPECTOR) },
-                            onOpenBenchmarkRegression = { navigator.open(AppDestination.BENCHMARK_REGRESSION) },
-                            onOpenRecentArtifact = { item ->
-                                when (item.feature) {
-                                    com.androidperformancestudio.desktop.dashboard.StudioFeature.LAYOUT ->
-                                        navigator.openLayoutArchive(item.artifactPath)
-                                    com.androidperformancestudio.desktop.dashboard.StudioFeature.CPU ->
-                                        navigator.openSimpleperfSession(item.artifactPath)
-                                    com.androidperformancestudio.desktop.dashboard.StudioFeature.TRACE ->
-                                        navigator.openPerfettoTrace(item.artifactPath)
-                                    com.androidperformancestudio.desktop.dashboard.StudioFeature.MEMORY ->
-                                        navigator.openMemoryProfiler(item.artifactPath)
-                                }
-                            },
-                            onOpenTraceFile = {
-                                chooseHomeArtifact()?.let { navigator.openPerfettoTrace(it) }
-                            },
-                            onAnalyzeHprof = {
-                                chooseHomeArtifact()?.let { navigator.openMemoryProfiler(it) }
-                            },
-                            androidSdkPath = applicationSettings.androidSdkPath,
-                            active = active,
-                        )
-                    AppDestination.SOURCE_WORKSPACES ->
-                        SourceWorkspacesPage(
-                            language = language,
-                            runtime = sourceWorkspaceRuntime,
-                            initialLocation = navigator.sourceLocation,
-                            onNavigateHome = { navigator.open(AppDestination.HOME) },
-                            onOpenAiSettings = { openSettings(SettingsPage.AI) },
-                        )
-                    AppDestination.LAYOUT_INSPECTOR ->
-                        LayoutInspectorMainPage(
-                            commonLanguagePreference = applicationSettings.language.storageValue,
-                            settingsRevision = layoutInspectorSettingsRevision,
-                            onNavigateHome = { navigator.open(AppDestination.HOME) },
-                            onOpenUnifiedSettings = {
-                                openSettings(SettingsPage.LAYOUT_INSPECTOR)
-                            },
-                            onOpenMemoryProfiler = { className ->
-                                memoryHighlightClassName = className
-                                navigator.open(AppDestination.MEMORY_PROFILER)
-                            },
-                            correlationHint = navigator.inspectorCorrelationHint,
-                            initialArchiveFile = navigator.layoutArchiveRequest?.path,
-                            initialArchiveRequestId = navigator.layoutArchiveRequest?.requestId ?: 0L,
-                            aiAnalysisClient = remember(sourceWorkspaceRuntime) {
-                                SourceAwareLayoutAiAnalysisClient(sourceWorkspaceRuntime)
-                            },
-                            onOpenSourceCandidate = { candidateId, archived ->
-                                val current = sourceWorkspaceRuntime.candidate(candidateId)
-                                    ?.takeIf { it.confidence != ResolutionConfidence.WEAK }
-                                current?.location?.let(navigator::openSource)
-                                    ?: run {
-                                        archivedSourceToRebind = archived?.takeIf { it.resolutionConfidence != "WEAK" }
-                                    }
-                            },
-                            onCanOpenSourceCandidate = { candidateId ->
-                                sourceWorkspaceRuntime.candidate(candidateId)?.confidence
-                                    ?.let { it != ResolutionConfidence.WEAK } == true
-                            },
-                            onCanOpenSourceCandidateDirectly = { candidateId ->
-                                sourceWorkspaceRuntime.candidate(candidateId)?.confidence ==
-                                    com.androidperformancestudio.source.ResolutionConfidence.EXACT
-                            },
-                            onOpenComposeSource = { fileName, packageHash, line ->
-                                coroutineScope.launch {
-                                    val candidates = sourceWorkspaceRuntime.resolveComposeSources(fileName, packageHash, line)
-                                    if (candidates.size == 1 && candidates.single().confidence == ResolutionConfidence.EXACT) {
-                                        navigator.openSource(candidates.single().location)
-                                    } else {
-                                        composeSourceCandidates = candidates
-                                    }
-                                }
-                            },
-                        )
-                    AppDestination.SIMPLEPERF ->
-                        SimpleperfMainPage(
-                            window = window,
-                            settings = simpleperfSettings,
-                            androidSdkPath = applicationSettings.androidSdkPath?.let { path -> runCatching { java.nio.file.Path.of(path) }.getOrNull() },
-                            initialSessionFile = navigator.simpleperfSessionRequest?.path,
-                            initialSessionRequestId = navigator.simpleperfSessionRequest?.requestId ?: 0L,
-                            onSettingsChanged = updateSimpleperfPreferences,
-                            onNavigateHome = { navigator.open(AppDestination.HOME) },
-                            onOpenPreferences = { section ->
-                                simpleperfSettingsSection = section
-                                openSettings(SettingsPage.SIMPLEPERF)
-                            },
-                            onCaptureSettingsContextChanged = { simpleperfCaptureSettingsContext = it },
-                            onOpenUserGuide = {
-                                coroutineScope.launch(Dispatchers.IO) {
-                                    runCatching { userDocumentationLauncher.open(language) }
-                                }
-                            },
-                            aiAnalysisClient = null,
-                            onOpenSourceCandidate = { candidateId ->
-                                sourceWorkspaceRuntime.candidate(candidateId)
-                                    ?.takeIf { it.confidence != ResolutionConfidence.WEAK }
-                                    ?.let { candidate ->
-                                        navigator.openSource(candidate.location)
-                                    }
-                            },
-                        )
-                    AppDestination.PERFETTO ->
-                        PerfettoMainPage(
-                            language = language,
-                            isActive = active,
-                            androidSdkPath = applicationSettings.androidSdkPath?.let { path ->
-                                runCatching { java.nio.file.Path.of(path) }.getOrNull()
-                            },
-                            onNavigateHome = { navigator.open(AppDestination.HOME) },
-                            initialTraceFile = navigator.perfettoTraceFile,
-                            initialTraceRequestId = navigator.perfettoTraceRequestId,
-                            initialTraceNotice = navigator.perfettoTraceNotice,
-                            initialTraceTimestampNanos = navigator.perfettoTimestampNanos,
-                            onOpenUserGuide = {
-                                coroutineScope.launch(Dispatchers.IO) {
-                                    runCatching { userDocumentationLauncher.open(language) }
-                                }
-                            },
-                        )
-                    AppDestination.MEMORY_PROFILER ->
-                        MemoryProfilerMainPage(
-                            language = language,
-                            highlightClassName = memoryHighlightClassName,
-                            initialImportFile = navigator.memoryImportFile,
-                            initialImportRequestId = navigator.memoryImportRequestId,
-                            initialImportIsJavaHeap = navigator.memoryImportIsJavaHeap,
-                            onBack = { navigator.open(AppDestination.HOME) },
-                        )
-                    AppDestination.FRAME_PROFILER ->
-                        FrameProfilerMainPage(
-                            language = language,
-                            onBack = { navigator.open(AppDestination.HOME) },
-                            onOpenLayoutInspector = { request ->
-                                val activity =
-                                    request.activityName
-                                        ?.substringAfterLast('.')
-                                        ?.let { " · $it" }
-                                        .orEmpty()
-                                val message =
-                                    localizedStringResource(Res.string.layout_correlation_from_frame, language, request.frameId, request.packageName, activity)
-                                navigator.openLayoutInspector(
-                                    InspectorCorrelationHint(
-                                        deviceSerial = request.deviceSerial,
-                                        targetPackageName = request.packageName,
-                                        message = message,
-                                        correlationNotice =
-                                            localizedStringResource(Res.string.correlation_only_no_view_causality_is_inferred, language),
-                                        foregroundMismatchPrefix =
-                                            localizedStringResource(Res.string.foreground_package_differs, language),
-                                    ),
-                                )
-                            },
-                            onOpenPerfetto = { request ->
-                                val correlation =
-                                    request.frameTimelineVsyncId?.let { "FrameTimeline VSync ID $it" }
-                                        ?: request.intendedVsyncNs?.let { "intended VSync $it ns" }
-                                        ?: "frame ${request.frameId ?: "—"}"
-                                navigator.openPerfettoTrace(
-                                    request.traceFile,
-                                    localizedStringResource(Res.string.frame_perfetto_correlation, language, correlation),
-                                )
-                            },
-                        )
-                    AppDestination.STARTUP_PROFILER ->
-                        StartupProfilerMainPage(
-                            language = language,
-                            onBack = { navigator.open(AppDestination.HOME) },
-                            onOpenTrace = { path ->
-                                navigator.openPerfettoTrace(
-                                    path,
-                                    localizedStringResource(
-                                        Res.string.opened_from_tool_for_correlation_only,
-                                        language,
-                                        localizedStringResource(Res.string.startup_profiler, language),
-                                    ),
-                                )
-                            },
-                        )
-                    AppDestination.BATTERY_PROFILER ->
-                        BatteryProfilerMainPage(
-                            language = language,
-                            onBack = { navigator.open(AppDestination.HOME) },
-                        )
-                    AppDestination.NETWORK_PROFILER ->
-                        NetworkProfilerMainPage(
-                            language = language,
-                            onBack = { navigator.open(AppDestination.HOME) },
-                        )
-                    AppDestination.GPU_INSPECTOR ->
-                        GpuIntegrationMainPage(
-                            language = language,
-                            onBack = { navigator.open(AppDestination.HOME) },
-                            onOpenTrace = { path ->
-                                navigator.openPerfettoTrace(
-                                    path,
-                                    localizedStringResource(
-                                        Res.string.opened_from_tool_for_correlation_only,
-                                        language,
-                                        localizedStringResource(Res.string.gpu_inspector, language),
-                                    ),
-                                )
-                            },
-                        )
-                    AppDestination.BENCHMARK_REGRESSION ->
-                        BenchmarkRegressionMainPage(
-                            language = language,
-                            onBack = { navigator.open(AppDestination.HOME) },
-                            onOpenTrace = { path ->
-                                navigator.openPerfettoTrace(
-                                    path,
-                                    localizedStringResource(
-                                        Res.string.opened_from_tool_for_correlation_only,
-                                        language,
-                                        localizedStringResource(Res.string.benchmark_regression, language),
-                                    ),
-                                )
-                            },
-                        )
-                    AppDestination.METHOD_RECORDING ->
-                        MethodRecordingMainPage(
-                            language = language,
-                            androidSdkPath = applicationSettings.androidSdkPath?.let { path -> runCatching { java.nio.file.Path.of(path) }.getOrNull() },
-                            initialTraceFile = navigator.methodRecordingTraceFile,
-                            onBack = { navigator.open(AppDestination.HOME) },
-                        )
-                    AppDestination.SETTINGS ->
-                        DesktopAppSettingsPage(
-                            selectedPage = settingsPage,
-                            applicationSettings = applicationSettings,
-                            simpleperfSettings = simpleperfSettings,
-                            simpleperfCaptureSettingsContext = simpleperfCaptureSettingsContext,
-                            simpleperfInitialSection = simpleperfSettingsSection,
-                            viewerThemeContext = viewerThemeContext,
-                            language = language,
-                            simpleperfLocale = if (language == UiLanguage.SIMPLIFIED_CHINESE) java.util.Locale.SIMPLIFIED_CHINESE else java.util.Locale.ENGLISH,
-                            sourceWorkspaceRuntime = sourceWorkspaceRuntime,
-                            onPageSelected = { settingsPage = it },
-                            onApplicationSettingsChanged = updateApplicationSettings,
-                            onSimpleperfSettingsChanged = updateSimpleperfPreferences,
-                            onLayoutInspectorSettingsChanged = { layoutInspectorSettingsRevision += 1 },
-                            onOpenUserGuide = {
-                                coroutineScope.launch(Dispatchers.IO) {
-                                    runCatching { userDocumentationLauncher.open(language) }
-                                }
-                            },
-                            persistenceErrorPage = settingsPersistenceErrorPage,
-                        )
-                }
-                        }
-                        }
-                    }
-                }
-                if (composeSourceCandidates.isNotEmpty()) {
-                    AlertDialog(
-                        onDismissRequest = { composeSourceCandidates = emptyList() },
-                        title = { Text(localizedStringResource(Res.string.source_select_candidate, language)) },
-                        text = {
-                            Column {
-                                composeSourceCandidates.forEach { candidate ->
-                                    TextButton(
-                                        onClick = {
-                                            composeSourceCandidates = emptyList()
-                                            navigator.openSource(candidate.location)
-                                        },
+                val viewerThemeContext = rememberViewerThemeContext()
+                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 32.dp) {
+                    CommercialAppShell(
+                        navigator = navigator,
+                        language = language,
+                        navigationRailCollapsed = applicationSettings.navigationRailCollapsed,
+                    ) {
+                        navigator.retainedDestinations.forEach { destination ->
+                            key(destination) {
+                                val active = destination == navigator.destination
+                                CompositionLocalProvider(LocalWindowMenuBarActive provides active) {
+                                    Box(
+                                        modifier =
+                                            Modifier
+                                                .fillMaxSize()
+                                                .zIndex(if (active) 1f else 0f)
+                                                .alpha(if (active) 1f else 0f)
+                                                .blockPointerInputWhenInactive(active)
+                                                .blockKeyboardInputWhenInactive(active)
+                                                .then(if (active) Modifier else Modifier.clearAndSetSemantics {}),
                                     ) {
-                                        Text(
-                                            localizedStringResource(
-                                                Res.string.source_candidate_label,
-                                                language,
-                                                candidate.location.relativePath,
-                                                candidate.location.range?.startLine ?: 1,
-                                                candidate.confidence.name,
+                        when (destination) {
+                            AppDestination.HOME ->
+                                AppHomePage(
+                                    language = language,
+                                    onOpenSourceWorkspaces = { navigator.open(AppDestination.SOURCE_WORKSPACES) },
+                                    onOpenLayoutInspector = { navigator.open(AppDestination.LAYOUT_INSPECTOR) },
+                                    onOpenSimpleperf = { navigator.open(AppDestination.SIMPLEPERF) },
+                                    onOpenPerfetto = { navigator.open(AppDestination.PERFETTO) },
+                                    onOpenMemoryProfiler = { navigator.open(AppDestination.MEMORY_PROFILER) },
+                                    onOpenFrameProfiler = { navigator.open(AppDestination.FRAME_PROFILER) },
+                                    onOpenStartupProfiler = { navigator.open(AppDestination.STARTUP_PROFILER) },
+                                    onOpenBatteryProfiler = { navigator.open(AppDestination.BATTERY_PROFILER) },
+                                    onOpenNetworkProfiler = { navigator.open(AppDestination.NETWORK_PROFILER) },
+                                    onOpenGpuInspector = { navigator.open(AppDestination.GPU_INSPECTOR) },
+                                    onOpenBenchmarkRegression = { navigator.open(AppDestination.BENCHMARK_REGRESSION) },
+                                    onOpenRecentArtifact = { item ->
+                                        when (item.feature) {
+                                            com.androidperformancestudio.desktop.dashboard.StudioFeature.LAYOUT ->
+                                                navigator.openLayoutArchive(item.artifactPath)
+                                            com.androidperformancestudio.desktop.dashboard.StudioFeature.CPU ->
+                                                navigator.openSimpleperfSession(item.artifactPath)
+                                            com.androidperformancestudio.desktop.dashboard.StudioFeature.TRACE ->
+                                                navigator.openPerfettoTrace(item.artifactPath)
+                                            com.androidperformancestudio.desktop.dashboard.StudioFeature.MEMORY ->
+                                                navigator.openMemoryProfiler(item.artifactPath)
+                                        }
+                                    },
+                                    onOpenTraceFile = openTraceFile,
+                                    onAnalyzeHprof = analyzeHprof,
+                                    androidSdkPath = applicationSettings.androidSdkPath,
+                                    active = active,
+                                )
+                            AppDestination.SOURCE_WORKSPACES ->
+                                SourceWorkspacesPage(
+                                    language = language,
+                                    runtime = sourceWorkspaceRuntime,
+                                    initialLocation = navigator.sourceLocation,
+                                    onNavigateHome = { navigator.open(AppDestination.HOME) },
+                                    onOpenAiSettings = { openSettings(SettingsPage.AI) },
+                                )
+                            AppDestination.LAYOUT_INSPECTOR ->
+                                LayoutInspectorMainPage(
+                                    commonLanguagePreference = applicationSettings.language.storageValue,
+                                    settingsRevision = layoutInspectorSettingsRevision,
+                                    onNavigateHome = { navigator.open(AppDestination.HOME) },
+                                    onOpenUnifiedSettings = {
+                                        openSettings(SettingsPage.LAYOUT_INSPECTOR)
+                                    },
+                                    onOpenMemoryProfiler = { className ->
+                                        memoryHighlightClassName = className
+                                        navigator.open(AppDestination.MEMORY_PROFILER)
+                                    },
+                                    correlationHint = navigator.inspectorCorrelationHint,
+                                    initialArchiveFile = navigator.layoutArchiveRequest?.path,
+                                    initialArchiveRequestId = navigator.layoutArchiveRequest?.requestId ?: 0L,
+                                    aiAnalysisClient = remember(sourceWorkspaceRuntime) {
+                                        SourceAwareLayoutAiAnalysisClient(sourceWorkspaceRuntime)
+                                    },
+                                    onOpenSourceCandidate = { candidateId, archived ->
+                                        val current = sourceWorkspaceRuntime.candidate(candidateId)
+                                            ?.takeIf { it.confidence != ResolutionConfidence.WEAK }
+                                        current?.location?.let(navigator::openSource)
+                                            ?: run {
+                                                archivedSourceToRebind = archived?.takeIf { it.resolutionConfidence != "WEAK" }
+                                            }
+                                    },
+                                    onCanOpenSourceCandidate = { candidateId ->
+                                        sourceWorkspaceRuntime.candidate(candidateId)?.confidence
+                                            ?.let { it != ResolutionConfidence.WEAK } == true
+                                    },
+                                    onCanOpenSourceCandidateDirectly = { candidateId ->
+                                        sourceWorkspaceRuntime.candidate(candidateId)?.confidence ==
+                                            com.androidperformancestudio.source.ResolutionConfidence.EXACT
+                                    },
+                                    onOpenComposeSource = { fileName, packageHash, line ->
+                                        coroutineScope.launch {
+                                            val candidates = sourceWorkspaceRuntime.resolveComposeSources(fileName, packageHash, line)
+                                            if (candidates.size == 1 && candidates.single().confidence == ResolutionConfidence.EXACT) {
+                                                navigator.openSource(candidates.single().location)
+                                            } else {
+                                                composeSourceCandidates = candidates
+                                            }
+                                        }
+                                    },
+                                )
+                            AppDestination.SIMPLEPERF ->
+                                SimpleperfMainPage(
+                                    window = window,
+                                    settings = simpleperfSettings,
+                                    androidSdkPath = applicationSettings.androidSdkPath?.let { path -> runCatching { java.nio.file.Path.of(path) }.getOrNull() },
+                                    initialSessionFile = navigator.simpleperfSessionRequest?.path,
+                                    initialSessionRequestId = navigator.simpleperfSessionRequest?.requestId ?: 0L,
+                                    onSettingsChanged = updateSimpleperfPreferences,
+                                    onNavigateHome = { navigator.open(AppDestination.HOME) },
+                                    onOpenPreferences = { section ->
+                                        simpleperfSettingsSection = section
+                                        openSettings(SettingsPage.SIMPLEPERF)
+                                    },
+                                    onCaptureSettingsContextChanged = { simpleperfCaptureSettingsContext = it },
+                                    onOpenUserGuide = {
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            runCatching { userDocumentationLauncher.open(language) }
+                                        }
+                                    },
+                                    aiAnalysisClient = null,
+                                    onOpenSourceCandidate = { candidateId ->
+                                        sourceWorkspaceRuntime.candidate(candidateId)
+                                            ?.takeIf { it.confidence != ResolutionConfidence.WEAK }
+                                            ?.let { candidate ->
+                                                navigator.openSource(candidate.location)
+                                            }
+                                    },
+                                )
+                            AppDestination.PERFETTO ->
+                                PerfettoMainPage(
+                                    language = language,
+                                    isActive = active,
+                                    androidSdkPath = applicationSettings.androidSdkPath?.let { path ->
+                                        runCatching { java.nio.file.Path.of(path) }.getOrNull()
+                                    },
+                                    onNavigateHome = { navigator.open(AppDestination.HOME) },
+                                    initialTraceFile = navigator.perfettoTraceFile,
+                                    initialTraceRequestId = navigator.perfettoTraceRequestId,
+                                    initialTraceNotice = navigator.perfettoTraceNotice,
+                                    initialTraceTimestampNanos = navigator.perfettoTimestampNanos,
+                                    onOpenUserGuide = {
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            runCatching { userDocumentationLauncher.open(language) }
+                                        }
+                                    },
+                                )
+                            AppDestination.MEMORY_PROFILER ->
+                                MemoryProfilerMainPage(
+                                    language = language,
+                                    highlightClassName = memoryHighlightClassName,
+                                    initialImportFile = navigator.memoryImportFile,
+                                    initialImportRequestId = navigator.memoryImportRequestId,
+                                    initialImportIsJavaHeap = navigator.memoryImportIsJavaHeap,
+                                    onBack = { navigator.open(AppDestination.HOME) },
+                                )
+                            AppDestination.FRAME_PROFILER ->
+                                FrameProfilerMainPage(
+                                    language = language,
+                                    onBack = { navigator.open(AppDestination.HOME) },
+                                    onOpenLayoutInspector = { request ->
+                                        val activity =
+                                            request.activityName
+                                                ?.substringAfterLast('.')
+                                                ?.let { " · $it" }
+                                                .orEmpty()
+                                        val message =
+                                            localizedStringResource(Res.string.layout_correlation_from_frame, language, request.frameId, request.packageName, activity)
+                                        navigator.openLayoutInspector(
+                                            InspectorCorrelationHint(
+                                                deviceSerial = request.deviceSerial,
+                                                targetPackageName = request.packageName,
+                                                message = message,
+                                                correlationNotice =
+                                                    localizedStringResource(Res.string.correlation_only_no_view_causality_is_inferred, language),
+                                                foregroundMismatchPrefix =
+                                                    localizedStringResource(Res.string.foreground_package_differs, language),
                                             ),
                                         )
+                                    },
+                                    onOpenPerfetto = { request ->
+                                        val correlation =
+                                            request.frameTimelineVsyncId?.let { "FrameTimeline VSync ID $it" }
+                                                ?: request.intendedVsyncNs?.let { "intended VSync $it ns" }
+                                                ?: "frame ${request.frameId ?: "—"}"
+                                        navigator.openPerfettoTrace(
+                                            request.traceFile,
+                                            localizedStringResource(Res.string.frame_perfetto_correlation, language, correlation),
+                                        )
+                                    },
+                                )
+                            AppDestination.STARTUP_PROFILER ->
+                                StartupProfilerMainPage(
+                                    language = language,
+                                    onBack = { navigator.open(AppDestination.HOME) },
+                                    onOpenTrace = { path ->
+                                        navigator.openPerfettoTrace(
+                                            path,
+                                            localizedStringResource(
+                                                Res.string.opened_from_tool_for_correlation_only,
+                                                language,
+                                                localizedStringResource(Res.string.startup_profiler, language),
+                                            ),
+                                        )
+                                    },
+                                )
+                            AppDestination.BATTERY_PROFILER ->
+                                BatteryProfilerMainPage(
+                                    language = language,
+                                    onBack = { navigator.open(AppDestination.HOME) },
+                                )
+                            AppDestination.NETWORK_PROFILER ->
+                                NetworkProfilerMainPage(
+                                    language = language,
+                                    onBack = { navigator.open(AppDestination.HOME) },
+                                )
+                            AppDestination.GPU_INSPECTOR ->
+                                GpuIntegrationMainPage(
+                                    language = language,
+                                    onBack = { navigator.open(AppDestination.HOME) },
+                                    onOpenTrace = { path ->
+                                        navigator.openPerfettoTrace(
+                                            path,
+                                            localizedStringResource(
+                                                Res.string.opened_from_tool_for_correlation_only,
+                                                language,
+                                                localizedStringResource(Res.string.gpu_inspector, language),
+                                            ),
+                                        )
+                                    },
+                                )
+                            AppDestination.BENCHMARK_REGRESSION ->
+                                BenchmarkRegressionMainPage(
+                                    language = language,
+                                    onBack = { navigator.open(AppDestination.HOME) },
+                                    onOpenTrace = { path ->
+                                        navigator.openPerfettoTrace(
+                                            path,
+                                            localizedStringResource(
+                                                Res.string.opened_from_tool_for_correlation_only,
+                                                language,
+                                                localizedStringResource(Res.string.benchmark_regression, language),
+                                            ),
+                                        )
+                                    },
+                                )
+                            AppDestination.METHOD_RECORDING ->
+                                MethodRecordingMainPage(
+                                    language = language,
+                                    androidSdkPath = applicationSettings.androidSdkPath?.let { path -> runCatching { java.nio.file.Path.of(path) }.getOrNull() },
+                                    initialTraceFile = navigator.methodRecordingTraceFile,
+                                    onBack = { navigator.open(AppDestination.HOME) },
+                                )
+                            AppDestination.SETTINGS ->
+                                DesktopAppSettingsPage(
+                                    selectedPage = settingsPage,
+                                    applicationSettings = applicationSettings,
+                                    simpleperfSettings = simpleperfSettings,
+                                    simpleperfCaptureSettingsContext = simpleperfCaptureSettingsContext,
+                                    simpleperfInitialSection = simpleperfSettingsSection,
+                                    viewerThemeContext = viewerThemeContext,
+                                    language = language,
+                                    simpleperfLocale = if (language == UiLanguage.SIMPLIFIED_CHINESE) java.util.Locale.SIMPLIFIED_CHINESE else java.util.Locale.ENGLISH,
+                                    sourceWorkspaceRuntime = sourceWorkspaceRuntime,
+                                    onPageSelected = { settingsPage = it },
+                                    onApplicationSettingsChanged = updateApplicationSettings,
+                                    onSimpleperfSettingsChanged = updateSimpleperfPreferences,
+                                    onLayoutInspectorSettingsChanged = { layoutInspectorSettingsRevision += 1 },
+                                    onOpenUserGuide = {
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            runCatching { userDocumentationLauncher.open(language) }
+                                        }
+                                    },
+                                    persistenceErrorPage = settingsPersistenceErrorPage,
+                                )
+                        }
+                                }
+                                }
+                            }
+                        }
+                        if (composeSourceCandidates.isNotEmpty()) {
+                            AlertDialog(
+                                onDismissRequest = { composeSourceCandidates = emptyList() },
+                                title = { Text(localizedStringResource(Res.string.source_select_candidate, language)) },
+                                text = {
+                                    Column {
+                                        composeSourceCandidates.forEach { candidate ->
+                                            TextButton(
+                                                onClick = {
+                                                    composeSourceCandidates = emptyList()
+                                                    navigator.openSource(candidate.location)
+                                                },
+                                            ) {
+                                                Text(
+                                                    localizedStringResource(
+                                                        Res.string.source_candidate_label,
+                                                        language,
+                                                        candidate.location.relativePath,
+                                                        candidate.location.range?.startLine ?: 1,
+                                                        candidate.confidence.name,
+                                                    ),
+                                                )
+                                            }
+                                        }
                                     }
-                                }
-                            }
-                        },
-                        confirmButton = {},
-                        dismissButton = {
-                            TextButton(onClick = { composeSourceCandidates = emptyList() }) {
-                                Text(localizedStringResource(Res.string.source_cancel, language))
-                            }
-                        },
-                    )
-                }
-                archivedSourceToRebind?.let { reference ->
-                    val workspaces = sourceWorkspaceRuntime.rebindableLocalWorkspaces(reference)
-                    AlertDialog(
-                        onDismissRequest = { archivedSourceToRebind = null },
-                        title = { Text(localizedStringResource(Res.string.source_rebind_archive, language)) },
-                        text = {
-                            Column {
-                                if (workspaces.isEmpty()) {
-                                    Text(localizedStringResource(Res.string.source_no_rebind_match, language))
-                                }
-                                workspaces.forEach { workspace ->
-                                    TextButton(
-                                        onClick = {
-                                            val location = sourceWorkspaceRuntime.rebindArchivedSource(reference, workspace.id)
-                                            archivedSourceToRebind = null
-                                            location?.let(navigator::openSource)
-                                        },
-                                    ) {
-                                        Text(workspace.displayName)
+                                },
+                                confirmButton = {},
+                                dismissButton = {
+                                    TextButton(onClick = { composeSourceCandidates = emptyList() }) {
+                                        Text(localizedStringResource(Res.string.source_cancel, language))
                                     }
-                                }
-                            }
-                        },
-                        confirmButton = {},
-                        dismissButton = {
-                            TextButton(onClick = { archivedSourceToRebind = null }) {
-                                Text(localizedStringResource(Res.string.source_cancel, language))
-                            }
-                        },
-                    )
+                                },
+                            )
+                        }
+                        archivedSourceToRebind?.let { reference ->
+                            val workspaces = sourceWorkspaceRuntime.rebindableLocalWorkspaces(reference)
+                            AlertDialog(
+                                onDismissRequest = { archivedSourceToRebind = null },
+                                title = { Text(localizedStringResource(Res.string.source_rebind_archive, language)) },
+                                text = {
+                                    Column {
+                                        if (workspaces.isEmpty()) {
+                                            Text(localizedStringResource(Res.string.source_no_rebind_match, language))
+                                        }
+                                        workspaces.forEach { workspace ->
+                                            TextButton(
+                                                onClick = {
+                                                    val location = sourceWorkspaceRuntime.rebindArchivedSource(reference, workspace.id)
+                                                    archivedSourceToRebind = null
+                                                    location?.let(navigator::openSource)
+                                                },
+                                            ) {
+                                                Text(workspace.displayName)
+                                            }
+                                        }
+                                    }
+                                },
+                                confirmButton = {},
+                                dismissButton = {
+                                    TextButton(onClick = { archivedSourceToRebind = null }) {
+                                        Text(localizedStringResource(Res.string.source_cancel, language))
+                                    }
+                                },
+                            )
+                        }
+                    }
                 }
             }
         }

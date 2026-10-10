@@ -79,6 +79,35 @@ class ApplicationSettingsDialogTest {
     }
 
     @Test
+    fun `settings sub-navigation rows stay compact`() {
+        // Rows are not painted across the whole sidebar while unselected, and the label is not
+        // indented by an icon slot that is never filled.
+        assertTrue(unifiedDialog.contains("UNIFIED_SETTINGS_SIDEBAR_WIDTH_DP = 176"))
+        assertTrue(unifiedDialog.contains("else Color.Transparent"))
+        assertFalse(unifiedDialog.contains("Spacer(Modifier.width(16.dp))"))
+        assertFalse(unifiedDialog.contains("settingsLabel"))
+    }
+
+    @Test
+    fun `general settings can show or hide the sidebar titles`() {
+        // Checked expands the rail (labels visible); unchecked is the collapsed icon-only rail.
+        assertTrue(unifiedDialog.contains("Res.string.show_sidebar_titles"))
+        assertTrue(unifiedDialog.contains("checked = !settings.navigationRailCollapsed"))
+        assertTrue(unifiedDialog.contains("navigationRailCollapsed = !showSidebarTitles"))
+        assertTrue(unifiedDialog.contains("MacOSSwitch(checked = checked, onCheckedChange = onCheckedChange)"))
+
+        // The label is styled as a section label: accent colour, flush with the "Theme colour"
+        // heading, while the switch keeps the row's horizontal inset.
+        val toggleRow =
+            unifiedDialog
+                .substringAfter("private fun SettingsToggleRow(")
+                .substringBefore("private fun GeneralSettingsContent(")
+        assertTrue(toggleRow.contains("color = colors.accent"))
+        assertTrue(toggleRow.contains("padding(end = 8.dp)"))
+        assertFalse(toggleRow.contains("padding(horizontal = 8.dp)"))
+    }
+
+    @Test
     fun `configuration page owns the Android SDK path setting`() {
         assertTrue(SettingsPage.entries.indexOf(SettingsPage.CONFIGURATION) > SettingsPage.entries.indexOf(SettingsPage.GENERAL))
         assertTrue(unifiedDialog.contains("SettingsPage.CONFIGURATION ->"))

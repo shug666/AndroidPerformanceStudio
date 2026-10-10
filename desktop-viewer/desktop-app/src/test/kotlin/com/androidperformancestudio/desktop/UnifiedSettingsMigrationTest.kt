@@ -15,7 +15,7 @@ class UnifiedSettingsMigrationTest {
         assertFalse(page.contains("DialogWindow("))
         assertFalse(page.contains("rememberDialogState("))
         assertTrue(page.contains("Modifier.fillMaxSize()"))
-        assertTrue(page.contains("UNIFIED_SETTINGS_SIDEBAR_WIDTH_DP = 220"))
+        assertTrue(page.contains("UNIFIED_SETTINGS_SIDEBAR_WIDTH_DP = 176"))
         assertTrue(shell.contains("AppDestination.SETTINGS ->"))
         assertTrue(shell.contains("DesktopAppSettingsPage("))
         assertTrue(shell.contains("navigator.open(AppDestination.SETTINGS)"))
@@ -69,7 +69,7 @@ class UnifiedSettingsMigrationTest {
         assertFalse(dialog.contains("simpleperfExpanded"))
         assertFalse(dialog.contains("onSimpleperfSectionSelected"))
         assertTrue(dialog.contains("width(UNIFIED_SETTINGS_SIDEBAR_WIDTH_DP.dp)"))
-        assertTrue(dialog.contains("UNIFIED_SETTINGS_SIDEBAR_WIDTH_DP = 220"))
+        assertTrue(dialog.contains("UNIFIED_SETTINGS_SIDEBAR_WIDTH_DP = 176"))
         assertFalse(
             dialog.contains("import com.androidperformancestudio.presentation.SimpleperfSettingsContent"),
         )

@@ -56,15 +56,13 @@ class CommercialAppShellTest {
                 "PaddingValues(horizontal = if (collapsed) 0.dp else StudioTokens.navigationItemHorizontalPadding)",
             ),
         )
-        // Collapsed rows are centred, matching the collapse control.
+        // A single shared entry row centres its icon while the rail is collapsed.
         assertTrue(
             shell.contains(
                 "if (collapsed) {\n                    Arrangement.Center",
             ),
         )
-        assertTrue(shell.contains("painterResource(navigationRailToggleIcon(collapsed))"))
-        // The collapse control reuses the entry geometry, so its icon shares the navigation icon axis.
-        assertEquals(2, shell.split("Arrangement.Center").size - 1)
+        assertEquals(1, shell.split("Arrangement.Center").size - 1)
         assertFalse(shell.contains("item.label.take(1)"))
     }
 
@@ -100,7 +98,7 @@ class CommercialAppShellTest {
     }
 
     @Test
-    fun `navigation rail state is a persisted preference rather than local state`() {
+    fun `navigation rail expansion is a persisted preference controlled from general settings`() {
         val shell =
             Files.readString(
                 Path.of("src/main/kotlin/com/androidperformancestudio/desktop/shell/CommercialAppShell.kt"),
@@ -109,14 +107,23 @@ class CommercialAppShellTest {
             Files.readString(
                 Path.of("src/main/kotlin/com/androidperformancestudio/desktop/DesktopAppMainPage.kt"),
             )
+        val settings =
+            Files.readString(
+                Path.of("src/main/kotlin/com/androidperformancestudio/desktop/DesktopAppSettingsPage.kt"),
+            )
 
+        // The rail only renders the persisted state; the expand/collapse button is gone.
         assertTrue(shell.contains("navigationRailCollapsed: Boolean"))
-        assertTrue(shell.contains("onNavigationRailCollapsedChange: (Boolean) -> Unit"))
         assertTrue(shell.contains("resolvedNavigationRailCollapsed(maxWidth.value.toInt(), navigationRailCollapsed)"))
-        assertTrue(shell.contains("onNavigationRailCollapsedChange(!collapsed)"))
+        assertFalse(shell.contains("onNavigationRailCollapsedChange"))
+        assertFalse(shell.contains("RailCollapseToggle"))
         assertFalse(shell.contains("var userCollapsed"))
         assertTrue(main.contains("navigationRailCollapsed = applicationSettings.navigationRailCollapsed"))
-        assertTrue(main.contains("applicationSettings.copy(navigationRailCollapsed = collapsed)"))
+        assertFalse(main.contains("onNavigationRailCollapsedChange"))
+        // Settings -> General owns the switch: checked means "show sidebar titles" (expanded).
+        assertTrue(settings.contains("Res.string.show_sidebar_titles"))
+        assertTrue(settings.contains("checked = !settings.navigationRailCollapsed"))
+        assertTrue(settings.contains("navigationRailCollapsed = !showSidebarTitles"))
     }
 
     @Test
@@ -144,7 +151,6 @@ class CommercialAppShellTest {
 
         assertTrue(shell.contains("private fun RailTooltip(label: String)"))
         assertTrue(shell.contains("TooltipArea(tooltip = { RailTooltip(label) }"))
-        assertTrue(shell.contains("TooltipArea(tooltip = { RailTooltip(collapseActionLabel) }"))
         // Only the icon-only state needs the hover title.
         val entry = shell.substringAfter("private fun NavigationRailEntry(").substringBefore("private fun RailEntryButton(")
         assertTrue(entry.contains("if (collapsed) {"))

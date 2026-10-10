@@ -55,6 +55,7 @@ public fun FrameWindowScope.WindowMenuBarHost(
     preloadedMenuTitles: List<String> = emptyList(),
     preloadedMenuKey: Any? = preloadedMenuTitles,
     onMenuBarReady: () -> Unit = {},
+    fallbackMenu: (@Composable @MenuComposable MenuBarScope.() -> Unit)? = null,
 ) {
     // Published before any feature page composes so every page finds it in the same frame.
     val content =
@@ -67,7 +68,14 @@ public fun FrameWindowScope.WindowMenuBarHost(
     val currentOnReady = rememberUpdatedState(onMenuBarReady)
 
     MenuBar {
-        content.content?.invoke(this)
+        val pageContent = content.content
+        if (pageContent == null) {
+            // Never leave the native bar with zero menus: on macOS that reads as a missing menu bar
+            // and it flashes every time a page without a feature menu is visited.
+            fallbackMenu?.invoke(this)
+        } else {
+            pageContent.invoke(this)
+        }
     }
 
     SideEffect {
