@@ -29,47 +29,55 @@ import com.androidperformancestudio.ui_components.generated.resources.ic_nav_ben
 import com.androidperformancestudio.ui_components.generated.resources.ic_nav_method_recording
 import com.androidperformancestudio.ui_components.generated.resources.ic_nav_rail_collapse
 import com.androidperformancestudio.ui_components.generated.resources.ic_nav_rail_expand
+import com.androidperformancestudio.ui_components.generated.resources.ic_stat_device
+import com.androidperformancestudio.ui_components.generated.resources.ic_stat_history
+import com.androidperformancestudio.ui_components.generated.resources.ic_action_play
+import com.androidperformancestudio.ui_components.generated.resources.ic_action_import
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Renders the shell navigation vectors through the production painter path so a malformed SVG or a
- * missing resource fails here instead of showing a blank rail icon at runtime.
+ * Renders every bundled studio vector through the production painter path so a malformed SVG or a
+ * missing resource fails here instead of showing a blank icon at runtime.
  */
 @OptIn(ExperimentalTestApi::class)
-class StudioNavigationIconTest {
-    private val navigationIcons: List<Pair<String, DrawableResource>> =
+class StudioIconRenderingTest {
+    private val icons: List<Pair<String, DrawableResource>> =
         listOf(
-            "home" to Res.drawable.ic_nav_home,
-            "source_workspaces" to Res.drawable.ic_nav_source_workspaces,
-            "layout_inspector" to Res.drawable.ic_nav_layout_inspector,
-            "cpu_profiler" to Res.drawable.ic_nav_cpu_profiler,
-            "trace_analyzer" to Res.drawable.ic_nav_trace_analyzer,
-            "memory_profiler" to Res.drawable.ic_nav_memory_profiler,
-            "frame_profiler" to Res.drawable.ic_nav_frame_profiler,
-            "startup_profiler" to Res.drawable.ic_nav_startup_profiler,
-            "battery" to Res.drawable.ic_nav_battery,
-            "network" to Res.drawable.ic_nav_network,
-            "gpu_inspector" to Res.drawable.ic_nav_gpu_inspector,
-            "benchmark" to Res.drawable.ic_nav_benchmark,
-            "method_recording" to Res.drawable.ic_nav_method_recording,
-            "rail_collapse" to Res.drawable.ic_nav_rail_collapse,
-            "rail_expand" to Res.drawable.ic_nav_rail_expand,
+            "nav_home" to Res.drawable.ic_nav_home,
+            "nav_source_workspaces" to Res.drawable.ic_nav_source_workspaces,
+            "nav_layout_inspector" to Res.drawable.ic_nav_layout_inspector,
+            "nav_cpu_profiler" to Res.drawable.ic_nav_cpu_profiler,
+            "nav_trace_analyzer" to Res.drawable.ic_nav_trace_analyzer,
+            "nav_memory_profiler" to Res.drawable.ic_nav_memory_profiler,
+            "nav_frame_profiler" to Res.drawable.ic_nav_frame_profiler,
+            "nav_startup_profiler" to Res.drawable.ic_nav_startup_profiler,
+            "nav_battery" to Res.drawable.ic_nav_battery,
+            "nav_network" to Res.drawable.ic_nav_network,
+            "nav_gpu_inspector" to Res.drawable.ic_nav_gpu_inspector,
+            "nav_benchmark" to Res.drawable.ic_nav_benchmark,
+            "nav_method_recording" to Res.drawable.ic_nav_method_recording,
+            "nav_rail_collapse" to Res.drawable.ic_nav_rail_collapse,
+            "nav_rail_expand" to Res.drawable.ic_nav_rail_expand,
+            "stat_device" to Res.drawable.ic_stat_device,
+            "stat_history" to Res.drawable.ic_stat_history,
+            "action_play" to Res.drawable.ic_action_play,
+            "action_import" to Res.drawable.ic_action_import,
         )
 
     @Test
-    fun `every navigation vector decodes and paints visible pixels`() =
-        runDesktopComposeUiTest(width = 640, height = 120) {
+    fun `every bundled studio vector decodes and paints visible pixels`() =
+        runDesktopComposeUiTest(width = 720, height = 160) {
             setContent {
                 ViewerTheme(darkTheme = true) {
                     Row {
-                        navigationIcons.forEach { (name, resource) ->
+                        icons.forEach { (name, resource) ->
                             Icon(
                                 painter = painterResource(resource),
                                 contentDescription = null,
-                                modifier = Modifier.size(24.dp).testTag("nav-icon-$name"),
+                                modifier = Modifier.size(24.dp).testTag("studio-icon-$name"),
                                 tint = Color.Red,
                             )
                         }
@@ -77,8 +85,8 @@ class StudioNavigationIconTest {
                 }
             }
 
-            navigationIcons.forEach { (name, _) ->
-                val pixels = onNodeWithTag("nav-icon-$name").captureToImage().toPixelMap()
+            icons.forEach { (name, _) ->
+                val pixels = onNodeWithTag("studio-icon-$name").captureToImage().toPixelMap()
                 var tinted = 0
                 for (y in 0 until pixels.height) {
                     for (x in 0 until pixels.width) {
@@ -88,7 +96,7 @@ class StudioNavigationIconTest {
                         }
                     }
                 }
-                assertTrue(tinted > 0, "navigation icon '$name' painted no vector pixels")
+                assertTrue(tinted > 0, "studio icon '$name' painted no vector pixels")
             }
         }
 }

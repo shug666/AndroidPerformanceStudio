@@ -54,16 +54,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.desktop.AppDestination
 import com.androidperformancestudio.desktop.AppNavigator
+import com.androidperformancestudio.desktop.navigationLabelResource
 import com.androidperformancestudio.desktop.titleResource
 import com.androidperformancestudio.desktop_app.generated.resources.Res
-import com.androidperformancestudio.desktop_app.generated.resources.android_performance_studio
 import com.androidperformancestudio.desktop_app.generated.resources.command_palette
 import com.androidperformancestudio.desktop_app.generated.resources.collapse_navigation
 import com.androidperformancestudio.desktop_app.generated.resources.expand_navigation
 import com.androidperformancestudio.desktop_app.generated.resources.no_active_artifact
 import com.androidperformancestudio.desktop_app.generated.resources.no_matching_commands
 import com.androidperformancestudio.desktop_app.generated.resources.search_commands
-import com.androidperformancestudio.desktop_app.generated.resources.workspace_context_unavailable
 import com.androidperformancestudio.desktop_app.generated.resources.settings
 import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.UiLanguage
@@ -118,10 +117,8 @@ internal fun CommercialAppShell(
     }
     val colors = LocalViewerColors.current
     val destinationTitle = localizedStringResource(navigator.destination.titleResource, language)
-    val productName = localizedStringResource(Res.string.android_performance_studio, language)
     val commandPaletteLabel = localizedStringResource(Res.string.command_palette, language)
     val settingsLabel = localizedStringResource(Res.string.settings, language)
-    val unavailableContextLabel = localizedStringResource(Res.string.workspace_context_unavailable, language)
     val navigationItems =
         listOf(
             AppDestination.HOME,
@@ -138,7 +135,7 @@ internal fun CommercialAppShell(
         ).map {
             StudioNavigationItem(
                 destination = it,
-                label = localizedStringResource(it.titleResource, language),
+                label = localizedStringResource(it.navigationLabelResource, language),
                 icon = it.navigationIconResource,
             )
         }
@@ -148,7 +145,7 @@ internal fun CommercialAppShell(
                 .map {
                     StudioNavigationItem(
                         destination = it,
-                        label = localizedStringResource(it.titleResource, language),
+                        label = localizedStringResource(it.navigationLabelResource, language),
                         icon = it.navigationIconResource,
                     )
                 })
@@ -184,22 +181,6 @@ internal fun CommercialAppShell(
     ) {
         val collapsed = resolvedNavigationRailCollapsed(maxWidth.value.toInt(), userCollapsed)
         Column(modifier = Modifier.fillMaxSize().background(colors.canvasBackground)) {
-            StudioTopBar(
-                productName = productName,
-                destinationTitle = destinationTitle,
-                commandPaletteLabel = commandPaletteLabel,
-                settingsLabel = settingsLabel,
-                toggleNavigationLabel =
-                    localizedStringResource(
-                        if (collapsed) Res.string.expand_navigation else Res.string.collapse_navigation,
-                        language,
-                    ),
-                workspaceContext = workspaceContext,
-                unavailableContextLabel = unavailableContextLabel,
-                onToggleNavigation = { userCollapsed = !collapsed },
-                onOpenCommandPalette = { showCommandPalette = true },
-                onOpenSettings = onOpenSettings,
-            )
             Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 StudioNavigationRail(
                     items = navigationItems,
@@ -210,8 +191,10 @@ internal fun CommercialAppShell(
                             if (collapsed) Res.string.expand_navigation else Res.string.collapse_navigation,
                             language,
                         ),
+                    settingsLabel = settingsLabel,
                     onToggleCollapse = { userCollapsed = !collapsed },
                     onDestinationSelected = navigator::open,
+                    onOpenSettings = onOpenSettings,
                 )
                 Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                     content()
@@ -241,84 +224,15 @@ internal fun CommercialAppShell(
 }
 
 @Composable
-private fun StudioTopBar(
-    productName: String,
-    destinationTitle: String,
-    commandPaletteLabel: String,
-    settingsLabel: String,
-    toggleNavigationLabel: String,
-    workspaceContext: WorkspaceContext,
-    unavailableContextLabel: String,
-    onToggleNavigation: () -> Unit,
-    onOpenCommandPalette: () -> Unit,
-    onOpenSettings: () -> Unit,
-) {
-    val colors = LocalViewerColors.current
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(StudioTokens.topBarHeight)
-                .background(colors.toolbar)
-                .border(width = StudioTokens.borderWidth, color = colors.border)
-                .padding(horizontal = StudioTokens.contentPadding),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
-    ) {
-        TextButton(
-            modifier = Modifier.semantics { contentDescription = toggleNavigationLabel },
-            onClick = onToggleNavigation,
-        ) {
-            Text(text = "☰", color = colors.primaryText, style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
-        }
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(
-                text = productName,
-                color = colors.primaryText,
-                fontSize = ViewerTypography.body.fontSize,
-                lineHeight = ViewerTypography.body.lineHeight,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = destinationTitle,
-                color = colors.secondaryText,
-                fontSize = ViewerTypography.secondary.fontSize,
-                lineHeight = ViewerTypography.secondary.lineHeight,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        workspaceContext.contextLabels().forEach { label ->
-            StudioStatusChip(label = label, tone = StudioStatusTone.NEUTRAL)
-        }
-        workspaceContext.artifactLabel?.let { artifact ->
-            StudioStatusChip(label = artifact, tone = StudioStatusTone.INFO)
-        } ?: StudioStatusChip(label = unavailableContextLabel, tone = StudioStatusTone.NEUTRAL)
-        TextButton(onClick = onOpenCommandPalette) {
-            Text(text = commandPaletteLabel, color = colors.accent, style = androidx.compose.material3.MaterialTheme.typography.labelLarge)
-        }
-        TextButton(
-            modifier = Modifier.semantics { contentDescription = settingsLabel },
-            onClick = onOpenSettings,
-        ) {
-            Text(text = "⚙", color = colors.primaryText, style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
-        }
-    }
-}
-
-private fun WorkspaceContext.contextLabels(): List<String> =
-    listOfNotNull(deviceLabel, packageName, processName)
-
-@Composable
 private fun StudioNavigationRail(
     items: List<StudioNavigationItem>,
     selectedDestination: AppDestination,
     collapsed: Boolean,
     collapseActionLabel: String,
+    settingsLabel: String,
     onToggleCollapse: () -> Unit,
     onDestinationSelected: (AppDestination) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val colors = LocalViewerColors.current
     val width = if (collapsed) StudioTokens.navigationCollapsedWidth else StudioTokens.navigationExpandedWidth
@@ -333,47 +247,30 @@ private fun StudioNavigationRail(
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         items.forEach { item ->
-            val selected = item.destination == selectedDestination
-            val iconTint = if (selected) colors.accent else colors.secondaryText
-            TextButton(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(StudioTokens.navigationItemHeight)
-                        .clip(RoundedCornerShape(StudioTokens.smallRadius))
-                        .background(if (selected) colors.selectedRow else colors.transparent)
-                        .semantics { contentDescription = item.label },
+            NavigationRailEntry(
+                icon = item.icon,
+                label = item.label,
+                selected = item.destination == selectedDestination,
+                collapsed = collapsed,
                 onClick = { onDestinationSelected(item.destination) },
-                contentPadding = PaddingValues(horizontal = StudioTokens.navigationItemHorizontalPadding),
-            ) {
-                // One shared row for both states, so collapsing never moves the icon horizontally.
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(StudioTokens.navigationIconGap),
-                ) {
-                    Icon(
-                        painter = painterResource(item.icon),
-                        contentDescription = if (collapsed) item.label else null,
-                        modifier = Modifier.size(StudioTokens.navigationIconSize),
-                        tint = iconTint,
-                    )
-                    if (!collapsed) {
-                        Text(
-                            text = item.label,
-                            modifier = Modifier.weight(1f),
-                            color = if (selected) colors.accent else colors.primaryText,
-                            fontSize = ViewerTypography.bodyCompact.fontSize,
-                            lineHeight = ViewerTypography.bodyCompact.lineHeight,
-                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
+            )
         }
         Spacer(Modifier.weight(1f))
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp)
+                    .height(StudioTokens.borderWidth)
+                    .background(colors.border),
+        )
+        NavigationRailEntry(
+            icon = railSettingsIcon,
+            label = settingsLabel,
+            selected = false,
+            collapsed = collapsed,
+            onClick = onOpenSettings,
+        )
         TextButton(
             modifier = Modifier.fillMaxWidth().semantics { contentDescription = collapseActionLabel },
             onClick = onToggleCollapse,
@@ -385,6 +282,65 @@ private fun StudioNavigationRail(
                 modifier = Modifier.size(StudioTokens.navigationIconSize),
                 tint = colors.secondaryText,
             )
+        }
+    }
+}
+
+/**
+ * One rail row shared by destinations and the settings action, so every entry keeps the same icon
+ * offset and collapse behaviour.
+ */
+@Composable
+private fun NavigationRailEntry(
+    icon: DrawableResource,
+    label: String,
+    selected: Boolean,
+    collapsed: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = LocalViewerColors.current
+    val iconTint = if (selected) colors.accent else colors.secondaryText
+    TextButton(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(StudioTokens.navigationItemHeight)
+                .clip(RoundedCornerShape(StudioTokens.smallRadius))
+                .background(if (selected) colors.selectedRow else colors.transparent)
+                .semantics { contentDescription = label },
+        onClick = onClick,
+        contentPadding = PaddingValues(horizontal = if (collapsed) 0.dp else StudioTokens.navigationItemHorizontalPadding),
+    ) {
+        // Expanded rows start at the shared icon offset; the collapsed rail centres the icon so it
+        // lines up with the collapse control below.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement =
+                if (collapsed) {
+                    Arrangement.Center
+                } else {
+                    Arrangement.spacedBy(StudioTokens.navigationIconGap)
+                },
+        ) {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = if (collapsed) label else null,
+                modifier = Modifier.size(StudioTokens.navigationIconSize),
+                tint = iconTint,
+            )
+            if (!collapsed) {
+                Text(
+                    text = label,
+                    modifier = Modifier.weight(1f),
+                    color = if (selected) colors.accent else colors.primaryText,
+                    fontSize = ViewerTypography.bodyCompact.fontSize,
+                    lineHeight = ViewerTypography.bodyCompact.lineHeight,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

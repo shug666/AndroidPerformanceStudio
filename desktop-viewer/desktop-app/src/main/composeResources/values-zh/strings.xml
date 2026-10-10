@@ -201,4 +201,22 @@
     <string name="expand_navigation">展开导航</string>
     <string name="no_active_artifact">没有活动产物</string>
     <string name="workspace_context_unavailable">工作区上下文不可用</string>
+    <string name="home_hero_title">欢迎使用 Android Performance Studio</string>
+    <string name="home_hero_subtitle">深入洞察 Android 应用性能，定位问题，持续优化，构建更出色的产品。</string>
+    <string name="home_hero_quote">让每一次性能优化，都带来更好的用户体验。</string>
+    <string name="home_analysis_modules">分析模块</string>
+    <string name="home_recent_sessions">最近分析会话</string>
+    <string name="recent_column_name">名称</string>
+    <string name="recent_column_package">应用包名</string>
+    <string name="recent_column_type">类型</string>
+    <string name="recent_column_started">开始时间</string>
+    <string name="quick_action_start_capture">开始采集</string>
+    <string name="quick_action_start_capture_description">从已连接设备采集系统跟踪与性能数据</string>
+    <string name="quick_action_import_trace">导入 Trace</string>
+    <string name="quick_action_import_trace_description">支持 Perfetto / Systrace 格式</string>
+    <string name="quick_action_analyze_hprof">分析 HPROF</string>
+    <string name="quick_action_analyze_hprof_description">内存泄漏与分配热点分析</string>
+    <string name="quick_action_run_startup_test">运行启动测试</string>
+    <string name="quick_action_run_startup_test_description">测量应用启动性能</string>
+    <string name="home_focus_on_performance">专注性能 · 创造更好的应用</string>
 </resources>

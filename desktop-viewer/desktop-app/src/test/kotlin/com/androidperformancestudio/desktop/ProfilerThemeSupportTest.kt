@@ -37,7 +37,7 @@ class ProfilerThemeSupportTest {
         assertTrue(shell.contains("CommercialAppShell("))
         assertTrue(commercialShell.contains("background(colors.canvasBackground)"))
         assertTrue(commercialShell.contains("background(colors.toolbar)"))
-        assertTrue(commercialShell.contains("StudioTokens.topBarHeight"))
+        assertTrue(commercialShell.contains("StudioTokens.navigationItemHeight"))
     }
 
     @Test

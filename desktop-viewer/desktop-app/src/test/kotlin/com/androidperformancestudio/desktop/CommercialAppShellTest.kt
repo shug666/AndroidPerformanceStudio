@@ -9,6 +9,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -47,9 +48,20 @@ class CommercialAppShellTest {
         assertTrue(shell.contains("val icon: DrawableResource"))
         assertTrue(shell.contains("icon = it.navigationIconResource"))
         // A single shared row renders the icon, so collapsing cannot shift it horizontally.
-        assertEquals(1, Regex("painterResource\\(item\\.icon\\)").findAll(shell).count())
+        assertEquals(1, Regex("painterResource\\(icon\\)").findAll(shell).count())
+        assertTrue(shell.contains("NavigationRailEntry("))
         assertTrue(shell.contains("if (!collapsed) {"))
-        assertTrue(shell.contains("PaddingValues(horizontal = StudioTokens.navigationItemHorizontalPadding)"))
+        assertTrue(
+            shell.contains(
+                "PaddingValues(horizontal = if (collapsed) 0.dp else StudioTokens.navigationItemHorizontalPadding)",
+            ),
+        )
+        // Collapsed rows are centred, matching the collapse control.
+        assertTrue(
+            shell.contains(
+                "if (collapsed) {\n                    Arrangement.Center",
+            ),
+        )
         assertTrue(shell.contains("painterResource(navigationRailToggleIcon(collapsed))"))
         assertFalse(shell.contains("item.label.take(1)"))
     }
@@ -83,6 +95,22 @@ class CommercialAppShellTest {
                 "navigation icon must be an SVG vector: $name",
             )
         }
+    }
+
+    @Test
+    fun `home rail label uses the short home string while the window title keeps the product name`() {
+        val shell =
+            Files.readString(
+                Path.of("src/main/kotlin/com/androidperformancestudio/desktop/shell/CommercialAppShell.kt"),
+            )
+
+        assertNotEquals(AppDestination.HOME.titleResource, AppDestination.HOME.navigationLabelResource)
+        assertEquals(
+            AppDestination.LAYOUT_INSPECTOR.titleResource,
+            AppDestination.LAYOUT_INSPECTOR.navigationLabelResource,
+        )
+        assertTrue(shell.contains("it.navigationLabelResource"))
+        assertTrue(shell.contains("navigator.destination.titleResource"))
     }
 
     @Test
@@ -123,8 +151,12 @@ class CommercialAppShellTest {
 
         assertTrue(desktopMain.contains("CommercialAppShell("))
         assertTrue(desktopMain.contains("navigator.retainedDestinations.forEach"))
-        assertTrue(shell.contains("StudioTopBar("))
+        assertFalse(shell.contains("StudioTopBar("))
         assertTrue(shell.contains("StudioNavigationRail("))
+        assertTrue(shell.contains("NavigationRailEntry("))
+        assertTrue(shell.contains("railSettingsIcon"))
+        assertTrue(shell.contains("onClick = onOpenSettings"))
+        assertTrue(shell.contains("height(StudioTokens.borderWidth)"))
         assertTrue(shell.contains("StudioStatusBar("))
         assertTrue(shell.contains("StudioCommandPalette("))
         assertTrue(shell.contains("navigator::open"))

@@ -2,6 +2,82 @@
 
 This is a continuation checkpoint for the [phased implementation plan](android-performance-studio-commercial-ui-implementation.md), not an assertion that the full commercial UI is finished.
 
+## 2026-10-10: Shell top bar removed and settings moved into the rail
+
+### Implemented
+
+- Removed `StudioTopBar`. The shell is now rail + content + status bar, so feature content gets the
+  full window height.
+- Settings is a regular rail entry pinned at the bottom below a divider, and reuses the shared
+  `NavigationRailEntry` row, so it collapses to the icon-only gear like every other entry. The
+  `Cmd/Ctrl+,` shortcut and the macOS Preferences menu still open it.
+- The Home rail entry now uses the short "Home" string through
+  `AppDestination.navigationLabelResource`; `titleResource` keeps the product name for the window
+  title and status bar.
+- The command palette is still reachable with `Cmd/Ctrl+K`; the product name, destination, and
+  artifact context remain in the status bar. The top bar's workspace-context chips are gone with it
+  (the current call site only ever passed an empty context).
+- Removed the now-dead `WorkspaceContext.contextLabels()` helper and the top-bar-only string imports.
+
+### Verification
+
+```sh
+cd desktop-viewer
+./gradlew :desktop-app:test --offline
+```
+
+- `:desktop-app:test` passed 150 tests, zero failures.
+- `CommercialAppShellTest` now asserts the top bar is gone and that the settings entry, the divider,
+  and the shared rail row exist; a new case covers `navigationLabelResource` for Home.
+- `ProfilerThemeSupportTest` checks rail tokens instead of the removed top bar height.
+- Offscreen renders of the full shell at 1500x1200 (expanded) and 1100x1200 (collapsed) confirmed the
+  divider / settings / chevron order in both states.
+
+## 2026-10-10: Home dashboard two-column redesign
+
+### Scope
+
+- Home page presentation only. The shell, routing, feature state, and the recent-artifact and device
+  projections are unchanged.
+- Reference: `images/01-home-dashboard.png`. The plan forbids inventing metrics, so only sections
+  with a real data source are rendered.
+
+### Implemented
+
+- Two columns above 900 dp: a scrolling main column plus a 320 dp right rail. Narrower widths stack
+  the rail below the main column instead of dropping it.
+- Hero banner with the welcome title, subtitle, and reference quote over an accent gradient.
+- KPI row reduced to the two real projections (connected devices; recent artifacts shown). Added an
+  optional icon to `StudioMetricCard`; both cards now share one intrinsic height.
+- Quick actions are four icon cards (Start Capture, Import Trace, Analyze HPROF, Run Startup Test)
+  that route into existing capture/import flows. They stay a four-up row until the column narrows.
+- Analysis modules reuse the shell navigation icons and destination titles in an adaptive 3/2/1 grid.
+- Recent sessions table keeps only columns backed by real artifacts: name, package, type, started,
+  action.
+- Right rail: localized date card and the connected-devices panel (moved out of the main column).
+- Sections without a data source (jank alerts, regression counts, recent reports, AI insights) are
+  intentionally not rendered.
+- Added 18 EN/ZH strings and four vectors (device, history, play, import).
+
+### Verification
+
+```sh
+cd desktop-viewer
+./gradlew :desktop-app:test --offline
+./gradlew :ui-components:test --offline --tests "com.androidperformancestudio.ui.studio.StudioIconRenderingTest"
+```
+
+- `:desktop-app:test` passed 149 tests, zero failures, including the 9 rewritten
+  `AppHomePageLayoutTest` cases.
+- `StudioIconRenderingTest` now renders all 19 bundled vectors through `painterResource` and `Icon`
+  and asserts each paints visible pixels.
+- Offscreen renders at 1500x1400 for both locales confirmed the two-column layout, the four-up quick
+  actions, equal-height KPI cards, and real recent-session rows.
+- Three source-wiring tests that asserted the previous home markup
+  (`RecentArtifactNavigationWiringTest`, `SourceWorkspaceLocalizationTest`) were updated to the new
+  wiring while keeping their intent.
+- The pre-existing unrelated failures noted in the previous entry are unchanged.
+
 ## 2026-10-10: Shell navigation rail icons and icon-only collapse
 
 ### Scope
@@ -20,8 +96,8 @@ This is a continuation checkpoint for the [phased implementation plan](android-p
 - `StudioNavigationRail` now draws the projected icon beside the label. When the rail is collapsed
   it renders the icon alone and keeps the label as the icon `contentDescription`, replacing the
   previous first-character label truncation.
-- Both states share one start-aligned row and one constant `contentPadding`, so collapsing never
-  moves an icon horizontally; the icon only loses its label.
+- Both states share one rail row component. Expanded rows start at a constant offset; the collapsed
+  rail drops `contentPadding` to zero and centres the icon, so it lines up with the collapse control.
 - The rail footer toggle is now a chevron icon (it already toggled collapse); the top bar control and
   the below-1280 dp auto-collapse are unchanged.
 - Added `StudioTokens.navigationIconSize` (18 dp), `navigationIconGap` (10 dp), and
@@ -42,8 +118,8 @@ cd desktop-viewer
   each paints visible pixels, so a malformed SVG fails in tests instead of showing a blank rail.
 - The shell was rendered offscreen at 1400x640 (expanded) and 900x640 (collapsed). The expanded rail
   shows icon plus label with the selected accent; the collapsed rail shows the icons alone.
-- Measured the icon left edge for all 11 primary rows in both renders: identical x-range in every row,
-  so collapse does not shift an icon horizontally.
+- Measured the collapsed rail: every primary icon, the settings gear, and the collapse chevron share
+  the same horizontal centre (x≈31.5 in a 64 dp rail), so the collapsed rail is centred consistently.
 - Pre-existing, unrelated failures were left untouched: `UnifiedUiComponentsSourceTest` (the
   `HomeButton.kt` accent assertion, and raw colors in `SourceCodeViewer.kt` / `OneDarkSourceTheme.kt`)
   and `:ui-components:detekt` (22 issues in files this batch did not modify).

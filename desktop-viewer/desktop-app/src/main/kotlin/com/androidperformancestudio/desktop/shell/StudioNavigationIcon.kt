@@ -16,6 +16,7 @@ import com.androidperformancestudio.ui_components.generated.resources.ic_nav_ben
 import com.androidperformancestudio.ui_components.generated.resources.ic_nav_method_recording
 import com.androidperformancestudio.ui_components.generated.resources.ic_nav_rail_collapse
 import com.androidperformancestudio.ui_components.generated.resources.ic_nav_rail_expand
+import com.androidperformancestudio.ui_components.generated.resources.ic_settings
 import com.androidperformancestudio.ui_components.generated.resources.Res as UiComponentsRes
 import org.jetbrains.compose.resources.DrawableResource
 
@@ -42,6 +43,10 @@ internal val AppDestination.navigationIconResource: DrawableResource
             AppDestination.BENCHMARK_REGRESSION -> UiComponentsRes.drawable.ic_nav_benchmark
             AppDestination.METHOD_RECORDING -> UiComponentsRes.drawable.ic_nav_method_recording
         }
+
+/** Settings action pinned to the bottom of the rail, below the divider. */
+internal val railSettingsIcon: DrawableResource
+    get() = UiComponentsRes.drawable.ic_settings
 
 /** Chevron shown by the rail footer control; it points outward while collapsed. */
 internal fun navigationRailToggleIcon(collapsed: Boolean): DrawableResource =

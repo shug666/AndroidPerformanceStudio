@@ -201,4 +201,22 @@
     <string name="expand_navigation">Expand navigation</string>
     <string name="no_active_artifact">No active artifact</string>
     <string name="workspace_context_unavailable">Workspace context unavailable</string>
+    <string name="home_hero_title">Welcome to Android Performance Studio</string>
+    <string name="home_hero_subtitle">Understand Android app performance, locate problems, and keep optimizing to build better products.</string>
+    <string name="home_hero_quote">Every optimization should make the user experience better.</string>
+    <string name="home_analysis_modules">Analysis Modules</string>
+    <string name="home_recent_sessions">Recent Sessions</string>
+    <string name="recent_column_name">Name</string>
+    <string name="recent_column_package">Package</string>
+    <string name="recent_column_type">Type</string>
+    <string name="recent_column_started">Started</string>
+    <string name="quick_action_start_capture">Start Capture</string>
+    <string name="quick_action_start_capture_description">Capture a system trace from a connected device.</string>
+    <string name="quick_action_import_trace">Import Trace</string>
+    <string name="quick_action_import_trace_description">Supports Perfetto and Systrace files.</string>
+    <string name="quick_action_analyze_hprof">Analyze HPROF</string>
+    <string name="quick_action_analyze_hprof_description">Detect memory leaks and allocation hotspots.</string>
+    <string name="quick_action_run_startup_test">Run Startup Test</string>
+    <string name="quick_action_run_startup_test_description">Measure application launch performance.</string>
+    <string name="home_focus_on_performance">Focus on Performance</string>
 </resources>

@@ -9,77 +9,101 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class AppHomePageLayoutTest {
-    @Test
-    fun `home cards use a compact adaptive macOS grid`() {
-        val source = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/AppHomePage.kt"))
+    private val source: String
+        get() = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/AppHomePage.kt"))
 
+    @Test
+    fun `home dashboard renders on the shell canvas background`() {
         assertTrue(source.contains("color = colors.canvasBackground"))
         assertEquals(viewerColors(darkTheme = false).canvasBackground, viewerColors(darkTheme = false).workspace)
         assertEquals(viewerColors(darkTheme = true).canvasBackground, viewerColors(darkTheme = true).workspace)
-        assertEquals(4, homeGridColumnCount(HOME_MAX_CONTENT_WIDTH_DP))
+    }
+
+    @Test
+    fun `home dashboard splits into a main column and a fixed width rail`() {
+        assertTrue(source.contains("HOME_TWO_COLUMN_MIN_WIDTH_DP"))
+        assertTrue(source.contains("Modifier.width(HOME_RAIL_WIDTH_DP.dp)"))
+        assertTrue(source.contains("HomeMainColumn("))
+        assertTrue(source.contains("HomeRailColumn("))
+        assertTrue(source.contains("HomeDateCard(language)"))
+        assertTrue(source.contains("HomeDeviceSummary("))
+    }
+
+    @Test
+    fun `home module grid stays adaptive`() {
+        assertEquals(3, homeGridColumnCount(HOME_RAIL_WIDTH_DP + 500))
         assertEquals(3, homeGridColumnCount(900))
         assertEquals(2, homeGridColumnCount(600))
         assertEquals(1, homeGridColumnCount(420))
-        assertTrue(HOME_CARD_HEIGHT_DP < 220)
-        assertEquals(14, HOME_CARD_CORNER_RADIUS_DP)
-        assertTrue(source.contains("BoxWithConstraints(modifier = Modifier.fillMaxWidth())"))
+        assertTrue(HOME_MODULE_CARD_HEIGHT_DP < 120)
+        assertEquals(10, HOME_CARD_CORNER_RADIUS_DP)
         assertTrue(source.contains("entries.chunked(columnCount)"))
-        assertTrue(source.contains("height(HOME_CARD_HEIGHT_DP.dp)"))
-        assertTrue(source.contains("shadow("))
-        assertTrue(source.contains("fontSize = ViewerTypography.cardTitle.fontSize"))
-        assertTrue(source.contains("text = entry.title.take(1)"))
-        assertTrue(source.contains("text = \"›\""))
+        assertTrue(source.contains("height(HOME_MODULE_CARD_HEIGHT_DP.dp)"))
+        assertTrue(source.contains("entry.destination.navigationIconResource"))
     }
 
     @Test
-    fun `home header text is horizontally centered`() {
-        val source = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/AppHomePage.kt"))
-        val header =
-            source
-                .substringAfter("text = localizedStringResource(Res.string.android_performance_studio, language)")
-                .substringBefore("BoxWithConstraints")
-
-        assertEquals(2, Regex("textAlign = TextAlign.Center").findAll(header).count())
+    fun `quick actions stay a four up row until the column narrows`() {
+        assertEquals(4, homeQuickActionColumnCount(1020))
+        assertEquals(4, homeQuickActionColumnCount(720))
+        assertEquals(2, homeQuickActionColumnCount(680))
+        assertEquals(1, homeQuickActionColumnCount(360))
+        assertTrue(source.contains("homeQuickActionColumnCount(maxWidth.value.toInt())"))
     }
 
     @Test
-    fun `dashboard keeps its header fixed and scrolls only the main content`() {
-        val source = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/AppHomePage.kt"))
-        val dashboard = source.substringAfter("Surface(modifier = Modifier.fillMaxSize()")
-            .substringBefore("private fun HomeDeviceSummary")
-        val beforeMetrics = dashboard.substringBefore("StudioMetricCard(")
-        val afterMetrics = dashboard.substringAfter("StudioMetricCard(")
+    fun `home metrics only read the real device and recent projections`() {
+        assertEquals(2, Regex("StudioMetricCard\\(").findAll(source).count())
+        assertTrue(source.contains("connectedCount"))
+        assertTrue(source.contains("val recentValue ="))
+        assertTrue(source.contains("recent_artifacts_scope"))
+        // Sections without a backing data source are intentionally not rendered.
+        assertFalse(source.contains("recent_reports"))
+        assertFalse(source.contains("ai_insights"))
+    }
 
-        assertFalse(beforeMetrics.contains(".verticalScroll(rememberScrollState())"))
-        assertTrue(afterMetrics.contains(".weight(1f)\n                        .verticalScroll(rememberScrollState())"))
-        assertTrue(dashboard.contains("StudioDataTable("))
-        assertTrue(dashboard.contains("Res.string.recent_column_artifact"))
-        assertTrue(dashboard.contains("Res.string.recent_column_feature"))
+    @Test
+    fun `recent sessions table shows only columns backed by real artifacts`() {
+        listOf(
+            "recent_column_name",
+            "recent_column_package",
+            "recent_column_type",
+            "recent_column_started",
+            "recent_column_action",
+        ).forEach { column -> assertTrue(source.contains(column), "missing $column") }
+        assertFalse(source.contains("recent_column_device"))
+        assertFalse(source.contains("recent_column_duration"))
+        assertFalse(source.contains("recent_column_status"))
+    }
+
+    @Test
+    fun `quick actions reuse the shell navigation icons`() {
+        assertTrue(source.contains("HomeQuickAction("))
+        assertTrue(source.contains("HOME_QUICK_ACTION_HEIGHT_DP"))
+        assertTrue(source.contains("UiComponentsRes.drawable.ic_action_play"))
+        assertTrue(source.contains("UiComponentsRes.drawable.ic_action_import"))
     }
 
     @Test
     fun `source workspace is the last home entry`() {
-        val source = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/AppHomePage.kt"))
-        val entries = source.substringAfter("val entries =").substringBefore("val colors =")
+        val entries = source.substringAfter("val entries =").substringBefore("val quickActions =")
 
         val lastEntry = entries.substring(entries.lastIndexOf("HomeFeatureEntry("))
         assertTrue(lastEntry.contains("onClick = onOpenSourceWorkspaces"))
     }
 
     @Test
-    fun `dashboard exposes all implemented module routes and stacks metrics in narrow windows`() {
-        val source = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/AppHomePage.kt"))
-        val entries = source.substringAfter("val entries =").substringBefore("val colors =")
+    fun `dashboard exposes all implemented module routes`() {
+        val entries = source.substringAfter("val entries =").substringBefore("val quickActions =")
 
         assertTrue(entries.contains("onClick = onOpenGpuInspector"))
         assertTrue(entries.contains("onClick = onOpenBenchmarkRegression"))
         assertFalse(entries.contains("onClick = onOpenMethodRecording"))
-        val shell = Files.readString(
-            Path.of("src/main/kotlin/com/androidperformancestudio/desktop/shell/CommercialAppShell.kt"),
-        )
+        val shell =
+            Files.readString(
+                Path.of("src/main/kotlin/com/androidperformancestudio/desktop/shell/CommercialAppShell.kt"),
+            )
         assertTrue(shell.contains("listOf(AppDestination.SOURCE_WORKSPACES, AppDestination.METHOD_RECORDING)"))
         assertTrue(shell.contains("navigator.open(destination)"))
-        assertTrue(source.contains("val compact = maxWidth < 500.dp"))
-        assertTrue(source.contains("Column(verticalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap))"))
     }
 }

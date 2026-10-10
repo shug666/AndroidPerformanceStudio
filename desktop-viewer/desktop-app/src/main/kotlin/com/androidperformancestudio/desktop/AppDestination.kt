@@ -37,6 +37,17 @@ internal fun com.androidperformancestudio.desktop.AppDestination.shouldMaximizeW
         else -> true
     }
 
+/**
+ * Rail and command-palette label for each destination. Home uses the short "Home" string because
+ * [titleResource] intentionally carries the product name for the window title.
+ */
+internal val com.androidperformancestudio.desktop.AppDestination.navigationLabelResource: StringResource
+    get() =
+        when (this) {
+            AppDestination.HOME -> Res.string.home
+            else -> titleResource
+        }
+
 /** Window-title string shown for each destination, derived from the single navigation source of truth. */
 internal val com.androidperformancestudio.desktop.AppDestination.titleResource: StringResource
     get() =

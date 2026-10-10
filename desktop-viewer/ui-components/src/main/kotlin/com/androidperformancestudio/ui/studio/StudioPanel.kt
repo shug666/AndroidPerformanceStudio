@@ -12,9 +12,12 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
@@ -24,6 +27,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.ViewerTypography
+import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.painterResource
 
 @Composable
 public fun StudioPanel(
@@ -90,6 +95,8 @@ public fun StudioMetricCard(
     value: String,
     modifier: Modifier = Modifier,
     supportingText: String? = null,
+    icon: DrawableResource? = null,
+    iconContentDescription: String? = null,
 ) {
     val colors = LocalViewerColors.current
     StudioPanel(
@@ -98,12 +105,25 @@ public fun StudioMetricCard(
                 contentDescription = "$label: $value"
             },
     ) {
-        Text(
-            text = label,
-            color = colors.secondaryText,
-            fontSize = ViewerTypography.secondary.fontSize,
-            lineHeight = ViewerTypography.secondary.lineHeight,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
+        ) {
+            icon?.let {
+                Icon(
+                    painter = painterResource(it),
+                    contentDescription = iconContentDescription,
+                    modifier = Modifier.size(StudioTokens.navigationIconSize),
+                    tint = colors.accent,
+                )
+            }
+            Text(
+                text = label,
+                color = colors.secondaryText,
+                fontSize = ViewerTypography.secondary.fontSize,
+                lineHeight = ViewerTypography.secondary.lineHeight,
+            )
+        }
         Text(
             text = value,
             color = colors.primaryText,

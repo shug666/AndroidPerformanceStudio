@@ -37,7 +37,7 @@ class SourceWorkspaceLocalizationTest {
         assertTrue(codeViewer.contains("Res.string.source_search_previous"))
         assertTrue(codeViewer.contains("Res.string.source_search_next"))
         assertFalse(source.contains("fontFamily = FontFamily.Monospace"))
-        assertTrue(home.contains("localizedStringResource(Res.string.source_home_subtitle, language)"))
+        assertTrue(home.contains("localizedStringResource(Res.string.source_workspaces, language)"))
         assertTrue(home.contains("localizedStringResource(Res.string.source_home_description, language)"))
         assertFalse(home.contains("if (language == UiLanguage.SIMPLIFIED_CHINESE) \"源码工作区\""))
         assertFalse(source.contains("private fun label("))
