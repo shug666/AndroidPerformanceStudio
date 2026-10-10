@@ -2,6 +2,52 @@
 
 This is a continuation checkpoint for the [phased implementation plan](android-performance-studio-commercial-ui-implementation.md), not an assertion that the full commercial UI is finished.
 
+## 2026-10-10: Shell navigation rail icons and icon-only collapse
+
+### Scope
+
+- Presentation-only batch for the shell navigation rail. Controller, Model, capture, archive, and
+  routing contracts are unchanged; no destination was added or removed.
+- The reference is `images/01-home-dashboard.png`, which shows one line icon per navigation item and
+  an icon-only rail.
+
+### Implemented
+
+- Added 15 SVG vectors under `ui-components/src/main/composeResources/drawable/`: one per
+  `AppDestination` plus rail collapse/expand chevrons.
+- `AppDestination.navigationIconResource` maps every destination to its icon, so an unmapped
+  destination is a compile error.
+- `StudioNavigationRail` now draws the projected icon beside the label. When the rail is collapsed
+  it renders the icon alone and keeps the label as the icon `contentDescription`, replacing the
+  previous first-character label truncation.
+- Both states share one start-aligned row and one constant `contentPadding`, so collapsing never
+  moves an icon horizontally; the icon only loses its label.
+- The rail footer toggle is now a chevron icon (it already toggled collapse); the top bar control and
+  the below-1280 dp auto-collapse are unchanged.
+- Added `StudioTokens.navigationIconSize` (18 dp), `navigationIconGap` (10 dp), and
+  `navigationItemHorizontalPadding` (10 dp), the fixed leading offset the icon keeps across collapse.
+
+### Verification
+
+```sh
+cd desktop-viewer
+./gradlew :desktop-app:test --offline
+./gradlew :ui-components:test --offline --tests "com.androidperformancestudio.ui.studio.StudioNavigationIconTest"
+```
+
+- `:desktop-app:test` passed 145 tests, zero failures, including three new `CommercialAppShellTest`
+  cases: distinct icon per destination, rail icon rendering plus icon-only collapse wiring, and the
+  presence of every icon drawable.
+- `StudioNavigationIconTest` renders all 15 vectors through `painterResource` and `Icon` and asserts
+  each paints visible pixels, so a malformed SVG fails in tests instead of showing a blank rail.
+- The shell was rendered offscreen at 1400x640 (expanded) and 900x640 (collapsed). The expanded rail
+  shows icon plus label with the selected accent; the collapsed rail shows the icons alone.
+- Measured the icon left edge for all 11 primary rows in both renders: identical x-range in every row,
+  so collapse does not shift an icon horizontally.
+- Pre-existing, unrelated failures were left untouched: `UnifiedUiComponentsSourceTest` (the
+  `HomeButton.kt` accent assertion, and raw colors in `SourceCodeViewer.kt` / `OneDarkSourceTheme.kt`)
+  and `:ui-components:detekt` (22 issues in files this batch did not modify).
+
 ## 2026-10-10: Phase 4 — Layout Inspector resize and visibility
 
 ### Scope and baseline

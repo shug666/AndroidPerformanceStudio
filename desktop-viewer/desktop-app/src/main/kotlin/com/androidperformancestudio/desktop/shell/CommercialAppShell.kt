@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -18,12 +19,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -70,6 +73,8 @@ import com.androidperformancestudio.ui.studio.StudioStatusChip
 import com.androidperformancestudio.ui.studio.StudioStatusTone
 import com.androidperformancestudio.ui.studio.StudioSearchField
 import com.androidperformancestudio.ui.studio.StudioTokens
+import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.painterResource
 
 internal const val NAVIGATION_COLLAPSE_BREAKPOINT_DP: Int = 1280
 
@@ -89,6 +94,7 @@ internal data class WorkspaceContext(
 private data class StudioNavigationItem(
     val destination: AppDestination,
     val label: String,
+    val icon: DrawableResource,
 )
 
 /**
@@ -129,11 +135,23 @@ internal fun CommercialAppShell(
             AppDestination.NETWORK_PROFILER,
             AppDestination.GPU_INSPECTOR,
             AppDestination.BENCHMARK_REGRESSION,
-        ).map { StudioNavigationItem(it, localizedStringResource(it.titleResource, language)) }
+        ).map {
+            StudioNavigationItem(
+                destination = it,
+                label = localizedStringResource(it.titleResource, language),
+                icon = it.navigationIconResource,
+            )
+        }
     val commandItems =
         (navigationItems +
             listOf(AppDestination.SOURCE_WORKSPACES, AppDestination.METHOD_RECORDING)
-                .map { StudioNavigationItem(it, localizedStringResource(it.titleResource, language)) })
+                .map {
+                    StudioNavigationItem(
+                        destination = it,
+                        label = localizedStringResource(it.titleResource, language),
+                        icon = it.navigationIconResource,
+                    )
+                })
             .distinctBy(StudioNavigationItem::destination)
 
     BoxWithConstraints(
@@ -316,6 +334,7 @@ private fun StudioNavigationRail(
     ) {
         items.forEach { item ->
             val selected = item.destination == selectedDestination
+            val iconTint = if (selected) colors.accent else colors.secondaryText
             TextButton(
                 modifier =
                     Modifier
@@ -325,28 +344,46 @@ private fun StudioNavigationRail(
                         .background(if (selected) colors.selectedRow else colors.transparent)
                         .semantics { contentDescription = item.label },
                 onClick = { onDestinationSelected(item.destination) },
+                contentPadding = PaddingValues(horizontal = StudioTokens.navigationItemHorizontalPadding),
             ) {
-                Text(
-                    text = if (collapsed) item.label.take(1) else item.label,
+                // One shared row for both states, so collapsing never moves the icon horizontally.
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    color = if (selected) colors.accent else colors.primaryText,
-                    fontSize = ViewerTypography.bodyCompact.fontSize,
-                    lineHeight = ViewerTypography.bodyCompact.lineHeight,
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(StudioTokens.navigationIconGap),
+                ) {
+                    Icon(
+                        painter = painterResource(item.icon),
+                        contentDescription = if (collapsed) item.label else null,
+                        modifier = Modifier.size(StudioTokens.navigationIconSize),
+                        tint = iconTint,
+                    )
+                    if (!collapsed) {
+                        Text(
+                            text = item.label,
+                            modifier = Modifier.weight(1f),
+                            color = if (selected) colors.accent else colors.primaryText,
+                            fontSize = ViewerTypography.bodyCompact.fontSize,
+                            lineHeight = ViewerTypography.bodyCompact.lineHeight,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
             }
         }
         Spacer(Modifier.weight(1f))
         TextButton(
             modifier = Modifier.fillMaxWidth().semantics { contentDescription = collapseActionLabel },
             onClick = onToggleCollapse,
+            contentPadding = PaddingValues(horizontal = 0.dp),
         ) {
-            Text(
-                text = if (collapsed) "›" else "‹",
-                color = colors.secondaryText,
-                style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
+            Icon(
+                painter = painterResource(navigationRailToggleIcon(collapsed)),
+                contentDescription = collapseActionLabel,
+                modifier = Modifier.size(StudioTokens.navigationIconSize),
+                tint = colors.secondaryText,
             )
         }
     }

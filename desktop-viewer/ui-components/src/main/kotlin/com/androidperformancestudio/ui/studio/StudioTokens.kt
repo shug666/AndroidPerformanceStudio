@@ -15,6 +15,9 @@ public object StudioTokens {
     public val globalStatusBarHeight: Dp = 28.dp
     public val panelHeaderHeight: Dp = 36.dp
     public val navigationItemHeight: Dp = 36.dp
+    public val navigationIconSize: Dp = 18.dp
+    public val navigationIconGap: Dp = 10.dp
+    public val navigationItemHorizontalPadding: Dp = 10.dp
     public val contentPadding: Dp = 16.dp
     public val compactContentPadding: Dp = 8.dp
     public val panelGap: Dp = 8.dp

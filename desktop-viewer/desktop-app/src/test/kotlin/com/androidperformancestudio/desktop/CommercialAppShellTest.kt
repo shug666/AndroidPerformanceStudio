@@ -2,6 +2,7 @@ package com.androidperformancestudio.desktop
 
 import com.androidperformancestudio.desktop.shell.NAVIGATION_COLLAPSE_BREAKPOINT_DP
 import com.androidperformancestudio.desktop.shell.WorkspaceContext
+import com.androidperformancestudio.desktop.shell.navigationIconResource
 import com.androidperformancestudio.desktop.shell.navigationRailCollapsedFor
 import com.androidperformancestudio.desktop.shell.resolvedNavigationRailCollapsed
 import java.nio.file.Files
@@ -27,6 +28,61 @@ class CommercialAppShellTest {
         assertTrue(resolvedNavigationRailCollapsed(1100, null))
         assertFalse(resolvedNavigationRailCollapsed(1100, false))
         assertTrue(resolvedNavigationRailCollapsed(1440, true))
+    }
+
+    @Test
+    fun `every destination projects a distinct navigation icon`() {
+        val icons = AppDestination.entries.map { destination -> destination.navigationIconResource }
+
+        assertEquals(AppDestination.entries.size, icons.toSet().size)
+    }
+
+    @Test
+    fun `navigation rail draws an icon per item and keeps only icons when collapsed`() {
+        val shell =
+            Files.readString(
+                Path.of("src/main/kotlin/com/androidperformancestudio/desktop/shell/CommercialAppShell.kt"),
+            )
+
+        assertTrue(shell.contains("val icon: DrawableResource"))
+        assertTrue(shell.contains("icon = it.navigationIconResource"))
+        // A single shared row renders the icon, so collapsing cannot shift it horizontally.
+        assertEquals(1, Regex("painterResource\\(item\\.icon\\)").findAll(shell).count())
+        assertTrue(shell.contains("if (!collapsed) {"))
+        assertTrue(shell.contains("PaddingValues(horizontal = StudioTokens.navigationItemHorizontalPadding)"))
+        assertTrue(shell.contains("painterResource(navigationRailToggleIcon(collapsed))"))
+        assertFalse(shell.contains("item.label.take(1)"))
+    }
+
+    @Test
+    fun `navigation icon drawables ship with the shared UI resources`() {
+        val drawables = Path.of("../ui-components/src/main/composeResources/drawable")
+        val expected =
+            listOf(
+                "ic_nav_home",
+                "ic_nav_source_workspaces",
+                "ic_nav_layout_inspector",
+                "ic_nav_cpu_profiler",
+                "ic_nav_trace_analyzer",
+                "ic_nav_memory_profiler",
+                "ic_nav_frame_profiler",
+                "ic_nav_startup_profiler",
+                "ic_nav_battery",
+                "ic_nav_network",
+                "ic_nav_gpu_inspector",
+                "ic_nav_benchmark",
+                "ic_nav_method_recording",
+                "ic_nav_rail_collapse",
+                "ic_nav_rail_expand",
+            )
+
+        expected.forEach { name ->
+            assertTrue(Files.exists(drawables.resolve("$name.svg")), "missing navigation icon: $name")
+            assertTrue(
+                Files.readString(drawables.resolve("$name.svg")).startsWith("<svg"),
+                "navigation icon must be an SVG vector: $name",
+            )
+        }
     }
 
     @Test
