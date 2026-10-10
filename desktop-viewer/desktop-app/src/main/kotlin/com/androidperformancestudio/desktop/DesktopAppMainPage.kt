@@ -70,7 +70,6 @@ fun FrameWindowScope.DesktopAppMainPage(
     settingsRequest: SettingsRequest? = null
 ) {
     val navigator = remember { AppNavigator() }
-    var showSettings by remember { mutableStateOf(false) }
     var settingsPage by remember { mutableStateOf(SettingsPage.GENERAL) }
     var layoutInspectorSettingsRevision by remember { mutableStateOf(0L) }
     var simpleperfCaptureSettingsContext by remember {
@@ -104,7 +103,7 @@ fun FrameWindowScope.DesktopAppMainPage(
     }
     val openSettings: (SettingsPage) -> Unit = { page ->
         settingsPage = page
-        showSettings = true
+        navigator.open(AppDestination.SETTINGS)
     }
     val language = applicationSettings.language.resolve(Locale.getDefault())
     val darkTheme = applicationSettings.theme.resolveDark(isSystemInDarkTheme())
@@ -167,7 +166,6 @@ fun FrameWindowScope.DesktopAppMainPage(
             CommercialAppShell(
                 navigator = navigator,
                 language = language,
-                onOpenSettings = { openSettings(SettingsPage.GENERAL) },
             ) {
                 navigator.retainedDestinations.forEach { destination ->
                     key(destination) {
@@ -424,6 +422,28 @@ fun FrameWindowScope.DesktopAppMainPage(
                             initialTraceFile = navigator.methodRecordingTraceFile,
                             onBack = { navigator.open(AppDestination.HOME) },
                         )
+                    AppDestination.SETTINGS ->
+                        DesktopAppSettingsPage(
+                            selectedPage = settingsPage,
+                            applicationSettings = applicationSettings,
+                            simpleperfSettings = simpleperfSettings,
+                            simpleperfCaptureSettingsContext = simpleperfCaptureSettingsContext,
+                            simpleperfInitialSection = simpleperfSettingsSection,
+                            viewerThemeContext = viewerThemeContext,
+                            language = language,
+                            simpleperfLocale = if (language == UiLanguage.SIMPLIFIED_CHINESE) java.util.Locale.SIMPLIFIED_CHINESE else java.util.Locale.ENGLISH,
+                            sourceWorkspaceRuntime = sourceWorkspaceRuntime,
+                            onPageSelected = { settingsPage = it },
+                            onApplicationSettingsChanged = updateApplicationSettings,
+                            onSimpleperfSettingsChanged = updateSimpleperfPreferences,
+                            onLayoutInspectorSettingsChanged = { layoutInspectorSettingsRevision += 1 },
+                            onOpenUserGuide = {
+                                coroutineScope.launch(Dispatchers.IO) {
+                                    runCatching { userDocumentationLauncher.open(language) }
+                                }
+                            },
+                            persistenceErrorPage = settingsPersistenceErrorPage,
+                        )
                 }
                         }
                         }
@@ -492,30 +512,6 @@ fun FrameWindowScope.DesktopAppMainPage(
                                 Text(localizedStringResource(Res.string.source_cancel, language))
                             }
                         },
-                    )
-                }
-                if (showSettings) {
-                    DesktopAppSettingsDialog(
-                        selectedPage = settingsPage,
-                        applicationSettings = applicationSettings,
-                        simpleperfSettings = simpleperfSettings,
-                        simpleperfCaptureSettingsContext = simpleperfCaptureSettingsContext,
-                        simpleperfInitialSection = simpleperfSettingsSection,
-                        viewerThemeContext = viewerThemeContext,
-                        language = language,
-                        simpleperfLocale = if (language == UiLanguage.SIMPLIFIED_CHINESE) java.util.Locale.SIMPLIFIED_CHINESE else java.util.Locale.ENGLISH,
-                        sourceWorkspaceRuntime = sourceWorkspaceRuntime,
-                        onPageSelected = { settingsPage = it },
-                        onApplicationSettingsChanged = updateApplicationSettings,
-                        onSimpleperfSettingsChanged = updateSimpleperfPreferences,
-                        onLayoutInspectorSettingsChanged = { layoutInspectorSettingsRevision += 1 },
-                        onOpenUserGuide = {
-                            coroutineScope.launch(Dispatchers.IO) {
-                                runCatching { userDocumentationLauncher.open(language) }
-                            }
-                        },
-                        persistenceErrorPage = settingsPersistenceErrorPage,
-                        onDismiss = { showSettings = false },
                     )
                 }
             }

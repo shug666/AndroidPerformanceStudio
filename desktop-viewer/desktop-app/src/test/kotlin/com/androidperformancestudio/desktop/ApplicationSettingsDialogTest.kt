@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test
 class ApplicationSettingsDialogTest {
     private val unifiedDialog =
         Files.readString(
-            Path.of("src/main/kotlin/com/androidperformancestudio/desktop/DesktopAppSettingsDialog.kt"),
+            Path.of("src/main/kotlin/com/androidperformancestudio/desktop/DesktopAppSettingsPage.kt"),
         )
 
     @Test
@@ -61,6 +61,14 @@ class ApplicationSettingsDialogTest {
             unifiedDialog.indexOf("label = localizedStringResource(Res.string.theme, language)") <
                 unifiedDialog.indexOf("ThemeColorSettingsContent("),
         )
+    }
+
+    @Test
+    fun `theme colour swatches stay compact`() {
+        assertTrue(unifiedDialog.contains("THEME_SWATCH_COLUMNS = 4"))
+        assertTrue(unifiedDialog.contains("height(38.dp)"))
+        assertTrue(unifiedDialog.contains("size(18.dp)"))
+        assertTrue(unifiedDialog.contains("themeColorPreferenceLabel(color, language)"))
     }
 
     @Test

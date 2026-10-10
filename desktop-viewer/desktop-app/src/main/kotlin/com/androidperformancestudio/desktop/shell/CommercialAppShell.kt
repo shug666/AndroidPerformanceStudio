@@ -2,6 +2,9 @@
 
 package com.androidperformancestudio.desktop.shell
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -27,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -104,7 +108,6 @@ private data class StudioNavigationItem(
 internal fun CommercialAppShell(
     navigator: AppNavigator,
     language: UiLanguage,
-    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
     workspaceContext: WorkspaceContext = WorkspaceContext(),
     content: @Composable BoxScope.() -> Unit,
@@ -171,7 +174,7 @@ internal fun CommercialAppShell(
                         event.type == KeyEventType.KeyDown &&
                             event.key == Key.Comma &&
                             (event.isCtrlPressed || event.isMetaPressed) -> {
-                            onOpenSettings()
+                            navigator.open(AppDestination.SETTINGS)
                             true
                         }
                         else -> false
@@ -192,9 +195,10 @@ internal fun CommercialAppShell(
                             language,
                         ),
                     settingsLabel = settingsLabel,
+                    settingsSelected = navigator.destination == AppDestination.SETTINGS,
                     onToggleCollapse = { userCollapsed = !collapsed },
                     onDestinationSelected = navigator::open,
-                    onOpenSettings = onOpenSettings,
+                    onOpenSettings = { navigator.open(AppDestination.SETTINGS) },
                 )
                 Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                     content()
@@ -223,6 +227,7 @@ internal fun CommercialAppShell(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun StudioNavigationRail(
     items: List<StudioNavigationItem>,
@@ -230,6 +235,7 @@ private fun StudioNavigationRail(
     collapsed: Boolean,
     collapseActionLabel: String,
     settingsLabel: String,
+    settingsSelected: Boolean,
     onToggleCollapse: () -> Unit,
     onDestinationSelected: (AppDestination) -> Unit,
     onOpenSettings: () -> Unit,
@@ -265,16 +271,50 @@ private fun StudioNavigationRail(
                     .background(colors.border),
         )
         NavigationRailEntry(
-            icon = railSettingsIcon,
+            icon = AppDestination.SETTINGS.navigationIconResource,
             label = settingsLabel,
-            selected = false,
+            selected = settingsSelected,
             collapsed = collapsed,
             onClick = onOpenSettings,
         )
-        TextButton(
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = collapseActionLabel },
-            onClick = onToggleCollapse,
-            contentPadding = PaddingValues(horizontal = 0.dp),
+        if (collapsed) {
+            TooltipArea(tooltip = { RailTooltip(collapseActionLabel) }, delayMillis = TOOLTIP_DELAY_MILLIS) {
+                RailCollapseToggle(collapsed, collapseActionLabel, onToggleCollapse)
+            }
+        } else {
+            RailCollapseToggle(collapsed, collapseActionLabel, onToggleCollapse)
+        }
+    }
+}
+
+private const val TOOLTIP_DELAY_MILLIS = 400
+
+@Composable
+private fun RailCollapseToggle(
+    collapsed: Boolean,
+    collapseActionLabel: String,
+    onToggleCollapse: () -> Unit,
+) {
+    val colors = LocalViewerColors.current
+    TextButton(
+        modifier = Modifier.fillMaxWidth().semantics { contentDescription = collapseActionLabel },
+        onClick = onToggleCollapse,
+        contentPadding =
+            PaddingValues(
+                horizontal = if (collapsed) 0.dp else StudioTokens.navigationItemHorizontalPadding,
+            ),
+    ) {
+        // Shares the entry geometry so the collapse icon sits on the same vertical axis as the
+        // navigation icons in both states.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement =
+                if (collapsed) {
+                    Arrangement.Center
+                } else {
+                    Arrangement.spacedBy(StudioTokens.navigationIconGap)
+                },
         ) {
             Icon(
                 painter = painterResource(navigationRailToggleIcon(collapsed)),
@@ -290,8 +330,27 @@ private fun StudioNavigationRail(
  * One rail row shared by destinations and the settings action, so every entry keeps the same icon
  * offset and collapse behaviour.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun NavigationRailEntry(
+    icon: DrawableResource,
+    label: String,
+    selected: Boolean,
+    collapsed: Boolean,
+    onClick: () -> Unit,
+) {
+    if (collapsed) {
+        // The collapsed rail is icon-only, so hovering reveals the destination title.
+        TooltipArea(tooltip = { RailTooltip(label) }, delayMillis = TOOLTIP_DELAY_MILLIS) {
+            RailEntryButton(icon, label, selected, collapsed, onClick)
+        }
+    } else {
+        RailEntryButton(icon, label, selected, collapsed, onClick)
+    }
+}
+
+@Composable
+private fun RailEntryButton(
     icon: DrawableResource,
     label: String,
     selected: Boolean,
@@ -342,6 +401,28 @@ private fun NavigationRailEntry(
                 )
             }
         }
+    }
+}
+
+/** Small floating label shown when an icon-only rail control is hovered. */
+@Composable
+private fun RailTooltip(label: String) {
+    val colors = LocalViewerColors.current
+    Surface(
+        shape = RoundedCornerShape(StudioTokens.smallRadius),
+        color = colors.panel,
+        contentColor = colors.primaryText,
+        border = BorderStroke(StudioTokens.borderWidth, colors.border),
+        shadowElevation = 6.dp,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+            color = colors.primaryText,
+            fontSize = ViewerTypography.secondary.fontSize,
+            lineHeight = ViewerTypography.secondary.lineHeight,
+            maxLines = 1,
+        )
     }
 }
 

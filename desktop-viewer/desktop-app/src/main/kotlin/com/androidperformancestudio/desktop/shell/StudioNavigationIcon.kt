@@ -42,11 +42,8 @@ internal val AppDestination.navigationIconResource: DrawableResource
             AppDestination.GPU_INSPECTOR -> UiComponentsRes.drawable.ic_nav_gpu_inspector
             AppDestination.BENCHMARK_REGRESSION -> UiComponentsRes.drawable.ic_nav_benchmark
             AppDestination.METHOD_RECORDING -> UiComponentsRes.drawable.ic_nav_method_recording
+            AppDestination.SETTINGS -> UiComponentsRes.drawable.ic_settings
         }
-
-/** Settings action pinned to the bottom of the rail, below the divider. */
-internal val railSettingsIcon: DrawableResource
-    get() = UiComponentsRes.drawable.ic_settings
 
 /** Chevron shown by the rail footer control; it points outward while collapsed. */
 internal fun navigationRailToggleIcon(collapsed: Boolean): DrawableResource =

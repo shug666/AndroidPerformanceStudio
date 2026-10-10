@@ -11,7 +11,9 @@ import androidx.compose.ui.unit.dp
 public object StudioTokens {
     public val topBarHeight: Dp = 56.dp
     public val navigationExpandedWidth: Dp = 216.dp
-    public val navigationCollapsedWidth: Dp = 64.dp
+    // 54dp keeps the centred collapsed icon at the same x as the expanded icon (8dp rail padding +
+    // 10dp row padding + half of the 18dp icon), so collapsing no longer shifts it.
+    public val navigationCollapsedWidth: Dp = 54.dp
     public val globalStatusBarHeight: Dp = 28.dp
     public val panelHeaderHeight: Dp = 36.dp
     public val navigationItemHeight: Dp = 36.dp

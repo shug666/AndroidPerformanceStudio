@@ -2,6 +2,111 @@
 
 This is a continuation checkpoint for the [phased implementation plan](android-performance-studio-commercial-ui-implementation.md), not an assertion that the full commercial UI is finished.
 
+## 2026-10-11: Hover titles on the collapsed rail
+
+### Implemented
+
+- While the rail is collapsed, every entry is wrapped in a desktop `TooltipArea` that reveals the
+  destination title in a `RailTooltip` panel after 400 ms. The collapse/expand control gets the same
+  treatment using its action label. Expanded entries keep their visible label and show no tooltip.
+
+### Verification
+
+- Temporary UI test: hovering the collapsed Home icon moved the count of `首页` text nodes from 0 to
+  1 and the tooltip node rendered its label. The first attempt was invalid because it asserted on
+  "Layout Inspector", which the home page also renders as a module card.
+- The tooltip is drawn in a separate popup root, so whole-window captures exclude it; the tooltip
+  node is captured instead under `build/ui-verification/rail-tooltip.png`.
+- `CommercialAppShellTest` asserts the tooltip wiring and that the hover title is gated on the
+  collapsed state.
+- `:desktop-app:test` passes 152 tests, zero failures.
+
+## 2026-10-11: Collapse control aligned with the navigation icon column
+
+### Implemented
+
+- The rail collapse/expand control now reuses the same geometry as `NavigationRailEntry`: the row
+  padding applies only while expanded and the icon is centred while collapsed. Its chevron therefore
+  sits on the navigation icon axis instead of floating in the middle of the 216 dp expanded rail.
+
+### Verification
+
+- Rendered both states and measured the bottom of the rail: the chevron cluster is x 24..29
+  (centre 26.5) in the 216 dp expanded rail and in the 54 dp collapsed rail, matching every
+  navigation icon and the settings gear.
+- `CommercialAppShellTest` asserts that both the entry and the collapse control carry the collapsed
+  centring rule.
+- `:desktop-app:test` passes 151 tests, zero failures.
+
+## 2026-10-10: Collapsed rail narrowed so centring does not move the icons
+
+### Implemented
+
+- `StudioTokens.navigationCollapsedWidth` is now 54 dp instead of 64 dp. With 8 dp rail padding and a
+  centred 18 dp icon, 54 dp places the icon's left edge at the same x as the expanded row
+  (8 dp rail padding + 10 dp row padding), so collapsing no longer shifts an icon while the icon is
+  still centred in the rail. 64 dp cannot satisfy both: a centred icon there lands 5 dp right of the
+  expanded position.
+- This intentionally departs from the "Navigation Collapsed 64 dp" entry in the design plan's token
+  table; the plan document was left unchanged.
+
+### Verification
+
+- Measured both renders: collapsed rail 53 px wide with the icon spanning x 20..33 (centre 26.5, rail
+  centre 26.5) and the expanded icon starting at the same x = 20, so the icon neither moves nor sits
+  off-centre.
+- `StudioComponentsTest` now pins `navigationCollapsedWidth` at 54 dp; `:ui-components:test` and
+  `:desktop-app:test` pass.
+
+## 2026-10-10: Compact theme colour swatches
+
+### Implemented
+
+- Settings -> General theme colours are now a four-column grid of 38 dp chips with an 18 dp swatch
+  dot and a 12 pt label, replacing two columns of 72 dp cards. The selected chip keeps its colour
+  border, tinted container and check mark.
+
+### Verification
+
+- `ApplicationSettingsDialogTest` gained a case pinning the compact swatch metrics
+  (`THEME_SWATCH_COLUMNS = 4`, `height(38.dp)`, `size(18.dp)`).
+- `:desktop-app:test` passed 151 tests, zero failures.
+- Offscreen render at 1400x700 confirmed the two-row swatch grid and the four settings dropdowns
+  above it.
+
+## 2026-10-10: Settings becomes a routed page instead of a dialog
+
+### Implemented
+
+- Added `AppDestination.SETTINGS`, so settings is a first-class destination composed in the retained
+  content host with its own title, icon, rail entry and selected state.
+- Converted `DesktopAppSettingsDialog` into `DesktopAppSettingsPage`: the `DialogWindow`, its dialog
+  state, the modal surface and the "Done" footer are gone. The page fills the content host and leads
+  with a "Settings" header above its own sub-sidebar.
+- The rail settings entry now highlights like every other destination, and both `Cmd/Ctrl+,` and the
+  macOS Preferences menu route to the same destination.
+- Removed the `showSettings` flag; `openSettings(page)` records the requested sub-page and opens the
+  destination, so feature pages can still deep-link into a section.
+- Settings no longer needs a shell callback, so `CommercialAppShell.onOpenSettings` and the
+  standalone `railSettingsIcon` accessor are gone; the entry uses the destination mapping.
+
+### Verification
+
+```sh
+cd desktop-viewer
+./gradlew :desktop-app:test --offline
+```
+
+- `:desktop-app:test` passed 150 tests, zero failures.
+- Source tests that read the dialog file were repointed at `DesktopAppSettingsPage.kt`; the former
+  "large and resizable window" case now asserts the page is routed and that no `DialogWindow` or
+  `rememberDialogState` remains, and that `showSettings` is gone.
+- Offscreen renders at 1400x760 confirmed the settings page inside the shell with the rail entry
+  selected, for both the Chinese General page and the English About page.
+- `docs/aps-commercial-ui-implementation/images/reports-settings-v2-*.png` remain untracked user
+  references; the settings sub-sidebar still uses the existing sections rather than the nine in that
+  design board.
+
 ## 2026-10-10: Shell top bar removed and settings moved into the rail
 
 ### Implemented
@@ -119,7 +224,7 @@ cd desktop-viewer
 - The shell was rendered offscreen at 1400x640 (expanded) and 900x640 (collapsed). The expanded rail
   shows icon plus label with the selected accent; the collapsed rail shows the icons alone.
 - Measured the collapsed rail: every primary icon, the settings gear, and the collapse chevron share
-  the same horizontal centre (x≈31.5 in a 64 dp rail), so the collapsed rail is centred consistently.
+  the same horizontal centre, so the collapsed rail is centred consistently.
 - Pre-existing, unrelated failures were left untouched: `UnifiedUiComponentsSourceTest` (the
   `HomeButton.kt` accent assertion, and raw colors in `SourceCodeViewer.kt` / `OneDarkSourceTheme.kt`)
   and `:ui-components:detekt` (22 issues in files this batch did not modify).

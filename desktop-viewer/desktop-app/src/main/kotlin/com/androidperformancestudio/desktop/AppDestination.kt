@@ -24,6 +24,7 @@ enum class AppDestination {
     GPU_INSPECTOR,
     BENCHMARK_REGRESSION,
     METHOD_RECORDING,
+    SETTINGS,
 }
 
 data class AppArtifactOpenRequest(
@@ -65,6 +66,7 @@ internal val com.androidperformancestudio.desktop.AppDestination.titleResource: 
             AppDestination.GPU_INSPECTOR -> Res.string.gpu_inspector
             AppDestination.BENCHMARK_REGRESSION -> Res.string.benchmark_regression
             AppDestination.METHOD_RECORDING -> Res.string.method_recording
+            AppDestination.SETTINGS -> Res.string.settings
         }
 
 class AppNavigator(

@@ -8,13 +8,18 @@ import org.junit.jupiter.api.Test
 
 class UnifiedSettingsMigrationTest {
     @Test
-    fun `unified settings window is large and resizable`() {
-        val dialog = desktopSource("DesktopAppSettingsDialog.kt")
+    fun `unified settings is a routed page instead of a dialog window`() {
+        val page = desktopSource("DesktopAppSettingsPage.kt")
+        val shell = desktopSource("DesktopAppMainPage.kt")
 
-        assertTrue(dialog.contains("UNIFIED_SETTINGS_WIDTH_DP = 1100"))
-        assertTrue(dialog.contains("UNIFIED_SETTINGS_HEIGHT_DP = 760"))
-        assertTrue(dialog.contains("resizable = true"))
-        assertTrue(dialog.contains("rememberDialogState("))
+        assertFalse(page.contains("DialogWindow("))
+        assertFalse(page.contains("rememberDialogState("))
+        assertTrue(page.contains("Modifier.fillMaxSize()"))
+        assertTrue(page.contains("UNIFIED_SETTINGS_SIDEBAR_WIDTH_DP = 220"))
+        assertTrue(shell.contains("AppDestination.SETTINGS ->"))
+        assertTrue(shell.contains("DesktopAppSettingsPage("))
+        assertTrue(shell.contains("navigator.open(AppDestination.SETTINGS)"))
+        assertFalse(shell.contains("showSettings"))
     }
 
     @Test
@@ -41,7 +46,7 @@ class UnifiedSettingsMigrationTest {
 
     @Test
     fun `simpleperf complete settings and live capture context are embedded`() {
-        val dialog = desktopSource("DesktopAppSettingsDialog.kt")
+        val dialog = desktopSource("DesktopAppSettingsPage.kt")
         val shell = desktopSource("DesktopAppMainPage.kt")
         val settings = simpleperfPresentationSource("CaptureSettingsSection.kt")
         val workspace = simpleperfDesktopSource("SimpleperfMainPage.kt")

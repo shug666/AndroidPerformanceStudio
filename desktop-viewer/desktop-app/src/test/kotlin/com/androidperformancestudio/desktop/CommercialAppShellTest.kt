@@ -63,6 +63,8 @@ class CommercialAppShellTest {
             ),
         )
         assertTrue(shell.contains("painterResource(navigationRailToggleIcon(collapsed))"))
+        // The collapse control reuses the entry geometry, so its icon shares the navigation icon axis.
+        assertEquals(2, shell.split("Arrangement.Center").size - 1)
         assertFalse(shell.contains("item.label.take(1)"))
     }
 
@@ -95,6 +97,21 @@ class CommercialAppShellTest {
                 "navigation icon must be an SVG vector: $name",
             )
         }
+    }
+
+    @Test
+    fun `collapsed rail reveals the entry title on hover`() {
+        val shell =
+            Files.readString(
+                Path.of("src/main/kotlin/com/androidperformancestudio/desktop/shell/CommercialAppShell.kt"),
+            )
+
+        assertTrue(shell.contains("private fun RailTooltip(label: String)"))
+        assertTrue(shell.contains("TooltipArea(tooltip = { RailTooltip(label) }"))
+        assertTrue(shell.contains("TooltipArea(tooltip = { RailTooltip(collapseActionLabel) }"))
+        // Only the icon-only state needs the hover title.
+        val entry = shell.substringAfter("private fun NavigationRailEntry(").substringBefore("private fun RailEntryButton(")
+        assertTrue(entry.contains("if (collapsed) {"))
     }
 
     @Test
@@ -154,7 +171,8 @@ class CommercialAppShellTest {
         assertFalse(shell.contains("StudioTopBar("))
         assertTrue(shell.contains("StudioNavigationRail("))
         assertTrue(shell.contains("NavigationRailEntry("))
-        assertTrue(shell.contains("railSettingsIcon"))
+        assertTrue(shell.contains("AppDestination.SETTINGS.navigationIconResource"))
+        assertTrue(shell.contains("settingsSelected"))
         assertTrue(shell.contains("onClick = onOpenSettings"))
         assertTrue(shell.contains("height(StudioTokens.borderWidth)"))
         assertTrue(shell.contains("StudioStatusBar("))

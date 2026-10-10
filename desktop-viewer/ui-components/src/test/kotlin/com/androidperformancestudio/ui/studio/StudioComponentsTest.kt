@@ -26,7 +26,7 @@ class StudioComponentsTest {
     fun `studio tokens preserve the documented dense shell measurements`() {
         assertEquals(56, StudioTokens.topBarHeight.value.toInt())
         assertEquals(216, StudioTokens.navigationExpandedWidth.value.toInt())
-        assertEquals(64, StudioTokens.navigationCollapsedWidth.value.toInt())
+        assertEquals(54, StudioTokens.navigationCollapsedWidth.value.toInt())
         assertEquals(10, StudioTokens.navigationItemHorizontalPadding.value.toInt())
         assertEquals(28, StudioTokens.globalStatusBarHeight.value.toInt())
     }

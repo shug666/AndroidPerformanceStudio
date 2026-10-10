@@ -50,9 +50,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.DialogWindow
-import androidx.compose.ui.window.rememberDialogState
 import java.util.Locale
 import java.io.File
 import javax.swing.JFileChooser
@@ -63,7 +62,6 @@ import com.androidperformancestudio.ui.ProvideViewerThemeContext
 import com.androidperformancestudio.ui.ViewerThemeContext
 import com.androidperformancestudio.ui.viewerOutlinedTextFieldColors
 import com.androidperformancestudio.ui.DropdownSelector
-import com.androidperformancestudio.ui.button.MacOSTextButton
 import com.androidperformancestudio.ui_components.generated.resources.icon_collapse
 import com.androidperformancestudio.ui_components.generated.resources.icon_expand
 import org.jetbrains.compose.resources.DrawableResource
@@ -82,7 +80,7 @@ public enum class SettingsPage {
 }
 
 @Composable
-internal fun DesktopAppSettingsDialog(
+internal fun DesktopAppSettingsPage(
     selectedPage: SettingsPage,
     applicationSettings: ApplicationUiSettings,
     simpleperfSettings: SimpleperfUiSettings,
@@ -98,7 +96,6 @@ internal fun DesktopAppSettingsDialog(
     onLayoutInspectorSettingsChanged: () -> Unit,
     onOpenUserGuide: () -> Unit,
     persistenceErrorPage: SettingsPage?,
-    onDismiss: () -> Unit,
 ) {
     var simpleperfExpanded by remember {
         mutableStateOf(selectedPage == SettingsPage.SIMPLEPERF)
@@ -111,108 +108,92 @@ internal fun DesktopAppSettingsDialog(
             simpleperfExpanded = true
         }
     }
-    DialogWindow(
-        onCloseRequest = onDismiss,
-        title = localizedStringResource(Res.string.settings, language),
-        state =
-            rememberDialogState(
-                width = UNIFIED_SETTINGS_WIDTH_DP.dp,
-                height = UNIFIED_SETTINGS_HEIGHT_DP.dp,
-            ),
-        resizable = true,
-    ) {
-        ProvideViewerThemeContext(viewerThemeContext) {
-            LaunchedEffect(selectedPage) {
-                window.toFront()
-                window.requestFocus()
-            }
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = MaterialTheme.colorScheme.surface,
-                shape = MaterialTheme.shapes.medium,
-            ) {
-                Column(Modifier.fillMaxSize()) {
-                    Row(Modifier.weight(1f)) {
-                        SettingsSidebar(
-                            selectedPage = selectedPage,
-                            selectedSimpleperfSection = activeSimpleperfSection,
-                            simpleperfExpanded = simpleperfExpanded,
-                            language = language,
-                            onPageSelected = onPageSelected,
-                            onSimpleperfExpandedChange = { simpleperfExpanded = it },
-                            onSimpleperfSectionSelected = { section ->
-                                activeSimpleperfSection = section
-                                simpleperfExpanded = true
-                                onPageSelected(SettingsPage.SIMPLEPERF)
-                            },
-                        )
-                        VerticalDivider(color = MaterialTheme.colorScheme.outline)
-                        Column(Modifier.weight(1f).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (persistenceErrorPage != null) {
-                                Text(
-                                    localizedStringResource(
-                                        Res.string.settings_could_not_be_saved_the_current_session_still_uses,
-                                        language,
-                                        persistenceErrorPage.label(language)
-                                    ),
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodySmall,
+    ProvideViewerThemeContext(viewerThemeContext) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = LocalViewerColors.current.canvasBackground,
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                SettingsPageHeader(language)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                Row(Modifier.weight(1f)) {
+                    SettingsSidebar(
+                        selectedPage = selectedPage,
+                        selectedSimpleperfSection = activeSimpleperfSection,
+                        simpleperfExpanded = simpleperfExpanded,
+                        language = language,
+                        onPageSelected = onPageSelected,
+                        onSimpleperfExpandedChange = { simpleperfExpanded = it },
+                        onSimpleperfSectionSelected = { section ->
+                            activeSimpleperfSection = section
+                            simpleperfExpanded = true
+                            onPageSelected(SettingsPage.SIMPLEPERF)
+                        },
+                    )
+                    VerticalDivider(color = MaterialTheme.colorScheme.outline)
+                    Column(Modifier.weight(1f).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (persistenceErrorPage != null) {
+                            Text(
+                                localizedStringResource(
+                                    Res.string.settings_could_not_be_saved_the_current_session_still_uses,
+                                    language,
+                                    persistenceErrorPage.label(language)
+                                ),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        when (selectedPage) {
+                            SettingsPage.GENERAL ->
+                                GeneralSettingsContent(
+                                    settings = applicationSettings,
+                                    language = language,
+                                    onSettingsChanged = onApplicationSettingsChanged,
+                                    modifier = Modifier.weight(1f),
                                 )
-                            }
-                            when (selectedPage) {
-                                SettingsPage.GENERAL ->
-                                    GeneralSettingsContent(
-                                        settings = applicationSettings,
-                                        language = language,
-                                        onSettingsChanged = onApplicationSettingsChanged,
-                                        modifier = Modifier.weight(1f),
-                                    )
 
-                                SettingsPage.CONFIGURATION ->
-                                    ConfigurationSettingsContent(
-                                        settings = applicationSettings,
-                                        language = language,
-                                        onSettingsChanged = onApplicationSettingsChanged,
-                                        modifier = Modifier.weight(1f),
-                                    )
+                            SettingsPage.CONFIGURATION ->
+                                ConfigurationSettingsContent(
+                                    settings = applicationSettings,
+                                    language = language,
+                                    onSettingsChanged = onApplicationSettingsChanged,
+                                    modifier = Modifier.weight(1f),
+                                )
 
-                                SettingsPage.LAYOUT_INSPECTOR ->
-                                    LayoutInspectorSettingsContent(
-                                        language = language,
-                                        onSettingsChanged = onLayoutInspectorSettingsChanged,
-                                        modifier = Modifier.weight(1f),
-                                    )
+                            SettingsPage.LAYOUT_INSPECTOR ->
+                                LayoutInspectorSettingsContent(
+                                    language = language,
+                                    onSettingsChanged = onLayoutInspectorSettingsChanged,
+                                    modifier = Modifier.weight(1f),
+                                )
 
-                                SettingsPage.SIMPLEPERF ->
-                                    CompleteSimpleperfSettingsContent(
-                                        settings = simpleperfSettings,
-                                        context = simpleperfCaptureSettingsContext,
-                                        section = activeSimpleperfSection,
-                                        darkTheme = viewerThemeContext.colors.isDark,
-                                        language = language,
-                                        locale = simpleperfLocale,
-                                        onSettingsChanged = onSimpleperfSettingsChanged,
-                                        onOpenUserGuide = onOpenUserGuide,
-                                        modifier = Modifier.weight(1f),
-                                    )
+                            SettingsPage.SIMPLEPERF ->
+                                CompleteSimpleperfSettingsContent(
+                                    settings = simpleperfSettings,
+                                    context = simpleperfCaptureSettingsContext,
+                                    section = activeSimpleperfSection,
+                                    darkTheme = viewerThemeContext.colors.isDark,
+                                    language = language,
+                                    locale = simpleperfLocale,
+                                    onSettingsChanged = onSimpleperfSettingsChanged,
+                                    onOpenUserGuide = onOpenUserGuide,
+                                    modifier = Modifier.weight(1f),
+                                )
 
-                                SettingsPage.AI ->
-                                    AiSettingsContent(
-                                        language = language,
-                                        runtime = sourceWorkspaceRuntime,
-                                        modifier = Modifier.weight(1f),
-                                    )
+                            SettingsPage.AI ->
+                                AiSettingsContent(
+                                    language = language,
+                                    runtime = sourceWorkspaceRuntime,
+                                    modifier = Modifier.weight(1f),
+                                )
 
-                                SettingsPage.ABOUT ->
-                                    AboutSettingsContent(
-                                        language = language,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                            }
+                            SettingsPage.ABOUT ->
+                                AboutSettingsContent(
+                                    language = language,
+                                    modifier = Modifier.weight(1f),
+                                )
                         }
                     }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-                    SettingsFooter(language, onDismiss)
                 }
             }
         }
@@ -232,14 +213,15 @@ private fun SettingsPageTitle(
 }
 
 @Composable
-private fun SettingsFooter(language: UiLanguage, onDismiss: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Spacer(Modifier.weight(1f))
-        MacOSTextButton(onClick = onDismiss, label = localizedStringResource(Res.string.done, language), style = LocalViewerColors.current)
-    }
+private fun SettingsPageHeader(language: UiLanguage) {
+    val colors = LocalViewerColors.current
+    Text(
+        text = localizedStringResource(Res.string.settings, language),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        color = colors.primaryText,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+    )
 }
 
 @Composable
@@ -582,12 +564,12 @@ private fun ThemeColorSettingsContent(
     language: UiLanguage,
     onSettingsChanged: (ApplicationUiSettings) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SettingsPageTitle(localizedStringResource(Res.string.theme_color, language))
-        ApplicationThemeColor.entries.chunked(2).forEach { row ->
+        ApplicationThemeColor.entries.chunked(THEME_SWATCH_COLUMNS).forEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 row.forEach { color ->
                     ThemeColorOption(
@@ -598,13 +580,15 @@ private fun ThemeColorSettingsContent(
                         modifier = Modifier.weight(1f),
                     )
                 }
-                if (row.size == 1) {
+                repeat(THEME_SWATCH_COLUMNS - row.size) {
                     Spacer(Modifier.weight(1f))
                 }
             }
         }
     }
 }
+
+private const val THEME_SWATCH_COLUMNS = 4
 
 @Composable
 private fun ThemeColorOption(
@@ -615,34 +599,36 @@ private fun ThemeColorOption(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier.height(72.dp).clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
+        modifier = modifier.height(38.dp).clickable(onClick = onClick),
+        shape = RoundedCornerShape(6.dp),
         color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
         border =
             BorderStroke(
-                width = if (selected) 2.dp else 1.dp,
+                width = if (selected) 1.5.dp else 1.dp,
                 color = if (selected) color.color else MaterialTheme.colorScheme.outline,
             ),
     ) {
         Row(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                modifier = Modifier.size(32.dp).background(color.color, CircleShape),
+                modifier = Modifier.size(18.dp).background(color.color, CircleShape),
             )
             Text(
                 text = label,
                 modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.bodyMedium,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             if (selected) {
                 Text(
                     text = "✓",
                     color = color.color,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleSmall,
                 )
             }
         }
@@ -860,6 +846,4 @@ private fun CaptureSettingsSection.settingsLabel(language: UiLanguage): String =
         CaptureSettingsSection.USER_GUIDE -> localizedStringResource(Res.string.user_guide, language)
     }
 
-internal const val UNIFIED_SETTINGS_WIDTH_DP = 1100
-internal const val UNIFIED_SETTINGS_HEIGHT_DP = 760
 internal const val UNIFIED_SETTINGS_SIDEBAR_WIDTH_DP = 220

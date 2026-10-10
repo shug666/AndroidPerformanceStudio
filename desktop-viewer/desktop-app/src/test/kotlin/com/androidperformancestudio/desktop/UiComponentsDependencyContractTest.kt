@@ -42,7 +42,7 @@ class UiComponentsDependencyContractTest {
         val uiComponentsBuild = Files.readString(desktopViewer.resolve("ui-components/build.gradle.kts"))
         val settingsDialog =
             Files.readString(
-                Path.of("src/main/kotlin/com/androidperformancestudio/desktop/DesktopAppSettingsDialog.kt"),
+                Path.of("src/main/kotlin/com/androidperformancestudio/desktop/DesktopAppSettingsPage.kt"),
             )
 
         assertTrue(uiComponentsBuild.contains("publicResClass = true"))
