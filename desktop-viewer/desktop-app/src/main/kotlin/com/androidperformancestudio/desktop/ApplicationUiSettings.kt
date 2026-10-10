@@ -91,6 +91,8 @@ internal data class ApplicationUiSettings(
     val themeColor: ApplicationThemeColor = ApplicationThemeColor.CORNFLOWER_BLUE,
     val language: ApplicationLanguagePreference = ApplicationLanguagePreference.SYSTEM,
     val androidSdkPath: String? = null,
+    /** The navigation rail starts collapsed and remembers the user's choice. */
+    val navigationRailCollapsed: Boolean = true,
 )
 
 internal class ApplicationUiSettingsStore(
@@ -105,6 +107,8 @@ internal class ApplicationUiSettingsStore(
             themeColor = ApplicationThemeColor.parse(readValue(THEME_COLOR_KEY)),
             language = ApplicationLanguagePreference.parse(readValue(LANGUAGE_KEY)),
             androidSdkPath = readValue(ANDROID_SDK_PATH_KEY)?.trim()?.takeIf(String::isNotEmpty),
+            navigationRailCollapsed =
+                readValue(NAVIGATION_RAIL_COLLAPSED_KEY)?.toBooleanStrictOrNull() ?: true,
         )
 
     fun save(settings: ApplicationUiSettings): Boolean =
@@ -114,6 +118,7 @@ internal class ApplicationUiSettingsStore(
             writeValue(THEME_COLOR_KEY, settings.themeColor.storageValue)
             writeValue(LANGUAGE_KEY, settings.language.storageValue)
             writeValue(ANDROID_SDK_PATH_KEY, settings.androidSdkPath.orEmpty())
+            writeValue(NAVIGATION_RAIL_COLLAPSED_KEY, settings.navigationRailCollapsed.toString())
             flush()
         }.isSuccess
 
@@ -123,6 +128,7 @@ internal class ApplicationUiSettingsStore(
         private const val THEME_COLOR_KEY = "application.themeColor"
         private const val LANGUAGE_KEY = "application.language"
         private const val ANDROID_SDK_PATH_KEY = "application.androidSdkPath"
+        private const val NAVIGATION_RAIL_COLLAPSED_KEY = "application.navigationRailCollapsed"
 
         fun desktop(): ApplicationUiSettingsStore {
             val preferences =

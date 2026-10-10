@@ -100,6 +100,26 @@ class CommercialAppShellTest {
     }
 
     @Test
+    fun `navigation rail state is a persisted preference rather than local state`() {
+        val shell =
+            Files.readString(
+                Path.of("src/main/kotlin/com/androidperformancestudio/desktop/shell/CommercialAppShell.kt"),
+            )
+        val main =
+            Files.readString(
+                Path.of("src/main/kotlin/com/androidperformancestudio/desktop/DesktopAppMainPage.kt"),
+            )
+
+        assertTrue(shell.contains("navigationRailCollapsed: Boolean"))
+        assertTrue(shell.contains("onNavigationRailCollapsedChange: (Boolean) -> Unit"))
+        assertTrue(shell.contains("resolvedNavigationRailCollapsed(maxWidth.value.toInt(), navigationRailCollapsed)"))
+        assertTrue(shell.contains("onNavigationRailCollapsedChange(!collapsed)"))
+        assertFalse(shell.contains("var userCollapsed"))
+        assertTrue(main.contains("navigationRailCollapsed = applicationSettings.navigationRailCollapsed"))
+        assertTrue(main.contains("applicationSettings.copy(navigationRailCollapsed = collapsed)"))
+    }
+
+    @Test
     fun `primary rail lists source workspaces`() {
         val shell =
             Files.readString(

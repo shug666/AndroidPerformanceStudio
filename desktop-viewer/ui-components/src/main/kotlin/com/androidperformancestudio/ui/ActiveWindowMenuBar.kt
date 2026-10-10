@@ -4,32 +4,50 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ComposableOpenTarget
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCompositionContext
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.window.FrameWindowScope
+import androidx.compose.ui.window.MenuBar
 import androidx.compose.ui.window.MenuBarScope
 import androidx.compose.ui.window.MenuComposable
-import androidx.compose.ui.window.setContent
-import javax.swing.JMenu
-import javax.swing.JMenuBar
 
-private const val PRELOADED_MENU_MARKER = "android-performance-studio.preloaded-menu"
 private const val MENU_BAR_READY_CALLBACK = "android-performance-studio.menu-bar-ready"
+private const val MENU_CONTENT_PROPERTY = "android-performance-studio.menu-content"
 
-private class MenuBarHostState {
-    var initialized: Boolean = false
-    var menuKey: Any? = null
-    var menuBar: JMenuBar = JMenuBar()
+/** Menu content published by the active feature page. */
+private class WindowMenuBarContent {
+    var content: (@Composable @MenuComposable MenuBarScope.() -> Unit)? by mutableStateOf(null)
 }
+
+/** Tracks which destination already reported menu readiness. */
+internal class MenuBarHostState {
+    private var reportedKey: Any? = UnsetPreloadedKey
+
+    /** True exactly once per key, so readiness is reported when the destination changes. */
+    fun reportReadinessOnce(key: Any?): Boolean {
+        if (reportedKey === key) return false
+        reportedKey = key
+        return true
+    }
+}
+
+private val UnsetPreloadedKey = Any()
 
 public val LocalWindowMenuBarActive = staticCompositionLocalOf { true }
 
 /**
- * Installs a native menu bar before the active feature page is composed.
+ * Hosts the window's native menu bar using Compose's own [MenuBar] control.
  *
- * The feature menu is filled later by [ActiveWindowMenuBar], but the placeholder keeps the
- * platform menu bar visible while a profiler initializes its controller and content.
+ * [MenuBar] creates the `JMenuBar` once for this composition and only clears it when the window is
+ * disposed (see `Window.desktop.kt`). Its content reads the holder below, so switching destinations
+ * swaps the menus inside that single composition instead of disposing it. Disposing a menu
+ * composition runs `SwingApplier.onClear()`, which calls `JMenuBar.removeAll()`; composing one menu
+ * bar per page therefore wiped the whole bar on every navigation, which is what made the macOS
+ * screen menu bar flash or stay empty while switching quickly.
  */
 @Composable
 @Suppress("FunctionName", "ktlint:standard:function-naming")
@@ -38,114 +56,68 @@ public fun FrameWindowScope.WindowMenuBarHost(
     preloadedMenuKey: Any? = preloadedMenuTitles,
     onMenuBarReady: () -> Unit = {},
 ) {
-    window.rootPane.putClientProperty(MENU_BAR_READY_CALLBACK, Runnable { onMenuBarReady() })
+    // Published before any feature page composes so every page finds it in the same frame.
+    val content =
+        remember {
+            WindowMenuBarContent().also { holder ->
+                window.rootPane.putClientProperty(MENU_CONTENT_PROPERTY, holder)
+            }
+        }
     val hostState = remember { MenuBarHostState() }
-    val menuBar: JMenuBar
-    if (!hostState.initialized || hostState.menuKey != preloadedMenuKey) {
-        val oldMenuBar = hostState.menuBar
-        menuBar = JMenuBar()
-        hostState.menuBar = menuBar
-        hostState.menuKey = preloadedMenuKey
-        hostState.initialized = true
-        menuBar.updatePreloadedMenus(preloadedMenuTitles)
-        if (preloadedMenuTitles.isEmpty()) {
-            if (window.jMenuBar === oldMenuBar) {
-                window.jMenuBar = null
-            }
-        } else {
-            window.jMenuBar = menuBar
-        }
-        refreshNativeMenuBar()
-    } else {
-        menuBar = hostState.menuBar
-        if (preloadedMenuTitles.isNotEmpty() && window.jMenuBar !== menuBar) {
-            window.jMenuBar = menuBar
-            refreshNativeMenuBar()
+    val currentOnReady = rememberUpdatedState(onMenuBarReady)
+
+    MenuBar {
+        content.content?.invoke(this)
+    }
+
+    SideEffect {
+        window.rootPane.putClientProperty(
+            MENU_BAR_READY_CALLBACK,
+            Runnable { currentOnReady.value() },
+        )
+        // Destinations without a feature menu have no page that can report readiness.
+        if (hostState.reportReadinessOnce(preloadedMenuKey) && preloadedMenuTitles.isEmpty()) {
+            currentOnReady.value()
         }
     }
-    DisposableEffect(menuBar) {
-        onDispose {
-            if (window.jMenuBar === menuBar) {
-                window.jMenuBar = null
-                refreshNativeMenuBar()
-            }
-        }
-    }
-    if (preloadedMenuTitles.isEmpty()) {
-        SideEffect {
-            refreshNativeMenuBar()
-            onMenuBarReady()
-        }
-    } else {
-        SideEffect(::refreshNativeMenuBar)
+
+    DisposableEffect(Unit) {
+        onDispose { window.rootPane.putClientProperty(MENU_CONTENT_PROPERTY, null) }
     }
 }
 
+/**
+ * Publishes the calling page's menus while it is the active destination.
+ *
+ * The content is composed by [WindowMenuBarHost], so deactivating a page only swaps the published
+ * content; it never disposes the menu composition or clears the window's menu bar.
+ */
 @Composable
 @ComposableOpenTarget(-1)
 @Suppress("FunctionName", "ktlint:standard:function-naming")
 public fun FrameWindowScope.ActiveWindowMenuBar(
     content: @Composable @MenuComposable MenuBarScope.() -> Unit,
 ) {
-    if (LocalWindowMenuBarActive.current) {
-        val parentComposition = rememberCompositionContext()
-        val ownsMenuBar = remember { window.jMenuBar == null }
-        val menuBar = remember { window.jMenuBar ?: JMenuBar() }
-        if (window.jMenuBar !== menuBar) {
-            window.jMenuBar = menuBar
-            refreshNativeMenuBar()
+    if (!LocalWindowMenuBarActive.current) return
+    val holder =
+        window.rootPane.getClientProperty(MENU_CONTENT_PROPERTY) as? WindowMenuBarContent ?: return
+    val currentContent = rememberUpdatedState(content)
+    SideEffect {
+        if (holder.content !== currentContent.value) {
+            holder.content = currentContent.value
         }
-        DisposableEffect(menuBar) {
-            val composition = menuBar.setContent(parentComposition, content)
-            removePreloadedMenus(menuBar)
-            notifyNativeMenuBarReady()
-            onDispose {
-                composition.dispose()
-                removeFeatureMenus(menuBar)
-                if (ownsMenuBar && window.jMenuBar === menuBar) {
-                    window.jMenuBar = null
-                    refreshNativeMenuBar()
-                }
+        // The window title is only updated once the active page has published its menus.
+        notifyNativeMenuBarReady()
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            if (holder.content === currentContent.value) {
+                holder.content = null
             }
         }
-        SideEffect(::refreshNativeMenuBar)
     }
 }
 
 private fun FrameWindowScope.notifyNativeMenuBarReady() {
     (window.rootPane.getClientProperty(MENU_BAR_READY_CALLBACK) as? Runnable)?.run()
-}
-
-private fun JMenuBar.updatePreloadedMenus(titles: List<String>) {
-    components
-        .filterIsInstance<JMenu>()
-        .filter { it.getClientProperty(PRELOADED_MENU_MARKER) == true }
-        .forEach(::remove)
-    titles.asReversed().forEach { title ->
-        add(
-            JMenu(title).apply {
-                putClientProperty(PRELOADED_MENU_MARKER, true)
-            },
-            0,
-        )
-    }
-}
-
-private fun removePreloadedMenus(menuBar: JMenuBar) {
-    menuBar.components
-        .filterIsInstance<JMenu>()
-        .filter { it.getClientProperty(PRELOADED_MENU_MARKER) == true }
-        .forEach(menuBar::remove)
-}
-
-private fun removeFeatureMenus(menuBar: JMenuBar) {
-    menuBar.components
-        .filterIsInstance<JMenu>()
-        .filter { it.getClientProperty(PRELOADED_MENU_MARKER) != true }
-        .forEach(menuBar::remove)
-}
-
-private fun FrameWindowScope.refreshNativeMenuBar() {
-    window.rootPane.revalidate()
-    window.rootPane.repaint()
 }

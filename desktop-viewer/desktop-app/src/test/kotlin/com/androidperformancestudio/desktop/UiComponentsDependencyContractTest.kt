@@ -40,18 +40,23 @@ class UiComponentsDependencyContractTest {
     fun `shared drawable resources are public and consumed through the UI component Res class`() {
         val desktopViewer = Path.of("..").toAbsolutePath().normalize()
         val uiComponentsBuild = Files.readString(desktopViewer.resolve("ui-components/build.gradle.kts"))
-        val settingsDialog =
+        val navigationIcons =
             Files.readString(
-                Path.of("src/main/kotlin/com/androidperformancestudio/desktop/DesktopAppSettingsPage.kt"),
+                Path.of("src/main/kotlin/com/androidperformancestudio/desktop/shell/StudioNavigationIcon.kt"),
+            )
+        val home =
+            Files.readString(
+                Path.of("src/main/kotlin/com/androidperformancestudio/desktop/AppHomePage.kt"),
             )
 
         assertTrue(uiComponentsBuild.contains("publicResClass = true"))
         assertTrue(Files.exists(desktopViewer.resolve("ui-components/src/main/composeResources/drawable/icon_expand.svg")))
         assertTrue(Files.exists(desktopViewer.resolve("ui-components/src/main/composeResources/drawable/icon_collapse.svg")))
-        assertTrue(settingsDialog.contains("UiComponentsRes.drawable.icon_expand"))
-        assertTrue(settingsDialog.contains("UiComponentsRes.drawable.icon_collapse"))
-        assertTrue(settingsDialog.contains("tint ="))
-        assertTrue(settingsDialog.contains("MaterialTheme.colorScheme.onSurfaceVariant"))
+        // Shared drawables are consumed through the public UI component Res class.
+        assertTrue(navigationIcons.contains("UiComponentsRes.drawable.ic_nav_home"))
+        assertTrue(navigationIcons.contains("UiComponentsRes.drawable.ic_settings"))
+        assertTrue(home.contains("painterResource(UiComponentsRes.drawable.ic_stat_device)"))
+        assertTrue(home.contains("tint ="))
     }
 
     @Test

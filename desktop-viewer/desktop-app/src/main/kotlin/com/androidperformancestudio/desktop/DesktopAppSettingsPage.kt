@@ -2,7 +2,6 @@ package com.androidperformancestudio.desktop
 
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.localizedStringResource
-import com.androidperformancestudio.ui_components.generated.resources.Res as UiComponentsRes
 import com.androidperformancestudio.desktop_app.generated.resources.Res
 import com.androidperformancestudio.desktop_app.generated.resources.*
 
@@ -23,6 +22,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -61,9 +63,8 @@ import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.ProvideViewerThemeContext
 import com.androidperformancestudio.ui.ViewerThemeContext
 import com.androidperformancestudio.ui.viewerOutlinedTextFieldColors
+import com.androidperformancestudio.ui.studio.StudioPanel
 import com.androidperformancestudio.ui.DropdownSelector
-import com.androidperformancestudio.ui_components.generated.resources.icon_collapse
-import com.androidperformancestudio.ui_components.generated.resources.icon_expand
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 import kotlinx.coroutines.Dispatchers
@@ -97,17 +98,6 @@ internal fun DesktopAppSettingsPage(
     onOpenUserGuide: () -> Unit,
     persistenceErrorPage: SettingsPage?,
 ) {
-    var simpleperfExpanded by remember {
-        mutableStateOf(selectedPage == SettingsPage.SIMPLEPERF)
-    }
-    var activeSimpleperfSection by remember(simpleperfInitialSection) {
-        mutableStateOf(simpleperfInitialSection)
-    }
-    LaunchedEffect(selectedPage) {
-        if (selectedPage == SettingsPage.SIMPLEPERF) {
-            simpleperfExpanded = true
-        }
-    }
     ProvideViewerThemeContext(viewerThemeContext) {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -119,16 +109,8 @@ internal fun DesktopAppSettingsPage(
                 Row(Modifier.weight(1f)) {
                     SettingsSidebar(
                         selectedPage = selectedPage,
-                        selectedSimpleperfSection = activeSimpleperfSection,
-                        simpleperfExpanded = simpleperfExpanded,
                         language = language,
                         onPageSelected = onPageSelected,
-                        onSimpleperfExpandedChange = { simpleperfExpanded = it },
-                        onSimpleperfSectionSelected = { section ->
-                            activeSimpleperfSection = section
-                            simpleperfExpanded = true
-                            onPageSelected(SettingsPage.SIMPLEPERF)
-                        },
                     )
                     VerticalDivider(color = MaterialTheme.colorScheme.outline)
                     Column(Modifier.weight(1f).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -171,7 +153,7 @@ internal fun DesktopAppSettingsPage(
                                 CompleteSimpleperfSettingsContent(
                                     settings = simpleperfSettings,
                                     context = simpleperfCaptureSettingsContext,
-                                    section = activeSimpleperfSection,
+                                    initialSection = simpleperfInitialSection,
                                     darkTheme = viewerThemeContext.colors.isDark,
                                     language = language,
                                     locale = simpleperfLocale,
@@ -227,12 +209,8 @@ private fun SettingsPageHeader(language: UiLanguage) {
 @Composable
 private fun SettingsSidebar(
     selectedPage: SettingsPage,
-    selectedSimpleperfSection: CaptureSettingsSection,
-    simpleperfExpanded: Boolean,
     language: UiLanguage,
     onPageSelected: (SettingsPage) -> Unit,
-    onSimpleperfExpandedChange: (Boolean) -> Unit,
-    onSimpleperfSectionSelected: (CaptureSettingsSection) -> Unit,
 ) {
     Column(
         modifier =
@@ -249,37 +227,12 @@ private fun SettingsSidebar(
                 onClick = { onPageSelected(page) },
             )
         }
+        // Simpleperf is one page: every category is a card inside it instead of a nested entry.
         SettingsSidebarRow(
             label = SettingsPage.SIMPLEPERF.label(language),
-            selected = selectedPage == SettingsPage.SIMPLEPERF && !simpleperfExpanded,
-            leadingIcon =
-                if (simpleperfExpanded) {
-                    UiComponentsRes.drawable.icon_expand
-                } else {
-                    UiComponentsRes.drawable.icon_collapse
-                },
-            fontWeight = FontWeight.Medium,
-            onClick = {
-                if (selectedPage == SettingsPage.SIMPLEPERF) {
-                    onSimpleperfExpandedChange(!simpleperfExpanded)
-                } else {
-                    onPageSelected(SettingsPage.SIMPLEPERF)
-                    onSimpleperfExpandedChange(true)
-                }
-            },
+            selected = selectedPage == SettingsPage.SIMPLEPERF,
+            onClick = { onPageSelected(SettingsPage.SIMPLEPERF) },
         )
-        if (simpleperfExpanded) {
-            CaptureSettingsSection.entries.forEach { section ->
-                SettingsSidebarRow(
-                    label = section.settingsLabel(language),
-                    selected =
-                        selectedPage == SettingsPage.SIMPLEPERF &&
-                                section == selectedSimpleperfSection,
-                    nested = true,
-                    onClick = { onSimpleperfSectionSelected(section) },
-                )
-            }
-        }
         SettingsSidebarRow(
             label = SettingsPage.AI.label(language),
             selected = selectedPage == SettingsPage.AI,
@@ -737,11 +690,15 @@ internal fun selectedAndroidSdkDirectoryPath(selectedDirectory: File?): String? 
         ?.normalize()
         ?.toString()
 
+/**
+ * One Simpleperf page: every [CaptureSettingsSection] is a card, so the category is visible without
+ * navigating a nested sidebar. [initialSection] is the deep link target and scrolls that card in.
+ */
 @Composable
 private fun CompleteSimpleperfSettingsContent(
     settings: SimpleperfUiSettings,
     context: SimpleperfCaptureSettingsContext?,
-    section: CaptureSettingsSection,
+    initialSection: CaptureSettingsSection,
     darkTheme: Boolean,
     language: UiLanguage,
     locale: Locale,
@@ -749,6 +706,13 @@ private fun CompleteSimpleperfSettingsContent(
     onOpenUserGuide: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val listState = rememberLazyListState()
+    LaunchedEffect(initialSection) {
+        val index = CaptureSettingsSection.entries.indexOf(initialSection)
+        if (index >= 0) {
+            listState.animateScrollToItem(index)
+        }
+    }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (context == null) {
             Text(
@@ -760,26 +724,37 @@ private fun CompleteSimpleperfSettingsContent(
                 style = MaterialTheme.typography.bodySmall,
             )
         }
-        SimpleperfSettingsSectionContent(
-            section = section,
-            setup = context?.setup,
-            availableEvents = context?.availableEvents.orEmpty(),
-            enabled = context?.enabled == true,
-            darkTheme = darkTheme,
-            flameTooltipMode = settings.flameTooltipMode,
-            onFlameTooltipModeChange = {
-                onSettingsChanged(settings.copy(flameTooltipMode = it))
-            },
-            simpleperfEngine = settings.simpleperfEngine,
-            onSimpleperfEngineChange = {
-                onSettingsChanged(settings.copy(simpleperfEngine = it))
-            },
-            onSelectTemplate = context?.onSelectTemplate ?: {},
-            onUpdate = context?.onUpdateSamplingParameters ?: {},
-            onOpenUserGuide = onOpenUserGuide,
-            locale = locale,
-            modifier = Modifier.fillMaxSize(),
-        )
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(CaptureSettingsSection.entries, key = CaptureSettingsSection::name) { section ->
+                StudioPanel(modifier = Modifier.fillMaxWidth()) {
+                    SimpleperfSettingsSectionContent(
+                        section = section,
+                        setup = context?.setup,
+                        availableEvents = context?.availableEvents.orEmpty(),
+                        enabled = context?.enabled == true,
+                        darkTheme = darkTheme,
+                        flameTooltipMode = settings.flameTooltipMode,
+                        onFlameTooltipModeChange = {
+                            onSettingsChanged(settings.copy(flameTooltipMode = it))
+                        },
+                        simpleperfEngine = settings.simpleperfEngine,
+                        onSimpleperfEngineChange = {
+                            onSettingsChanged(settings.copy(simpleperfEngine = it))
+                        },
+                        onSelectTemplate = context?.onSelectTemplate ?: {},
+                        onUpdate = context?.onUpdateSamplingParameters ?: {},
+                        onOpenUserGuide = onOpenUserGuide,
+                        locale = locale,
+                        modifier = Modifier.fillMaxWidth(),
+                        embedded = true,
+                    )
+                }
+            }
+        }
     }
 }
 

@@ -60,10 +60,14 @@ class UnifiedSettingsMigrationTest {
             "USER_GUIDE",
         ).forEach { section -> assertTrue(settings.contains(section), "Missing Simpleperf section: $section") }
         assertTrue(settings.contains("fun SimpleperfSettingsSectionContent("))
+        // The Simpleperf sections are merged into one page: each category is a card, so the settings
+        // sidebar no longer nests them.
         assertTrue(dialog.contains("SimpleperfSettingsSectionContent("))
-        assertTrue(dialog.contains("simpleperfExpanded"))
-        assertTrue(dialog.contains("CaptureSettingsSection.entries.forEach"))
-        assertTrue(dialog.contains("onSimpleperfSectionSelected"))
+        assertTrue(dialog.contains("items(CaptureSettingsSection.entries"))
+        assertTrue(dialog.contains("embedded = true"))
+        assertTrue(dialog.contains("StudioPanel("))
+        assertFalse(dialog.contains("simpleperfExpanded"))
+        assertFalse(dialog.contains("onSimpleperfSectionSelected"))
         assertTrue(dialog.contains("width(UNIFIED_SETTINGS_SIDEBAR_WIDTH_DP.dp)"))
         assertTrue(dialog.contains("UNIFIED_SETTINGS_SIDEBAR_WIDTH_DP = 220"))
         assertFalse(

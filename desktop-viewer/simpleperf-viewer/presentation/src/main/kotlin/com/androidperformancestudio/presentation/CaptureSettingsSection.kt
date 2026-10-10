@@ -150,6 +150,7 @@ fun SimpleperfSettingsSectionContent(
     onOpenUserGuide: (() -> Unit)?,
     modifier: Modifier = Modifier,
     locale: java.util.Locale = java.util.Locale.ENGLISH,
+    embedded: Boolean = false,
 ) {
     SettingsPanel(
         section = section,
@@ -167,6 +168,7 @@ fun SimpleperfSettingsSectionContent(
         onOpenUserGuide = onOpenUserGuide,
         locale = locale,
         modifier = modifier,
+        embedded = embedded,
     )
 }
 
@@ -304,8 +306,11 @@ private fun SettingsPanel(
     onOpenUserGuide: (() -> Unit)?,
     locale: java.util.Locale,
     modifier: Modifier = Modifier,
+    embedded: Boolean = false,
 ) {
-    Column(modifier.fillMaxHeight().padding(22.dp)) {
+    // "embedded" is used when the section is one card of a combined settings page: the host owns
+    // scrolling and the card padding, so this panel only contributes its header and body.
+    Column(modifier.fillMaxHeight().padding(if (embedded) 0.dp else 22.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
@@ -325,9 +330,17 @@ private fun SettingsPanel(
                 )
             }
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(if (embedded) 10.dp else 14.dp))
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+            Modifier
+                .fillMaxWidth()
+                .then(
+                    if (embedded) {
+                        Modifier
+                    } else {
+                        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                    },
+                ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             when (section) {
@@ -342,7 +355,10 @@ private fun SettingsPanel(
                 CaptureSettingsSection.SIMPLEPERF_ENGINE ->
                     SimpleperfEngineSettingsPanel(simpleperfEngine, onSimpleperfEngineChange, style, locale)
                 CaptureSettingsSection.USER_GUIDE ->
-                    onOpenUserGuide?.let { UserGuideSettingsPanel(it, style, locale) }
+                    onOpenUserGuide?.let {
+                        // Embedded cards already carry the section heading.
+                        UserGuideSettingsPanel(it, style, locale, showHeader = !embedded)
+                    }
             }
         }
     }
@@ -395,19 +411,22 @@ private fun UserGuideSettingsPanel(
     onOpenUserGuide: () -> Unit,
     style: ViewerColors,
     locale: java.util.Locale,
+    showHeader: Boolean = true,
 ) {
     MacOsPanel(Modifier.fillMaxWidth(), style) {
-        Text(
-            localizedStringResource(SimpleperfViewerRes.sp_settings_user_guide, locale),
-            color = style.text,
-            fontSize = ViewerTypography.bodyCompact.fontSize,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Text(
-            localizedStringResource(SimpleperfViewerRes.sp_settings_user_guide_description, locale),
-            color = style.secondaryText,
-            fontSize = ViewerTypography.label.fontSize,
-        )
+        if (showHeader) {
+            Text(
+                localizedStringResource(SimpleperfViewerRes.sp_settings_user_guide, locale),
+                color = style.text,
+                fontSize = ViewerTypography.bodyCompact.fontSize,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                localizedStringResource(SimpleperfViewerRes.sp_settings_user_guide_description, locale),
+                color = style.secondaryText,
+                fontSize = ViewerTypography.label.fontSize,
+            )
+        }
         MacOSTextButton(
             localizedStringResource(SimpleperfViewerRes.sp_settings_open_user_guide_browser, locale),
             onOpenUserGuide,

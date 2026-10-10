@@ -2,6 +2,105 @@
 
 This is a continuation checkpoint for the [phased implementation plan](android-performance-studio-commercial-ui-implementation.md), not an assertion that the full commercial UI is finished.
 
+## 2026-10-11: Simpleperf settings merged into one card page
+
+### Implemented
+
+- The Simpleperf entry in the settings sidebar no longer expands into per-section rows; the sidebar is
+  a flat list again and Simpleperf is one destination.
+- `CompleteSimpleperfSettingsContent` renders every `CaptureSettingsSection` as a card
+  (`StudioPanel`) in one scrollable page, each card carrying its own category heading and description.
+  The section deep link (`openSettings(SIMPLEPERF)` from the CPU profiler) now scrolls that card into
+  view instead of selecting a nested page.
+- `SimpleperfSettingsSectionContent` gained `embedded`: when the host owns scrolling and padding the
+  section only contributes its header and body. `UserGuideSettingsPanel` gained `showHeader` so its
+  embedded card does not repeat the section heading.
+
+### Verification
+
+- `UnifiedSettingsMigrationTest` now asserts the merged page: `items(CaptureSettingsSection.entries`,
+  `embedded = true`, `StudioPanel(`, and the absence of `simpleperfExpanded` /
+  `onSimpleperfSectionSelected`.
+- `UiComponentsDependencyContractTest` was repointed at the current consumers of the shared drawables
+  (the navigation icon mapping and the home page icons), because the settings page no longer uses the
+  expand/collapse chevrons.
+- Offscreen render of Settings -> Simpleperf shows the six category cards; the only repeated heading
+  found was the user guide, which is fixed.
+- `:desktop-app:test` and `:simpleperf-viewer:simpleperf-presentation:test` pass.
+
+## 2026-10-11: Navigation rail defaults to collapsed and persists its state
+
+### Implemented
+
+- `ApplicationUiSettings` gained `navigationRailCollapsed` (default `true`), stored under
+  `application.navigationRailCollapsed`.
+- `CommercialAppShell` no longer owns a local `userCollapsed` flag. It takes the persisted value plus
+  an `onNavigationRailCollapsedChange` callback, so toggling the rail writes through to the settings
+  store and survives a restart.
+- `DesktopAppMainPage` wires the preference through `updateApplicationSettings`, which already reports
+  persistence failures on the settings page.
+
+### Verification
+
+- `UnifiedSettingsStoreTest`: a fresh profile loads collapsed, and saving `false`/`true` round-trips
+  through the stored key.
+- `CommercialAppShellTest`: the rail state is a persisted preference, the local flag is gone, and the
+  toggle writes through instead of mutating local state.
+- Offscreen render at 1600x900 - a width that used to auto-expand - shows the 53 px collapsed rail
+  with the default preference, and 215 px when the stored preference is expanded.
+- `:desktop-app:test` passes 157 tests.
+
+## 2026-10-11: One native menu bar per window
+
+### Problem
+
+`window.jMenuBar` had three independent writers, so every navigation destroyed and rebuilt the native
+menu bar:
+
+- `WindowMenuBarHost` was keyed on `navigator.destination` and allocated a fresh `JMenuBar` per
+  destination.
+- Destinations without a feature menu (Home, Source Workspaces, Settings, Network, GPU, Benchmark)
+  ran `window.jMenuBar = null`, which removes the app menu bar on macOS.
+- The outgoing page's `onDispose` could clear the bar the incoming page had just installed, and the
+  incoming page could capture `null` and install an empty bar.
+- Those Swing writes happened during composition instead of in an effect.
+
+### Implemented
+
+- The window bar is hosted by **Compose's own `MenuBar` control**
+  (`androidx.compose.ui.window.MenuBar`) inside `WindowMenuBarHost`. That control creates the
+  `JMenuBar` once for its composition and only clears it when the window is disposed, so nothing
+  manages the bar by hand any more.
+- `ActiveWindowMenuBar` no longer composes menus onto the bar. While a page is the active
+  destination it publishes its menu content through a window-scoped, state-backed holder; the
+  control's content reads that holder, so navigating swaps the menus inside one composition instead
+  of disposing it.
+- The hand-rolled `JMenuBar` creation, the preload placeholder menus, the per-page ownership flag
+  and the manual `rootPane.revalidate()/repaint()` calls are gone.
+
+### Root cause, confirmed
+
+Rapid switching still failed after a first attempt that only stopped recreating and clearing the bar.
+Reading the Compose runtime and UI sources showed why: a disposed menu composition runs
+`CompositionImpl.dispose()` -> `applier.clear()` -> `SwingApplier.onClear()` ->
+**`JMenuBar.removeAll()`** (`Composition.kt`, `Menu.desktop.kt`). Composing one menu bar per page
+therefore wiped every menu on the window bar on every navigation and rebuilt it, so the macOS screen
+menu bar churned and could stay empty for a frame.
+
+### Verification
+
+- `ActiveWindowMenuBarTest` (new): menu readiness is reported exactly once per destination.
+- `ProfilerThemeSupportTest` asserts the design guards: the shared menu bar module imports and uses
+  `androidx.compose.ui.window.MenuBar`, and no longer constructs `JMenuBar()`, calls `setContent(`,
+  clears `window.jMenuBar`, or tracks per-page ownership. Feature pages keep using
+  `ActiveWindowMenuBar {` and must not import `androidx.compose.ui.window.MenuBar` themselves.
+- `:desktop-app:test` passes 155 tests. The two `UnifiedUiComponentsSourceTest` failures remain
+  pre-existing and unrelated (they assert on `HomeButton.kt` and raw colors in `SourceCodeViewer.kt`
+  / `OneDarkSourceTheme.kt`).
+- This repository has no application-level GUI test harness, and packaged GUI acceptance was already
+  recorded as blocked, so the fix is covered by design-level unit tests and source contracts rather
+  than by driving a real window.
+
 ## 2026-10-11: Source Workspaces added to the primary rail
 
 ### Implemented

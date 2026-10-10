@@ -30,7 +30,24 @@ class UnifiedSettingsStoreTest {
         assertEquals("royal_purple", values["application.themeColor"])
         assertEquals("simplified_chinese", values["application.language"])
         assertEquals("D:/Android/Sdk", values["application.androidSdkPath"])
+        assertEquals("true", values["application.navigationRailCollapsed"])
         assertEquals(settings, store.load())
+    }
+
+    @Test
+    fun `the navigation rail is collapsed by default and remembers an expanded choice`() {
+        val values = mutableMapOf<String, String>()
+        val store = ApplicationUiSettingsStore(values::get, values::set)
+
+        // A fresh profile has no stored value: the rail starts collapsed.
+        assertTrue(store.load().navigationRailCollapsed)
+
+        assertTrue(store.save(ApplicationUiSettings(navigationRailCollapsed = false)))
+        assertEquals("false", values["application.navigationRailCollapsed"])
+        assertFalse(store.load().navigationRailCollapsed)
+
+        assertTrue(store.save(ApplicationUiSettings(navigationRailCollapsed = true)))
+        assertTrue(store.load().navigationRailCollapsed)
     }
 
     @Test

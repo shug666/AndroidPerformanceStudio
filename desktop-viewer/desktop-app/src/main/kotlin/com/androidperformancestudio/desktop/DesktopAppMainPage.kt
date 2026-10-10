@@ -166,6 +166,12 @@ fun FrameWindowScope.DesktopAppMainPage(
             CommercialAppShell(
                 navigator = navigator,
                 language = language,
+                navigationRailCollapsed = applicationSettings.navigationRailCollapsed,
+                onNavigationRailCollapsedChange = { collapsed ->
+                    updateApplicationSettings(
+                        applicationSettings.copy(navigationRailCollapsed = collapsed),
+                    )
+                },
             ) {
                 navigator.retainedDestinations.forEach { destination ->
                     key(destination) {

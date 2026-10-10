@@ -108,11 +108,12 @@ private data class StudioNavigationItem(
 internal fun CommercialAppShell(
     navigator: AppNavigator,
     language: UiLanguage,
+    navigationRailCollapsed: Boolean,
+    onNavigationRailCollapsedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     workspaceContext: WorkspaceContext = WorkspaceContext(),
     content: @Composable BoxScope.() -> Unit,
 ) {
-    var userCollapsed by remember { mutableStateOf<Boolean?>(null) }
     var showCommandPalette by remember { mutableStateOf(false) }
     val shellFocusRequester = remember { FocusRequester() }
     LaunchedEffect(navigator.destination) {
@@ -183,7 +184,7 @@ internal fun CommercialAppShell(
                 }
                 .focusable(),
     ) {
-        val collapsed = resolvedNavigationRailCollapsed(maxWidth.value.toInt(), userCollapsed)
+        val collapsed = resolvedNavigationRailCollapsed(maxWidth.value.toInt(), navigationRailCollapsed)
         Column(modifier = Modifier.fillMaxSize().background(colors.canvasBackground)) {
             Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 StudioNavigationRail(
@@ -197,7 +198,7 @@ internal fun CommercialAppShell(
                         ),
                     settingsLabel = settingsLabel,
                     settingsSelected = navigator.destination == AppDestination.SETTINGS,
-                    onToggleCollapse = { userCollapsed = !collapsed },
+                    onToggleCollapse = { onNavigationRailCollapsedChange(!collapsed) },
                     onDestinationSelected = navigator::open,
                     onOpenSettings = { navigator.open(AppDestination.SETTINGS) },
                 )

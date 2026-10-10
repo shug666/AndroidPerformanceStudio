@@ -158,14 +158,20 @@ class ProfilerThemeSupportTest {
         assertTrue(sharedMenuBar.contains("preloadedMenuKey"))
         assertTrue(sharedMenuBar.contains("onMenuBarReady"))
         assertTrue(sharedMenuBar.contains("notifyNativeMenuBarReady()"))
-        assertTrue(sharedMenuBar.contains("if (LocalWindowMenuBarActive.current)"))
-        assertTrue(sharedMenuBar.contains("SideEffect(::refreshNativeMenuBar)"))
-        assertTrue(sharedMenuBar.contains("window.rootPane.revalidate()"))
-        assertTrue(sharedMenuBar.contains("window.rootPane.repaint()"))
-        val nativeAttach = sharedMenuBar.indexOf("window.jMenuBar = menuBar")
-        val menuContent =
-            sharedMenuBar.indexOf("val composition = menuBar.setContent(parentComposition, content)")
-        assertTrue(nativeAttach >= 0 && nativeAttach < menuContent)
+        assertTrue(sharedMenuBar.contains("if (!LocalWindowMenuBarActive.current) return"))
+        assertTrue(sharedMenuBar.contains("SideEffect {"))
+        // Compose's own MenuBar control owns the window bar: it creates the JMenuBar once for its
+        // composition and only clears it when the window is disposed. Composing a menu bar per page
+        // cleared every menu on navigation, because disposing a menu composition calls
+        // SwingApplier.onClear() -> JMenuBar.removeAll(); that is what made the macOS screen menu bar
+        // flash or stay empty.
+        assertTrue(sharedMenuBar.contains("import androidx.compose.ui.window.MenuBar"))
+        assertTrue(sharedMenuBar.contains("MenuBar {"))
+        assertTrue(sharedMenuBar.contains("content.content?.invoke(this)"))
+        assertFalse(sharedMenuBar.contains("JMenuBar()"))
+        assertFalse(sharedMenuBar.contains("setContent("))
+        assertFalse(sharedMenuBar.contains("window.jMenuBar = null"))
+        assertFalse(sharedMenuBar.contains("val ownsMenuBar"))
         profilerWindowMenuSources().forEach { source ->
             val content = Files.readString(source)
             assertTrue(content.contains("ActiveWindowMenuBar {"), "$source must gate its window menu bar")
