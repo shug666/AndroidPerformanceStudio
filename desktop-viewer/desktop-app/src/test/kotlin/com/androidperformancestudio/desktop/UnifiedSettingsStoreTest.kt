@@ -18,7 +18,7 @@ class UnifiedSettingsStoreTest {
             ApplicationUiSettings(
                 theme = ApplicationThemePreference.DARK,
                 displayScale = ApplicationDisplayScale.PERCENT_125,
-                themeColor = ApplicationThemeColor.ROYAL_PURPLE,
+                themeColor = ApplicationThemeColor.ROYAL_PURPLE.color,
                 language = ApplicationLanguagePreference.SIMPLIFIED_CHINESE,
                 androidSdkPath = "D:/Android/Sdk",
             )
@@ -66,8 +66,30 @@ class UnifiedSettingsStoreTest {
         assertEquals(Color(0xFF41B5C2), ApplicationThemeColor.AZURE.color)
         assertEquals(Color(0xFFFACA2E), ApplicationThemeColor.LEMON_YELLOW.color)
         assertEquals(Color(0xFF722169), ApplicationThemeColor.ROYAL_PURPLE.color)
-        assertEquals(ApplicationThemeColor.ROYAL_PURPLE, ApplicationThemeColor.parse("royal_purple"))
-        assertEquals(ApplicationThemeColor.CORNFLOWER_BLUE, ApplicationThemeColor.parse("missing"))
+        // Presets keep their legacy keys; custom colours parse from hex and fall back safely.
+        assertEquals(ApplicationThemeColor.ROYAL_PURPLE.color, parseThemeColor("royal_purple"))
+        assertEquals(DEFAULT_THEME_COLOR, parseThemeColor("missing"))
+        assertEquals(Color(0xFF5A92E5), parseThemeColor("#5A92E5"))
+        assertEquals(Color(0xFF5A92E5), parseThemeColor("5a92e5"))
+        assertEquals(Color(0xFFFF0000), parseThemeColor("#F00"))
+        assertEquals(Color(0x80FF0000), parseThemeColor("#80FF0000"))
+        assertEquals("royal_purple", themeColorStorageValue(ApplicationThemeColor.ROYAL_PURPLE.color))
+        assertEquals("#123456", themeColorStorageValue(Color(0xFF123456)))
+    }
+
+    @Test
+    fun `custom theme colours round trip and legacy preset keys still load`() {
+        val values = mutableMapOf<String, String>()
+        val store = ApplicationUiSettingsStore(values::get, values::set)
+        val custom = Color(0xFF12AB34)
+
+        assertTrue(store.save(ApplicationUiSettings(themeColor = custom)))
+        assertEquals("#12AB34", values["application.themeColor"])
+        assertEquals(custom, store.load().themeColor)
+
+        // Older profiles stored the preset key instead of a hex value.
+        values["application.themeColor"] = "royal_purple"
+        assertEquals(ApplicationThemeColor.ROYAL_PURPLE.color, store.load().themeColor)
     }
 
     @Test

@@ -53,9 +53,12 @@ class ApplicationSettingsDialogTest {
 
     @Test
     fun `general settings keeps theme color directly below theme selection`() {
-        assertFalse(unifiedDialog.contains("THEME_COLOR"))
+        // The dialog only edits the setting; the preference key stays in the store.
+        assertFalse(unifiedDialog.contains("application.themeColor"))
         assertTrue(unifiedDialog.contains("ThemeColorSettingsContent("))
         assertTrue(unifiedDialog.contains("ApplicationThemeColor.entries"))
+        assertTrue(unifiedDialog.contains("selected = preset.color == selectedColor"))
+        assertTrue(unifiedDialog.contains("onClick = { onSelect(preset.color) }"))
         assertTrue(unifiedDialog.contains("onSettingsChanged(settings.copy(themeColor = color))"))
         assertTrue(
             unifiedDialog.indexOf("label = localizedStringResource(Res.string.theme, language)") <
@@ -65,10 +68,76 @@ class ApplicationSettingsDialogTest {
 
     @Test
     fun `theme colour swatches stay compact`() {
-        assertTrue(unifiedDialog.contains("THEME_SWATCH_COLUMNS = 4"))
+        assertTrue(unifiedDialog.contains("THEME_SWATCH_COLUMNS = 2"))
         assertTrue(unifiedDialog.contains("height(38.dp)"))
         assertTrue(unifiedDialog.contains("size(18.dp)"))
-        assertTrue(unifiedDialog.contains("themeColorPreferenceLabel(color, language)"))
+        assertTrue(unifiedDialog.contains("themeColorPreferenceLabel(preset, language)"))
+    }
+
+    @Test
+    fun `theme colour offers a picker, a hex field and a default reset`() {
+        assertTrue(unifiedDialog.contains("ThemeColorPicker("))
+        assertTrue(unifiedDialog.contains("parseHexColor(next)?.let(onColorChange)"))
+        assertTrue(unifiedDialog.contains("Res.string.theme_color_custom"))
+        assertTrue(unifiedDialog.contains("Res.string.theme_color_default"))
+        assertTrue(unifiedDialog.contains("settings.copy(themeColor = DEFAULT_THEME_COLOR)"))
+        // Presets sit in two columns beside the picker; the default reset is a real button.
+        assertTrue(unifiedDialog.contains("ThemeColorPresets("))
+        assertTrue(unifiedDialog.contains("CustomThemeColorColumn("))
+        assertTrue(unifiedDialog.contains("ApplicationThemeColor.entries.chunked(THEME_SWATCH_COLUMNS)"))
+        assertTrue(unifiedDialog.contains("Button(onClick = onResetDefault)"))
+        // Each colour bar is sized from half of the free width, and the picker follows the bars
+        // directly: only the leftover width trails it.
+        assertTrue(unifiedDialog.contains("THEME_PRESET_WIDTH_FRACTION = 0.5f"))
+        assertTrue(
+            unifiedDialog.indexOf("CustomThemeColorColumn(") <
+                unifiedDialog.indexOf("Modifier.weight(1f - THEME_PRESET_WIDTH_FRACTION)"),
+        )
+    }
+
+    @Test
+    fun `custom colour picker exposes a saturation value plane and a hue rail`() {
+        val picker =
+            Files.readString(
+                Path.of("src/main/kotlin/com/androidperformancestudio/desktop/ThemeColorPicker.kt"),
+            )
+
+        assertTrue(picker.contains("internal fun ThemeColorPicker("))
+        assertTrue(picker.contains("listOf(Color.White, Color.hsv("))
+        assertTrue(picker.contains("Brush.verticalGradient(listOf(Color.Transparent, Color.Black))"))
+        assertTrue(picker.contains("Brush.horizontalGradient(HUE_GRADIENT)"))
+        assertTrue(picker.contains("detectDragGestures("))
+    }
+
+    @Test
+    fun `settings sidebar shows an icon for every page`() {
+        val drawables = Path.of("../ui-components/src/main/composeResources/drawable")
+        val expected =
+            listOf(
+                "ic_settings_general",
+                "ic_settings_configuration",
+                "ic_nav_layout_inspector",
+                "ic_nav_cpu_profiler",
+                "ic_settings_ai",
+                "ic_settings_about",
+            )
+
+        expected.forEach { name ->
+            assertTrue(Files.exists(drawables.resolve("$name.svg")), "missing settings icon: $name")
+            assertTrue(
+                Files.readString(drawables.resolve("$name.svg")).startsWith("<svg"),
+                "settings icon must be an SVG vector: $name",
+            )
+        }
+        assertTrue(unifiedDialog.contains("private val SettingsPage.settingsIconResource"))
+        assertTrue(unifiedDialog.contains("leadingIcon = page.settingsIconResource"))
+        assertTrue(unifiedDialog.contains("leadingIcon = SettingsPage.ABOUT.settingsIconResource"))
+        SettingsPage.entries.forEach { page ->
+            assertTrue(
+                unifiedDialog.contains("SettingsPage.${page.name} -> UiComponentsRes.drawable."),
+                "no sidebar icon mapped for $page",
+            )
+        }
     }
 
     @Test
@@ -80,8 +149,8 @@ class ApplicationSettingsDialogTest {
 
     @Test
     fun `settings sub-navigation rows stay compact`() {
-        // Rows are not painted across the whole sidebar while unselected, and the label is not
-        // indented by an icon slot that is never filled.
+        // Rows are not painted across the whole sidebar while unselected, and the leading icon
+        // uses one shared square slot rather than a bare spacer.
         assertTrue(unifiedDialog.contains("UNIFIED_SETTINGS_SIDEBAR_WIDTH_DP = 176"))
         assertTrue(unifiedDialog.contains("else Color.Transparent"))
         assertFalse(unifiedDialog.contains("Spacer(Modifier.width(16.dp))"))

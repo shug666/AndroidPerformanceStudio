@@ -2,6 +2,42 @@
 
 This is a continuation checkpoint for the [phased implementation plan](android-performance-studio-commercial-ui-implementation.md), not an assertion that the full commercial UI is finished.
 
+## 2026-10-11: Settings sidebar icons
+
+### Implemented
+
+- Every settings page now carries a leading icon in the sidebar through
+  `SettingsPage.settingsIconResource`, rendered by the existing `SettingsSidebarRow` leading-icon
+  slot.
+- Four new vectors in the shared ui-components resources: general (sliders), configuration (folder),
+  AI (sparkle) and about (info). Layout Inspector and Simpleperf reuse their navigation icons.
+- The icon slot is a square 16dp box so the 24dp vectors are not stretched by the row height.
+
+### Verification
+
+- `:desktop-app:test` passes; `ApplicationSettingsDialogTest` checks every page maps to an icon and
+  that all six vectors exist as SVG.
+## 2026-10-11: Custom theme colour picker with hex entry and default reset
+
+### Implemented
+
+- `ApplicationUiSettings.themeColor` is now a raw `Color` instead of an enum constant. The eight
+  presets stay as one-click swatches; custom colours persist as `#RRGGBB` (or `#AARRGGBB`), and the
+  legacy preset keys ("royal_purple") still load, so existing profiles are unaffected.
+- The Theme Color section splits into two columns: the eight presets in a two-column grid on the
+  left, and the custom picker on the right with the hex field and a filled Default button below it.
+- `ThemeColorPicker` is an in-app HSV picker: a saturation/value plane over a hue rail, both click-
+  and drag-driven. HSV is held separately so dragging never loses the hue once saturation hits zero.
+- The hex field accepts `#RGB`, `#RRGGBB` and `#AARRGGBB` (the `#` is optional) and applies valid
+  drafts live; Default restores `DEFAULT_THEME_COLOR` (cornflower blue).
+
+### Verification
+
+- `:desktop-app:compileKotlin` and `:desktop-app:test` pass.
+- `UnifiedSettingsStoreTest` covers hex parsing/formatting, the preset round trip and legacy keys;
+  `ThemeColorPickerTest` covers the HSV ranges Compose requires; `ApplicationSettingsDialogTest`
+  asserts the picker, hex field and default reset wiring.
+
 ## 2026-10-11: macOS title bar painted with the theme background
 
 ### Implemented

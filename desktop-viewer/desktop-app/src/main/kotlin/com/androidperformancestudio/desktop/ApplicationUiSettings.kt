@@ -5,6 +5,7 @@ import com.androidperformancestudio.presentation.FlameTooltipMode
 import com.androidperformancestudio.presentation.SimpleperfEngine
 import com.androidperformancestudio.ui.UiLanguage
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import com.androidperformancestudio.ui.ViewerAccentPalette
 import java.util.Locale
 import java.util.prefs.Preferences
@@ -61,8 +62,50 @@ internal enum class ApplicationThemeColor(
     ;
 
     companion object {
-        fun parse(value: String?): ApplicationThemeColor =
-            entries.firstOrNull { it.storageValue == value?.lowercase() } ?: CORNFLOWER_BLUE
+        /** The preset matching [color], or null when the colour is custom. */
+        fun presetFor(color: Color): ApplicationThemeColor? = entries.firstOrNull { it.color == color }
+
+        fun presetForStorageValue(value: String?): ApplicationThemeColor? =
+            entries.firstOrNull { it.storageValue == value?.trim()?.lowercase() }
+    }
+}
+
+/** Accent used until the user picks a preset or a custom colour. */
+internal val DEFAULT_THEME_COLOR: Color = ApplicationThemeColor.CORNFLOWER_BLUE.color
+
+private val HEX_COLOR_PATTERN = Regex("^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
+
+/**
+ * Resolves a persisted accent colour. Preset keys ("royal_purple") stay supported next to custom
+ * hex values ("#5A92E5" / "5a92e5"); anything unreadable falls back to [DEFAULT_THEME_COLOR].
+ */
+internal fun parseThemeColor(value: String?): Color {
+    val raw = value?.trim().orEmpty()
+    if (raw.isEmpty()) return DEFAULT_THEME_COLOR
+    ApplicationThemeColor.presetForStorageValue(raw)?.let { return it.color }
+    return parseHexColor(raw) ?: DEFAULT_THEME_COLOR
+}
+
+/** Presets keep their stable keys; any other colour persists as `#RRGGBB` (or `#AARRGGBB`). */
+internal fun themeColorStorageValue(color: Color): String =
+    ApplicationThemeColor.presetFor(color)?.storageValue ?: color.toHexString()
+
+/** Parses `#RGB`, `#RRGGBB` or `#AARRGGBB` (the `#` is optional); null when not a colour. */
+internal fun parseHexColor(text: String): Color? {
+    val hex = HEX_COLOR_PATTERN.matchEntire(text.trim())?.groupValues?.get(1) ?: return null
+    val full = if (hex.length == 3) hex.map { digit -> "$digit$digit" }.joinToString("") else hex
+    val argb = if (full.length == 6) "FF$full" else full
+    return argb.toLongOrNull(16)?.let { Color(it) }
+}
+
+/** Formats the colour as `#RRGGBB`, or `#AARRGGBB` when it is not fully opaque. */
+internal fun Color.toHexString(): String {
+    val argb = toArgb()
+    val alpha = (argb ushr 24) and 0xFF
+    return if (alpha == 0xFF) {
+        "#%06X".format(argb and 0xFFFFFF)
+    } else {
+        "#%08X".format(argb)
     }
 }
 
@@ -88,7 +131,7 @@ internal enum class ApplicationLanguagePreference(val storageValue: String) {
 internal data class ApplicationUiSettings(
     val theme: ApplicationThemePreference = ApplicationThemePreference.SYSTEM,
     val displayScale: ApplicationDisplayScale = ApplicationDisplayScale.PERCENT_100,
-    val themeColor: ApplicationThemeColor = ApplicationThemeColor.CORNFLOWER_BLUE,
+    val themeColor: Color = DEFAULT_THEME_COLOR,
     val language: ApplicationLanguagePreference = ApplicationLanguagePreference.SYSTEM,
     val androidSdkPath: String? = null,
     /** The navigation rail starts collapsed and remembers the user's choice. */
@@ -104,7 +147,7 @@ internal class ApplicationUiSettingsStore(
         ApplicationUiSettings(
             theme = ApplicationThemePreference.parse(readValue(THEME_KEY)),
             displayScale = ApplicationDisplayScale.parse(readValue(DISPLAY_SCALE_KEY)),
-            themeColor = ApplicationThemeColor.parse(readValue(THEME_COLOR_KEY)),
+            themeColor = parseThemeColor(readValue(THEME_COLOR_KEY)),
             language = ApplicationLanguagePreference.parse(readValue(LANGUAGE_KEY)),
             androidSdkPath = readValue(ANDROID_SDK_PATH_KEY)?.trim()?.takeIf(String::isNotEmpty),
             navigationRailCollapsed =
@@ -115,7 +158,7 @@ internal class ApplicationUiSettingsStore(
         runCatching {
             writeValue(THEME_KEY, settings.theme.storageValue)
             writeValue(DISPLAY_SCALE_KEY, settings.displayScale.storageValue)
-            writeValue(THEME_COLOR_KEY, settings.themeColor.storageValue)
+            writeValue(THEME_COLOR_KEY, themeColorStorageValue(settings.themeColor))
             writeValue(LANGUAGE_KEY, settings.language.storageValue)
             writeValue(ANDROID_SDK_PATH_KEY, settings.androidSdkPath.orEmpty())
             writeValue(NAVIGATION_RAIL_COLLAPSED_KEY, settings.navigationRailCollapsed.toString())

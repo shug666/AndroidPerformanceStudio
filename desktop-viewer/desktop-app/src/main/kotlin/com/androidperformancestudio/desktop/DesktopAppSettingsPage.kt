@@ -29,6 +29,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.CircularProgressIndicator
@@ -67,6 +68,13 @@ import com.androidperformancestudio.ui.viewerOutlinedTextFieldColors
 import com.androidperformancestudio.ui.studio.StudioPanel
 import com.androidperformancestudio.ui.switch.MacOSSwitch
 import com.androidperformancestudio.ui.DropdownSelector
+import com.androidperformancestudio.ui_components.generated.resources.Res as UiComponentsRes
+import com.androidperformancestudio.ui_components.generated.resources.ic_nav_cpu_profiler
+import com.androidperformancestudio.ui_components.generated.resources.ic_nav_layout_inspector
+import com.androidperformancestudio.ui_components.generated.resources.ic_settings_about
+import com.androidperformancestudio.ui_components.generated.resources.ic_settings_ai
+import com.androidperformancestudio.ui_components.generated.resources.ic_settings_configuration
+import com.androidperformancestudio.ui_components.generated.resources.ic_settings_general
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 import kotlinx.coroutines.Dispatchers
@@ -227,6 +235,7 @@ private fun SettingsSidebar(
                 label = page.label(language),
                 selected = page == selectedPage,
                 onClick = { onPageSelected(page) },
+                leadingIcon = page.settingsIconResource,
             )
         }
         // Simpleperf is one page: every category is a card inside it instead of a nested entry.
@@ -234,16 +243,19 @@ private fun SettingsSidebar(
             label = SettingsPage.SIMPLEPERF.label(language),
             selected = selectedPage == SettingsPage.SIMPLEPERF,
             onClick = { onPageSelected(SettingsPage.SIMPLEPERF) },
+            leadingIcon = SettingsPage.SIMPLEPERF.settingsIconResource,
         )
         SettingsSidebarRow(
             label = SettingsPage.AI.label(language),
             selected = selectedPage == SettingsPage.AI,
             onClick = { onPageSelected(SettingsPage.AI) },
+            leadingIcon = SettingsPage.AI.settingsIconResource,
         )
         SettingsSidebarRow(
             label = SettingsPage.ABOUT.label(language),
             selected = selectedPage == SettingsPage.ABOUT,
             onClick = { onPageSelected(SettingsPage.ABOUT) },
+            leadingIcon = SettingsPage.ABOUT.settingsIconResource,
         )
     }
 }
@@ -425,7 +437,7 @@ private fun SettingsSidebarRow(
             Icon(
                 painter = painterResource(leadingIcon),
                 contentDescription = null,
-                modifier = Modifier.width(16.dp),
+                modifier = Modifier.size(SETTINGS_SIDEBAR_ICON_SIZE),
                 tint =
                     if (selected) {
                         MaterialTheme.colorScheme.onPrimaryContainer
@@ -551,17 +563,55 @@ private fun ThemeColorSettingsContent(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SettingsPageTitle(localizedStringResource(Res.string.theme_color, language))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(THEME_SECTION_GAP),
+            verticalAlignment = Alignment.Top,
+        ) {
+            ThemeColorPresets(
+                selectedColor = settings.themeColor,
+                language = language,
+                onSelect = { color -> onSettingsChanged(settings.copy(themeColor = color)) },
+                modifier = Modifier.weight(THEME_PRESET_WIDTH_FRACTION),
+            )
+            CustomThemeColorColumn(
+                color = settings.themeColor,
+                language = language,
+                onColorChange = { color -> onSettingsChanged(settings.copy(themeColor = color)) },
+                onResetDefault = { onSettingsChanged(settings.copy(themeColor = DEFAULT_THEME_COLOR)) },
+            )
+            // The picker sits one section gap after the bars; only the leftover width trails it, so
+            // the preset grid still occupies half of the free width.
+            Spacer(Modifier.weight(1f - THEME_PRESET_WIDTH_FRACTION))
+        }
+    }
+}
+
+private val THEME_SECTION_GAP = 24.dp
+
+/** Share of the free width the preset grid occupies; the bars are sized from this. */
+private const val THEME_PRESET_WIDTH_FRACTION = 0.5f
+
+/** The eight built-in accents, two per row so the grid sits beside the picker. */
+@Composable
+private fun ThemeColorPresets(
+    selectedColor: Color,
+    language: UiLanguage,
+    onSelect: (Color) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         ApplicationThemeColor.entries.chunked(THEME_SWATCH_COLUMNS).forEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                row.forEach { color ->
+                row.forEach { preset ->
                     ThemeColorOption(
-                        color = color,
-                        selected = color == settings.themeColor,
-                        label = themeColorPreferenceLabel(color, language),
-                        onClick = { onSettingsChanged(settings.copy(themeColor = color)) },
+                        color = preset,
+                        selected = preset.color == selectedColor,
+                        label = themeColorPreferenceLabel(preset, language),
+                        onClick = { onSelect(preset.color) },
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -573,7 +623,68 @@ private fun ThemeColorSettingsContent(
     }
 }
 
-private const val THEME_SWATCH_COLUMNS = 4
+/** Custom accent entry: the picker on top, the hex field and default reset underneath. */
+@Composable
+private fun CustomThemeColorColumn(
+    color: Color,
+    language: UiLanguage,
+    onColorChange: (Color) -> Unit,
+    onResetDefault: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.width(THEME_PICKER_WIDTH),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ThemeColorPicker(color = color, onColorChange = onColorChange)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            HexThemeColorField(
+                color = color,
+                label = localizedStringResource(Res.string.theme_color_custom, language),
+                onColorChange = onColorChange,
+                modifier = Modifier.weight(1f),
+            )
+            Button(onClick = onResetDefault) {
+                Text(localizedStringResource(Res.string.theme_color_default, language))
+            }
+        }
+    }
+}
+
+@Composable
+private fun HexThemeColorField(
+    color: Color,
+    label: String,
+    onColorChange: (Color) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var text by remember { mutableStateOf(color.toHexString()) }
+    // Follow swatches, the picker and the default reset without fighting the user mid-typing: an
+    // unparsable draft never matches the active colour, so it is left alone.
+    LaunchedEffect(color) {
+        if (parseHexColor(text) != color) text = color.toHexString()
+    }
+    OutlinedTextField(
+        value = text,
+        onValueChange = { next ->
+            text = next
+            parseHexColor(next)?.let(onColorChange)
+        },
+        modifier = modifier,
+        singleLine = true,
+        label = { Text(label) },
+        placeholder = { Text(HEX_COLOR_PLACEHOLDER) },
+        textStyle = MaterialTheme.typography.bodyMedium,
+        colors = viewerOutlinedTextFieldColors(),
+    )
+}
+
+private const val HEX_COLOR_PLACEHOLDER = "#RRGGBB"
+
+private const val THEME_SWATCH_COLUMNS = 2
 
 @Composable
 private fun ThemeColorOption(
@@ -822,6 +933,18 @@ private fun SettingsPage.label(language: UiLanguage): String =
         SettingsPage.ABOUT -> localizedStringResource(Res.string.about, language)
     }
 
+/** Sidebar icon for each settings page. */
+private val SettingsPage.settingsIconResource: DrawableResource
+    get() =
+        when (this) {
+            SettingsPage.GENERAL -> UiComponentsRes.drawable.ic_settings_general
+            SettingsPage.CONFIGURATION -> UiComponentsRes.drawable.ic_settings_configuration
+            SettingsPage.LAYOUT_INSPECTOR -> UiComponentsRes.drawable.ic_nav_layout_inspector
+            SettingsPage.SIMPLEPERF -> UiComponentsRes.drawable.ic_nav_cpu_profiler
+            SettingsPage.AI -> UiComponentsRes.drawable.ic_settings_ai
+            SettingsPage.ABOUT -> UiComponentsRes.drawable.ic_settings_about
+        }
+
 private fun displayScalePreferenceLabel(scale: ApplicationDisplayScale): String =
     "${scale.storageValue}%"
 
@@ -840,3 +963,5 @@ private fun themeColorPreferenceLabel(color: ApplicationThemeColor, language: Ui
 private const val OPENAI_API_KEY = "openai:api-key"
 
 internal const val UNIFIED_SETTINGS_SIDEBAR_WIDTH_DP = 176
+
+private val SETTINGS_SIDEBAR_ICON_SIZE = 16.dp

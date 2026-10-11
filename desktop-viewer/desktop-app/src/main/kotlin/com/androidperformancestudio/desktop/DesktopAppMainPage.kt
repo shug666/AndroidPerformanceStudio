@@ -179,7 +179,7 @@ fun FrameWindowScope.DesktopAppMainPage(
     val windowColors =
         viewerColors(
             darkTheme = darkTheme,
-            accentColor = applicationSettings.themeColor.color,
+            accentColor = applicationSettings.themeColor,
         )
     Column(modifier = Modifier.fillMaxSize()) {
         MacOsTitleBar(
@@ -193,7 +193,7 @@ fun FrameWindowScope.DesktopAppMainPage(
             ViewerTheme(
                 darkTheme = darkTheme,
                 displayScale = applicationSettings.displayScale.multiplier,
-                accentColor = applicationSettings.themeColor.color,
+                accentColor = applicationSettings.themeColor,
             ) {
                 val viewerThemeContext = rememberViewerThemeContext()
                 CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 32.dp) {

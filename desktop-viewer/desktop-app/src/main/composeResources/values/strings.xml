@@ -43,6 +43,8 @@
     <string name="theme_color_azure">Azure</string>
     <string name="theme_color_lemon_yellow">Lemon Yellow</string>
     <string name="theme_color_royal_purple">Royal Purple</string>
+    <string name="theme_color_custom">Custom colour</string>
+    <string name="theme_color_default">Default</string>
     <string name="done">Done</string>
     <string name="system">System</string>
     <string name="simplified_chinese">Simplified Chinese</string>
