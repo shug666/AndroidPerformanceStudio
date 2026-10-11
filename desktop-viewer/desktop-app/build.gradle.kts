@@ -238,18 +238,6 @@ compose.desktop {
 tasks.withType<JavaExec>().configureEach {
     if (name == "run") {
         val developmentRuntimeClasspath = sourceSets["main"].runtimeClasspath
-        // Development runs point the Layout Inspector's full Compose path at the in-repo agent
-        // bundle produced by :layout-inspector:compose-agent-build. Only the run task is configured,
-        // so a build-machine path never reaches a packaged distribution; the property stays
-        // overridable from the command line.
-        val defaultBundle =
-            layout.projectDirectory
-                .dir("../layout-inspector/compose-agent-build/build/compose-agent-bundle")
-                .asFile.absolutePath
-        jvmArgs(
-            "-Dagentperf.compose.agent.bundle=" +
-                (System.getProperty("agentperf.compose.agent.bundle") ?: defaultBundle),
-        )
         doFirst {
             classpath = developmentRuntimeClasspath
         }

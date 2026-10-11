@@ -201,6 +201,7 @@ internal data class ComposeFallbackRecovery(
 
 internal fun composeFallbackRecovery(): ComposeFallbackRecovery = ComposeFallbackRecovery()
 
+
 private data class AuthorizedComposeTarget(
     val prepared: PreparedComposeInspection,
     val authorization: ComposeInspectionAuthorization,
@@ -340,9 +341,7 @@ fun FrameWindowScope.LayoutInspectorMainPage(
             val prepared = runCatching {
                 withContext(Dispatchers.IO) {
                     val packageName = deviceClient.foregroundPackageName(serial)
-                    val bundleRoot = Path.of(
-                        System.getProperty("agentperf.compose.agent.bundle", "compose-agent-bundle"),
-                    ).toAbsolutePath()
+                    val bundleRoot = resolveComposeAgentBundle()
                     composeInjectionManager.preflight(serial, packageName, bundleRoot)
                 }
             }
@@ -353,6 +352,8 @@ fun FrameWindowScope.LayoutInspectorMainPage(
                         target,
                         ComposeInspectionAuthorization.authorize(target.preflight),
                     )
+                    // The scan mode stays whatever the user selected: full fidelity now works from
+                    // either mode, so activation must not switch the user to live capture.
                     fullComposeEnabled = true
                 },
                 onFailure = { error ->
@@ -508,8 +509,8 @@ fun FrameWindowScope.LayoutInspectorMainPage(
         if (store.loadComposeDetail(document.frame.frameId, detail)) state = store.state
     }
 
-    LaunchedEffect(manualRefreshRequest, autoScanEnabled, fullComposeEnabled) {
-        if (manualRefreshRequest == 0 || autoScanEnabled || fullComposeEnabled) {
+    LaunchedEffect(manualRefreshRequest, autoScanEnabled) {
+        if (manualRefreshRequest == 0 || autoScanEnabled) {
             manualRefreshInProgress = false
             return@LaunchedEffect
         }
@@ -518,6 +519,43 @@ fun FrameWindowScope.LayoutInspectorMainPage(
         try {
             store.connecting()
             state = store.state
+            if (fullComposeEnabled) {
+                // Full fidelity has its own pipeline: the attached session is the only producer of
+                // frames, so a manual refresh runs it once for a single frame instead of leaving the
+                // control disabled and the manual mode unusable.
+                val authorized = checkNotNull(composeAuthorization) {
+                    "Full Compose inspection is not authorized"
+                }
+                val capture = withContext(Dispatchers.IO) {
+                    timer.measure("captureFullCompose") {
+                        val injected = composeInjectionManager.attach(authorized.prepared, authorized.authorization)
+                        try {
+                            ComposeLiveSession.open(
+                                injection = injected,
+                                artifactResolver = composeArtifactResolver,
+                                processRunner = composeProcessRunner,
+                                expectedComposeVersion = checkNotNull(authorized.prepared.preflight.composeVersion),
+                                explicitLocalArtifact = System.getProperty("agentperf.compose.inspector.path")
+                                    ?.takeIf(String::isNotBlank)?.let(Path::of),
+                            ).use { session -> session.capture(hideSystemComposables) }
+                        } finally {
+                            injected.close()
+                        }
+                    }
+                }
+                timer.measure("publishCapture") {
+                    store.loadCapture(
+                        snapshot = capture.snapshot,
+                        screenshotPng = checkNotNull(capture.screenshotPng) { "ADB screenshot failed" },
+                        composeInspection = capture.composeInspection,
+                    )
+                    importedRawArtifacts = null
+                    hiddenLayerState = HiddenLayerState()
+                    state = store.state
+                    aiAnalysisUiState = AiAnalysisUiState.Idle
+                }
+                return@LaunchedEffect
+            }
             val frame = withContext(Dispatchers.IO) {
                 timer.measure("captureForegroundApp") {
                     manualRefreshSession.capture(selectedDeviceSerial)
@@ -1013,15 +1051,16 @@ fun FrameWindowScope.LayoutInspectorMainPage(
                 ScanModeButtons(
                     scanControlState = scanControlState,
                     controlsEnabled = archiveUiState !is CaptureArchiveUiState.Working,
-                    manualRefreshAvailable = !fullComposeEnabled,
+                    manualRefreshAvailable = true,
                     onAutoScanSelected = {
                         if (!autoScanEnabled && archiveUiState !is CaptureArchiveUiState.Working) {
                             performAction(ViewerAction.TOGGLE_AUTO_SCAN)
                         }
                     },
                     onManualRefreshSelected = {
-                        if (!fullComposeEnabled &&
-                            !manualRefreshInProgress &&
+                        // Full fidelity is not a reason to ignore the control: the manual path runs
+                        // the full pipeline once, so switching back from live capture has to work.
+                        if (!manualRefreshInProgress &&
                             archiveUiState !is CaptureArchiveUiState.Working
                         ) {
                             if (autoScanEnabled) performAction(ViewerAction.TOGGLE_AUTO_SCAN)
