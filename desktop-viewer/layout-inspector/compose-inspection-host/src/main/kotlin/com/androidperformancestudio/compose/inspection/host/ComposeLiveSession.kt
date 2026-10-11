@@ -11,6 +11,7 @@ import com.androidperformancestudio.compose.inspection.ComposeParameterReference
 import com.androidperformancestudio.compose.inspection.ComposeValue
 import com.androidperformancestudio.protocol.AgentCapabilities
 import com.androidperformancestudio.protocol.LayoutSnapshot
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 data class ComposeLiveCapture(
@@ -80,12 +81,27 @@ class ComposeLiveSession private constructor(
 
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
+        activeSessions.remove(this)
         runCatching { protocol.shutdownAgent() }
         protocol.close()
         injection.close()
     }
 
     companion object {
+        /**
+         * Sessions whose device agent still has to be shut down.
+         *
+         * Closing the window makes Compose Desktop call exitProcess, which does not wait for the
+         * coroutine that would otherwise close a live session. The agent would then stay attached to
+         * the target process, and the next preflight would refuse to start with "Another Layout
+         * Inspector is already attached" until the target app restarts. A shutdown hook closes
+         * whatever is left so an ordinary exit leaves no agent behind.
+         */
+        private val activeSessions: MutableSet<ComposeLiveSession> = ConcurrentHashMap.newKeySet()
+        private val shutdownHookInstalled = AtomicBoolean(false)
+
+        private const val SHUTDOWN_TIMEOUT_MILLIS = 5_000L
+
         fun open(
             injection: InjectedComposeSession,
             artifactResolver: ComposeInspectorArtifactResolver,
@@ -109,18 +125,51 @@ class ComposeLiveSession private constructor(
                     AospInspectorProtocolClient.COMPOSE_INSPECTOR_ID,
                     injection.deployComposeInspector(resolved),
                 )
-                return ComposeLiveSession(
+                val session = ComposeLiveSession(
                     injection = injection,
                     protocol = protocol,
                     client = ComposeInspectionClient(protocol),
                     resolvedInspector = resolved,
                     processRunner = processRunner,
                 )
+                installShutdownHook()
+                activeSessions += session
+                return session
             } catch (error: Throwable) {
                 runCatching { protocol.shutdownAgent() }
                 protocol.close()
                 injection.close()
                 throw error
+            }
+        }
+
+        private fun installShutdownHook() {
+            if (!shutdownHookInstalled.compareAndSet(false, true)) return
+            runCatching {
+                Runtime.getRuntime().addShutdownHook(
+                    Thread(::closeActiveSessions, "aps-compose-inspector-shutdown"),
+                )
+            }
+        }
+
+        /**
+         * Closes the sessions that are still open. The work runs on a worker thread so a stuck adb
+         * call cannot keep the process alive past [SHUTDOWN_TIMEOUT_MILLIS].
+         */
+        private fun closeActiveSessions() {
+            val sessions = activeSessions.toList()
+            if (sessions.isEmpty()) return
+            System.err.println("[layout-inspector] shutting down " + sessions.size + " live Compose session(s)")
+            val worker =
+                Thread(
+                    { sessions.forEach { session -> runCatching { session.close() } } },
+                    "aps-compose-inspector-close",
+                )
+            worker.isDaemon = true
+            worker.start()
+            worker.join(SHUTDOWN_TIMEOUT_MILLIS)
+            if (worker.isAlive) {
+                System.err.println("[layout-inspector] live Compose session cleanup timed out")
             }
         }
     }

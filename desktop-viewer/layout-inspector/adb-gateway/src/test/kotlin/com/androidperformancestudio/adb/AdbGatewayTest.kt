@@ -122,13 +122,16 @@ class AdbGatewayTest {
     }
 
     @Test
-    fun `rmdir is constrained to a safe app path`() {
+    fun `session directory removal is recursive and constrained to a safe app path`() {
         assertEquals(
-            listOf("-s", "device", "shell", "run-as", "dev.sample", "rmdir", "/data/user/0/dev.sample/code_cache/session"),
-            AdbCommandFactory.runAsRmdir("device", "dev.sample", "/data/user/0/dev.sample/code_cache/session"),
+            listOf(
+                "-s", "device", "shell", "run-as", "dev.sample",
+                "rm", "-rf", "/data/user/0/dev.sample/code_cache/session",
+            ),
+            AdbCommandFactory.runAsRemoveTree("device", "dev.sample", "/data/user/0/dev.sample/code_cache/session"),
         )
         assertThrows(IllegalArgumentException::class.java) {
-            AdbCommandFactory.runAsRmdir("device", "dev.sample", "/data/user/0/dev.sample/../escape")
+            AdbCommandFactory.runAsRemoveTree("device", "dev.sample", "/data/user/0/dev.sample/../escape")
         }
     }
 

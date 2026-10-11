@@ -140,6 +140,10 @@ class ComposeInjectionManager(
         val currentPids = checked(AdbCommandFactory.pidOf(target.serial, target.packageName)).stdout
             .split(Regex("\\s+")).mapNotNull(String::toIntOrNull)
         require(target.pid in currentPids) { "Target PID changed; authorize Compose inspection again" }
+        // A session that has just ended releases the device agent asynchronously: it is shut down and
+        // its files are removed through adb. Give the socket a moment to disappear so switching
+        // between live and manual capture does not report a conflict with itself.
+        awaitInspectorDetached(target.serial, target.pid)
         require(!checked(AdbCommandFactory.readUnixSockets(target.serial)).stdout.contains("@${socketName(target.pid)}")) {
             "Another Layout Inspector is already attached to PID ${target.pid}"
         }
@@ -181,9 +185,19 @@ class ComposeInjectionManager(
             )
         } catch (error: Throwable) {
             processRunner.run(AdbCommandFactory.removeRemote(target.serial, stagedFiles))
-            processRunner.run(AdbCommandFactory.runAsRemove(target.serial, target.packageName, privateFiles))
-            processRunner.run(AdbCommandFactory.runAsRmdir(target.serial, target.packageName, privateDir))
+            processRunner.run(
+                AdbCommandFactory.runAsRemoveTree(target.serial, target.packageName, privateDir),
+            )
             throw error
+        }
+    }
+
+    /** Waits, bounded, for a previously attached inspector of this target to release its socket. */
+    private fun awaitInspectorDetached(serial: String, pid: Int) {
+        val expected = "@${socketName(pid)}"
+        repeat(SOCKET_RELEASE_ATTEMPTS) { attempt ->
+            if (!checked(AdbCommandFactory.readUnixSockets(serial)).stdout.contains(expected)) return
+            sleeper(SOCKET_RELEASE_INTERVAL_MILLIS)
         }
     }
 
@@ -205,6 +219,8 @@ class ComposeInjectionManager(
     private companion object {
         const val MAX_APK_SPLITS = 32
         const val MAX_APK_BYTES = 512L * 1024 * 1024
+        const val SOCKET_RELEASE_ATTEMPTS = 20
+        const val SOCKET_RELEASE_INTERVAL_MILLIS = 250L
         const val MAX_VERSION_BYTES = 256
         const val COMPOSE_VERSION_ENTRY = "META-INF/androidx.compose.ui_ui.version"
         val COMPOSE_VERSION_PATTERN = Regex("[0-9A-Za-z._+-]+")
@@ -229,18 +245,17 @@ class InjectedComposeSession internal constructor(
     private val cleanupStagedFiles: List<String>,
 ) : AutoCloseable {
     private val closed = AtomicBoolean(false)
-    private val deployedInspectorFiles = mutableListOf<String>()
+
+    private fun privateDir(): String = cleanupPrivateFiles.first().substringBeforeLast('/')
 
     fun deployComposeInspector(resolved: ResolvedComposeInspector): String {
         check(!closed.get()) { "Compose injection session is closed" }
         require(resolved.identity.sha256 == resolved.jar.sha256()) { "Compose inspector checksum changed after resolution" }
         val staged = "/data/local/tmp/aps-compose-${resolved.identity.sha256.take(16)}.jar"
-        val privateDir = cleanupPrivateFiles.first().substringBeforeLast('/')
-        val destination = "$privateDir/compose-${resolved.identity.sha256.take(16)}.jar"
+        val destination = privateDir() + "/compose-${resolved.identity.sha256.take(16)}.jar"
         try {
             checked(AdbCommandFactory.push(serial, resolved.jar.toString(), staged))
             checked(AdbCommandFactory.runAsCopy(serial, packageName, staged, destination))
-            synchronized(deployedInspectorFiles) { deployedInspectorFiles += destination }
             checked(AdbCommandFactory.runAsChmod(serial, packageName, "444", destination))
             return destination
         } finally {
@@ -256,10 +271,11 @@ class InjectedComposeSession internal constructor(
         if (!closed.compareAndSet(false, true)) return
         processRunner.run(AdbCommandFactory.removeForward(serial, hostPort))
         processRunner.run(AdbCommandFactory.removeRemote(serial, cleanupStagedFiles))
-        val privateFiles = cleanupPrivateFiles + synchronized(deployedInspectorFiles) { deployedInspectorFiles.toList() }
-        processRunner.run(AdbCommandFactory.runAsRemove(serial, packageName, privateFiles))
+        // Remove the deployment directory tree rather than its files plus rmdir: ART dexopts the
+        // deployed jars into an oat directory of its own, so rmdir failed and left the directory
+        // (and its oat cache) behind on every session.
         processRunner.run(
-            AdbCommandFactory.runAsRmdir(serial, packageName, cleanupPrivateFiles.first().substringBeforeLast('/')),
+            AdbCommandFactory.runAsRemoveTree(serial, packageName, privateDir()),
         )
     }
 

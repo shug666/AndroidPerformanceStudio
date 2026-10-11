@@ -111,15 +111,15 @@ object AdbCommandFactory {
         return runAs(serial, packageName, "chmod", mode, path)
     }
 
-    fun runAsRemove(serial: String, packageName: String, paths: List<String>): List<String> {
-        require(paths.isNotEmpty())
-        paths.forEach(::requireSafeRemotePath)
-        return runAs(serial, packageName, "rm", "-f") + paths
-    }
-
-    fun runAsRmdir(serial: String, packageName: String, path: String): List<String> {
+    /**
+     * Removes a directory tree owned by the session.
+     *
+     * A plain rmdir cannot be used for a Compose session directory: ART dexopts the deployed jars into
+     * an oat directory of its own, so the deployment is never empty when the files are gone.
+     */
+    fun runAsRemoveTree(serial: String, packageName: String, path: String): List<String> {
         requireSafeRemotePath(path)
-        return runAs(serial, packageName, "rmdir", path)
+        return runAs(serial, packageName, "rm", "-rf", path)
     }
 
     fun removeRemote(serial: String, paths: List<String>): List<String> {
