@@ -132,8 +132,12 @@ object AdbCommandFactory {
         require(pid > 0)
         requireSafeRemotePath(agentPath)
         require(options.isNotBlank() && !options.any { it == '\n' || it == '\r' }) { "Unsafe agent options" }
+        // adb shell joins its arguments and hands them to the device shell, so the agent options
+        // (service.jar;payload.jar;pid;token) must be quoted or the shell splits on ';'.
+        val attachArgument = "$agentPath=$options"
+        require(!attachArgument.contains('\'')) { "Unsafe agent options" }
         return devicePrefix(serial) + listOf(
-            "shell", "cmd", "activity", "attach-agent", pid.toString(), "$agentPath=$options",
+            "shell", "cmd", "activity", "attach-agent", pid.toString(), "'" + attachArgument + "'",
         )
     }
 

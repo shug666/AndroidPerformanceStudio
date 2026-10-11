@@ -1,0 +1,18 @@
+--- a/agent/payload/src/main/java/com/android/tools/ui/inspector/payload/appinspection/AppInspectionUtils.java	2026-10-11 18:30:24
++++ b/agent/payload/src/main/java/com/android/tools/ui/inspector/payload/appinspection/AppInspectionUtils.java	2026-10-11 18:30:24
+@@ -236,7 +236,14 @@
+         }
+         File dexFile = new File(dexPath);
+         String tmpDir = System.getProperty("java.io.tmpdir");
+-        File workingDir = new File(tmpDir, dexFile.getName() + "_unpacked_lib");
++        // A native library file can only ever be loaded by one class loader, so unpacking into a
++        // stable directory makes every session after the first fail with UnsatisfiedLinkError once
++        // the previous class loader has opened the library (b/187342510). Qualify the directory with
++        // the per-session deployment directory so each session loads its own copy.
++        File deploymentDir = dexFile.getParentFile();
++        String workingDirName =
++            (deploymentDir == null ? "" : deploymentDir.getName() + "_") + dexFile.getName() + "_unpacked_lib";
++        File workingDir = new File(tmpDir, workingDirName);
+         if (!workingDir.exists() && !workingDir.mkdir()) {
+           throw new IOException("Failed to create working dir: " + workingDir);
+         }

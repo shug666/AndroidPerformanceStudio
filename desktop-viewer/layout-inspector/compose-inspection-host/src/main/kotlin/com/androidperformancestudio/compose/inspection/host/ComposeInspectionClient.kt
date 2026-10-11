@@ -51,6 +51,9 @@ internal class ComposeInspectionClient(
                 frameId = UUID.randomUUID().toString(),
                 generation = generation,
                 tree = response.getComposablesResponse,
+                // Upstream serves parameters from the cache warmed by extractAllParameters, and the
+                // whole-tree query is the one that returns them.
+                parameters = requestAllParameters(rootViewId),
                 recompositionObservation = recompositionObservation,
             )
         }
@@ -67,6 +70,25 @@ internal class ComposeInspectionClient(
             truncations = frames.flatMap(ComposeInspectionFrame::truncations),
             completeness = frames.maxOf(ComposeInspectionFrame::completeness),
         )
+    }
+
+    private fun requestAllParameters(
+        rootViewId: Long,
+    ): LayoutInspectorComposeProtocol.GetAllParametersResponse? {
+        val command =
+            LayoutInspectorComposeProtocol.Command.newBuilder()
+                .setGetAllParametersCommand(
+                    LayoutInspectorComposeProtocol.GetAllParametersCommand.newBuilder()
+                        .setRootViewId(rootViewId)
+                        .setSkipSystemComposables(false)
+                        // Same generation as the tree command so the warmed cache is reused.
+                        .setGeneration(generation)
+                        .setMaxRecursions(DEFAULT_MAX_RECURSIONS)
+                        .setMaxInitialIterableSize(DEFAULT_MAX_INITIAL_ITERABLE_SIZE),
+                )
+                .build()
+        val response = composeResponse(command, AospInspectorProtocolClient.PARAMETER_TIMEOUT_MILLIS)
+        return if (response.hasGetAllParametersResponse()) response.getAllParametersResponse else null
     }
 
     fun loadDetail(
@@ -144,6 +166,8 @@ internal class ComposeInspectionClient(
             .build()
         val response = composeResponse(command)
         check(response.hasUpdateSettingsResponse()) { "Unexpected Compose settings response" }
+        // Settings changes invalidate the parameters-and-semantics cache.
+        generation += 1
         val now = clock.millis()
         recompositionObservation = when {
             includeCounts -> RecompositionObservation(now, active = true, continuous = true)
@@ -152,10 +176,22 @@ internal class ComposeInspectionClient(
         }
     }
 
-    private fun composeResponse(command: LayoutInspectorComposeProtocol.Command): LayoutInspectorComposeProtocol.Response =
+    private fun composeResponse(
+        command: LayoutInspectorComposeProtocol.Command,
+        timeoutMillis: Int = AospInspectorProtocolClient.DEFAULT_SOCKET_TIMEOUT_MILLIS,
+    ): LayoutInspectorComposeProtocol.Response =
         LayoutInspectorComposeProtocol.Response.parseFrom(
-            protocol.sendInspectorCommand(AospInspectorProtocolClient.COMPOSE_INSPECTOR_ID, command.toByteArray()),
+            protocol.sendInspectorCommand(
+                AospInspectorProtocolClient.COMPOSE_INSPECTOR_ID,
+                command.toByteArray(),
+                timeoutMillis,
+            ),
         ).also { response ->
             check(!response.hasUnknownCommandResponse()) { "Compose inspector rejected command" }
         }
+
+    private companion object {
+        const val DEFAULT_MAX_RECURSIONS = 2
+        const val DEFAULT_MAX_INITIAL_ITERABLE_SIZE = 5
+    }
 }

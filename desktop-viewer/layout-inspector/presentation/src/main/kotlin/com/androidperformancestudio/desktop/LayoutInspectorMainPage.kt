@@ -352,9 +352,14 @@ fun FrameWindowScope.LayoutInspectorMainPage(
                     )
                     fullComposeEnabled = true
                 },
-                onFailure = {
+                onFailure = { error ->
                     // Complete Compose requires the verified AOSP runtime bundle. Native View and
-                    // compatible Semantics capture must remain available when that bundle is absent.
+                    // compatible Semantics capture must remain available when that bundle is absent,
+                    // but the reason has to stay visible instead of degrading silently.
+                    val reason = "Full Compose inspection unavailable: " +
+                        (error.message ?: error.javaClass.simpleName)
+                    System.err.println("[layout-inspector] " + reason)
+                    store.noteComposeInspectionUnavailable(reason)
                     val recovery = composeFallbackRecovery()
                     fullComposeEnabled = recovery.fullComposeEnabled
                     composeAuthorization = null
@@ -468,7 +473,9 @@ fun FrameWindowScope.LayoutInspectorMainPage(
                     fullComposeEnabled = recovery.fullComposeEnabled
                     recompositionActive = recovery.recompositionActive
                     autoScanEnabled = recovery.autoScanEnabled
-                    store.fallbackToCompatibleInspection()
+                    store.fallbackToCompatibleInspection(
+                        "Full Compose inspection failed: " + (error.message ?: error.javaClass.simpleName),
+                    )
                     state = store.state
                 } else {
                     store.connectionFailed(error.message ?: error.javaClass.simpleName)

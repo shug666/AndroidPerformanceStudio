@@ -60,13 +60,18 @@ class AospInspectorProtocolClient private constructor(
     }
 
     @Synchronized
-    fun sendInspectorCommand(inspectorId: String, payload: ByteArray): ByteArray {
+    fun sendInspectorCommand(
+        inspectorId: String,
+        payload: ByteArray,
+        timeoutMillis: Int = DEFAULT_SOCKET_TIMEOUT_MILLIS,
+    ): ByteArray {
         val response = send(
             UiInspectorProtocol.Command.newBuilder().setInspectorMessage(
                 UiInspectorProtocol.InspectorMessageCommand.newBuilder()
                     .setInspectorId(inspectorId)
                     .setPayload(ByteString.copyFrom(payload)),
             ),
+            timeoutMillis,
         )
         check(response.inspectorMessage.inspectorId == inspectorId) { "Inspector response ID mismatch" }
         return response.inspectorMessage.payload.toByteArray()
@@ -82,8 +87,14 @@ class AospInspectorProtocolClient private constructor(
         )
     }
 
-    private fun send(builder: UiInspectorProtocol.Command.Builder): UiInspectorProtocol.Response {
+    private fun send(
+        builder: UiInspectorProtocol.Command.Builder,
+        timeoutMillis: Int = DEFAULT_SOCKET_TIMEOUT_MILLIS,
+    ): UiInspectorProtocol.Response {
         check(!closed.get()) { "Inspector connection is closed" }
+        // A tree dump is fast, but extracting parameters and semantics for a whole Compose tree is
+        // not, so every call carries its own read timeout.
+        if (socket.soTimeout != timeoutMillis) socket.soTimeout = timeoutMillis
         val commandId = nextCommandId.getAndIncrement()
         InspectorFraming.write(
             socket.getOutputStream(),
@@ -117,6 +128,11 @@ class AospInspectorProtocolClient private constructor(
     }
 
     companion object {
+        const val DEFAULT_SOCKET_TIMEOUT_MILLIS = 5_000
+
+        /** Parameter extraction for a full Compose tree routinely exceeds the default timeout. */
+        const val PARAMETER_TIMEOUT_MILLIS = 30_000
+
         const val VIEW_INSPECTOR_ID = "ui.inspector.inspectors.view.inspector"
         const val COMPOSE_INSPECTOR_ID = "layoutinspector.compose.inspection"
         const val COMPOSE_UI_LIBRARY_ID = "androidx.compose.ui:ui"

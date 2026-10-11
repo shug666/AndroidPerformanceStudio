@@ -12,6 +12,7 @@ import com.androidperformancestudio.protocol.LayoutSnapshot
 import com.androidperformancestudio.protocol.ViewNode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class StableComposeFrameCaptureTest {
@@ -62,7 +63,26 @@ class StableComposeFrameCaptureTest {
             StableComposeFrameCapture(client, maxAttempts = 2).capture("example.app")
         }
 
-        assertEquals("Target changed during Compose frame capture; try again", error.message)
+        assertTrue(error.message!!.startsWith("Target changed during Compose frame capture; try again"))
+        assertTrue(error.message!!.contains("view hierarchy kept changing"))
+    }
+
+    @Test
+    fun `rejects compose roots that are not views of the captured window`() {
+        val client =
+            object : ComposeFrameCaptureClient {
+                override fun captureViews(packageName: String, includeAttributes: Boolean): ViewInspectionCapture =
+                    viewCapture(rootId = 1, childId = "view:stable")
+
+                override fun captureTree(rootViewIds: List<Long>): ComposeInspectionFrame =
+                    composeFrame(rootId = 999, nodeId = 1)
+            }
+
+        val error = assertThrows(IllegalStateException::class.java) {
+            StableComposeFrameCapture(client, maxAttempts = 1).capture("example.app")
+        }
+
+        assertTrue(error.message!!.contains("are not views of the captured window"))
     }
 
     private class FakeClient(

@@ -338,13 +338,20 @@ class InspectorStore(
         )
     }
 
-    fun fallbackToCompatibleInspection() {
+    fun fallbackToCompatibleInspection(reason: String? = null) {
         state = state.copy(
             connectionStatus = ConnectionStatus.DISCONNECTED,
             connectionError = null,
             composeInspection = null,
-            composeInspectionWarning = null,
+            // A full-Compose failure must be visible: silently showing Semantics-only would look
+            // like a working capture with missing data.
+            composeInspectionWarning = reason,
         )
+    }
+
+    /** Records why full Compose inspection is not active without disturbing the capture. */
+    fun noteComposeInspectionUnavailable(reason: String) {
+        state = state.copy(composeInspectionWarning = reason)
     }
 
     fun selectNode(nodeId: String): Boolean {
