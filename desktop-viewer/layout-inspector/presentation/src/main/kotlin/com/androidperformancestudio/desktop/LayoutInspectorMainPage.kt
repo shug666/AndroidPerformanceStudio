@@ -9,7 +9,9 @@ import androidx.compose.foundation.LocalScrollbarStyle
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -132,6 +134,7 @@ import com.androidperformancestudio.adb.VisibleWindowViewsTextRenderer
 import com.androidperformancestudio.protocol.Bounds
 import com.androidperformancestudio.protocol.ProtocolCodec
 import com.androidperformancestudio.protocol.UiNode
+import com.androidperformancestudio.protocol.WindowType
 import com.androidperformancestudio.compose.inspection.host.ComposeInjectionManager
 import com.androidperformancestudio.compose.inspection.host.ComposeCompilerReportParser
 import com.androidperformancestudio.compose.inspection.host.ComposeInspectionAuthorization
@@ -1899,6 +1902,7 @@ private fun PanelToggleButton(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HierarchyPane(
     state: InspectorState,
@@ -1927,6 +1931,7 @@ private fun HierarchyPane(
     val horizontalScrollState = rememberScrollState()
     val listState = rememberLazyListState()
     val focusRequester = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
     val visibleRows = treeState.displayRows(
         rows = isolationState.rows(model.rows),
         hideInvisible = viewDisplayOptions.hideInvisibleHierarchyViews,
@@ -2047,6 +2052,8 @@ private fun HierarchyPane(
                             isSearchMatch -> colors.searchMatchRow
                             else -> colors.transparent
                         }
+                        var contextMenuExpanded by remember(row.id) { mutableStateOf(false) }
+                        Box {
                         Row(
                             modifier = Modifier
                                 .widthIn(min = viewportWidth)
@@ -2055,6 +2062,11 @@ private fun HierarchyPane(
                                 .clickable {
                                     focusRequester.requestFocus()
                                     onSelect(row.id)
+                                }
+                                .onSecondaryClick {
+                                    focusRequester.requestFocus()
+                                    onSelect(row.id)
+                                    contextMenuExpanded = true
                                 }
                                 .padding(
                                     start = (8 + row.depth * HierarchyRowLayout.INDENT_DP).dp,
@@ -2125,6 +2137,29 @@ private fun HierarchyPane(
                                     softWrap = false,
                                 )
                             }
+                        }
+                        DropdownMenu(
+                            expanded = contextMenuExpanded,
+                            onDismissRequest = { contextMenuExpanded = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("定位源码 (Locate Source)") },
+                                onClick = {
+                                    contextMenuExpanded = false
+                                    SourceLocateBridge.pushLocateRequest(
+                                        scope = scope,
+                                        packageName = state.snapshot?.packageName,
+                                        activityClass = state.activeWindow
+                                            ?.takeIf { it.type == WindowType.ACTIVITY }
+                                            ?.title,
+                                        windowTitle = state.activeWindow?.title,
+                                        windowType = state.activeWindow?.type?.name,
+                                        root = state.activeRoot,
+                                        targetId = row.id,
+                                    )
+                                },
+                            )
+                        }
                         }
                     }
                 }
