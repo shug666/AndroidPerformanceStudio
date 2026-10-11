@@ -2,6 +2,33 @@
 
 This is a continuation checkpoint for the [phased implementation plan](android-performance-studio-commercial-ui-implementation.md), not an assertion that the full commercial UI is finished.
 
+## 2026-10-11: Compose inspection agent built entirely in-repo
+
+### Implemented
+
+- The four Compose inspection agent artifacts are now produced by
+  `:layout-inspector:compose-agent-build` instead of a Bazel build inside a full AOSP Studio
+  checkout: the three dexed jars (`service`, `payload`, `view-inspector`) and the per-ABI JVMTI
+  agent `lib_ui_inspector_agent.so`.
+- Four upstream snapshots are vendored with provenance: `third_party/aosp-ui-inspector`,
+  `third_party/androidx-inspection` (the `androidx.inspection` API is not published to any public
+  Maven repository), `third_party/aosp-transport-native` and `third_party/aosp-slicer`.
+- Staging mirrors the snapshots, applies `third_party/aosp-ui-inspector-patches/` (the per-session
+  token handshake), and retargets the Android Studio shaded protobuf onto the public runtime.
+  Packaging mirrors the upstream Bazel targets: jarjar relocation of `kotlin`/`kotlinx.coroutines`,
+  `d8` dexing, the `classes.dex` layout, and the payload supplying the shared runtime to the View
+  inspector through its DexClassLoader parent.
+
+### Verification
+
+- `:compose-agent-build:composeAgentBundle` writes the bundle plus `manifest.properties`, and
+  `:compose-agent-build:verifyComposeAgentBundle` asserts the layout, manifest keys, checksums and
+  dexed jars.
+- All three `.so` files report zero undefined `profiler::`/`slicer::` symbols and export
+  `Agent_OnAttach`; every jar contains `classes.dex`; the payload carries `androidx.inspection` and
+  the protobuf runtime but not the service bridge; the View inspector has no unrelocated `kotlin/`
+  classes.
+- `:desktop-app:test` still passes.
 ## 2026-10-11: Settings sidebar icons
 
 ### Implemented

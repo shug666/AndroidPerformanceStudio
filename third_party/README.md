@@ -1,5 +1,21 @@
 # Third-party sources
 
+## Vendored AOSP inspection sources
+
+Four upstream snapshots are vendored verbatim so APS can build the Compose inspection agent without
+an AOSP Bazel workspace or an Android Studio installation. APS patches live outside the snapshots,
+in `aosp-ui-inspector-patches/`.
+
+| Path | Upstream | Pin |
+| --- | --- | --- |
+| `aosp-ui-inspector/` | `platform/tools/base`, `ui-inspector` | `b1261356012800c0a93d18f03b060024e8162c2f` |
+| `androidx-inspection/` | `platform/frameworks/support`, `inspection/inspection` | `b2dcba37aea417626ed77a230e961f405d893c4c` |
+| `aosp-transport-native/` | `platform/tools/base`, `transport/native` | `b1261356012800c0a93d18f03b060024e8162c2f` |
+| `aosp-slicer/` | `platform/tools/dexter`, `slicer` | `d992a222ec28b56efa29f9104db060379298049c` |
+
+Each directory carries a `PROVENANCE.md` with the archive URL, SHA-256 and licence. See
+`desktop-viewer/layout-inspector/compose-agent-build/` for the build that consumes them.
+
 ## Firefox Profiler
 
 `firefox-profiler/` is a shallow Git Submodule of
