@@ -180,6 +180,9 @@ internal const val SYSTEM_UI_PACKAGE_NAME = "com.android.systemui"
 // automatically for the foreground app when the verified AOSP agent bundle is available.
 internal const val DEFAULT_HIDE_SYSTEM_COMPOSABLES: Boolean = false
 
+/** Node id prefix the Compose projection puts on full-fidelity composable nodes. */
+internal const val COMPOSE_NODE_ID_PREFIX = "compose-inspection:"
+
 internal fun automaticComposePreflightKey(
     serial: String?,
     mode: CaptureTargetMode,
@@ -494,7 +497,7 @@ fun FrameWindowScope.LayoutInspectorMainPage(
 
     LaunchedEffect(state.selectedNodeId, state.composeInspection?.frame?.frameId, composeSession) {
         val document = state.composeInspection ?: return@LaunchedEffect
-        val nodeId = state.selectedNodeId?.removePrefix("compose-inspection:")?.toLongOrNull()
+        val nodeId = state.selectedNodeId?.removePrefix(COMPOSE_NODE_ID_PREFIX)?.toLongOrNull()
             ?: return@LaunchedEffect
         if (document.frame.details.containsKey(nodeId)) return@LaunchedEffect
         val node = document.frame.roots.asSequence().flatMap { it.nodes.asSequence() }
@@ -2864,7 +2867,7 @@ private fun DetailsPane(
     val colors = LocalViewerColors.current
     val language = LocalLayoutInspectorLanguage.current
     val details = InspectorPresenter.present(state, language).details
-    val composeSource = state.selectedNodeId?.removePrefix("compose-inspection:")?.toLongOrNull()?.let { nodeId ->
+    val composeSource = state.selectedNodeId?.removePrefix(COMPOSE_NODE_ID_PREFIX)?.toLongOrNull()?.let { nodeId ->
         state.composeInspection?.frame?.roots?.firstNotNullOfOrNull { root ->
             root.nodes.firstNotNullOfOrNull { it.findComposeNode(nodeId) }
         }?.source
@@ -2874,11 +2877,21 @@ private fun DetailsPane(
     val categories = DetailCategory.entries.filter { category -> details.sections.any { it.category == category } }
     val activeCategory = selectedCategory.takeIf(categories::contains) ?: categories.firstOrNull()
     val detailsListState = rememberLazyListState()
-    LaunchedEffect(activeCategory, details.id) {
-        if (activeCategory != null) {
-            selectedCategory = activeCategory
-            detailsListState.scrollToItem(0)
-        }
+    // A newly selected composable opens on its Compose tab, so PARAMETERS and MODIFIER are visible
+    // without a manual tab click; every other selection opens on its first available tab. This must
+    // stay the only writer of selectedCategory for a new selection, or it would undo the switch.
+    val composeSelection = state.selectedNodeId?.startsWith(COMPOSE_NODE_ID_PREFIX) == true
+    LaunchedEffect(details.id) {
+        selectedCategory =
+            if (composeSelection && DetailCategory.COMPOSE in categories) {
+                DetailCategory.COMPOSE
+            } else {
+                categories.firstOrNull() ?: DetailCategory.OVERVIEW
+            }
+        detailsListState.scrollToItem(0)
+    }
+    LaunchedEffect(activeCategory) {
+        if (activeCategory != null) detailsListState.scrollToItem(0)
     }
     Column(modifier.background(colors.panel)) {
         Row(
