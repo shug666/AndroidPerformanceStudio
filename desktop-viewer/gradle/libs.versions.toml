@@ -22,7 +22,7 @@ mcp-kotlin = "0.15.0"
 ktor = "3.5.2"
 shadow = "9.6.1"
 slf4j = "2.0.18"
-kotlin-logging = "8.0.4"
+kotlinLogging = "8.0.4"
 
 [libraries]
 androidx-activity = { module = "androidx.activity:activity", version.ref = "androidx-activity" }
@@ -80,7 +80,7 @@ ktor-server-content-negotiation = { module = "io.ktor:ktor-server-content-negoti
 ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json-jvm" }
 ktor-server-websockets = { module = "io.ktor:ktor-server-websockets" }
 slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
-kotlin-logging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlin-logging" }
+kotlin-logging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlinLogging" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
