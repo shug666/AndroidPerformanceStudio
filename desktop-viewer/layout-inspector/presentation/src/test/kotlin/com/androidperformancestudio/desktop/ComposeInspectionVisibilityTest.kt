@@ -7,34 +7,66 @@ import org.junit.jupiter.api.Test
 
 class ComposeInspectionVisibilityTest {
     @Test
-    fun `foreground capture automatically prepares the full Compose tree without a toolbar switch`() {
+    fun `foreground capture automatically prepares the full Compose tree for each new foreground app`() {
         assertEquals(
-            "serial:FOREGROUND_APP",
+            "serial:FOREGROUND_APP:com.example",
             automaticComposePreflightKey(
                 serial = "serial",
+                packageName = "com.example",
                 mode = CaptureTargetMode.FOREGROUND_APP,
-                fullComposeEnabled = false,
-                hasAuthorization = false,
+                authorizedPackage = null,
             ),
         )
     }
 
     @Test
-    fun `automatic full Compose preparation never replaces system UI or an active native-plus-compose session`() {
-        assertNull(
+    fun `switching the foreground app retries preflight instead of reusing the previous attempt`() {
+        // The package is part of the key, so a native View app that failed the Compose preflight does
+        // not stop a later Compose app, and a previously authorized app is not reused after another
+        // app took the foreground.
+        assertEquals(
+            "serial:FOREGROUND_APP:com.compose",
             automaticComposePreflightKey(
                 serial = "serial",
-                mode = CaptureTargetMode.SYSTEM_UI,
-                fullComposeEnabled = false,
-                hasAuthorization = false,
+                packageName = "com.compose",
+                mode = CaptureTargetMode.FOREGROUND_APP,
+                authorizedPackage = "com.native",
             ),
         )
         assertNull(
             automaticComposePreflightKey(
                 serial = "serial",
+                packageName = "com.compose",
                 mode = CaptureTargetMode.FOREGROUND_APP,
-                fullComposeEnabled = true,
-                hasAuthorization = true,
+                authorizedPackage = "com.compose",
+            ),
+        )
+    }
+
+    @Test
+    fun `automatic full Compose preparation never replaces system UI or a missing foreground app`() {
+        assertNull(
+            automaticComposePreflightKey(
+                serial = "serial",
+                packageName = "com.example",
+                mode = CaptureTargetMode.SYSTEM_UI,
+                authorizedPackage = null,
+            ),
+        )
+        assertNull(
+            automaticComposePreflightKey(
+                serial = "serial",
+                packageName = null,
+                mode = CaptureTargetMode.FOREGROUND_APP,
+                authorizedPackage = null,
+            ),
+        )
+        assertNull(
+            automaticComposePreflightKey(
+                serial = null,
+                packageName = "com.example",
+                mode = CaptureTargetMode.FOREGROUND_APP,
+                authorizedPackage = null,
             ),
         )
     }

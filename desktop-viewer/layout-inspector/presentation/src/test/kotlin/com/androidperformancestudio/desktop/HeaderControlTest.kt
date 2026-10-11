@@ -201,8 +201,10 @@ class HeaderControlTest {
 
         assertTrue(header.contains("ScanModeButtons("))
         assertTrue(header.contains("if (!autoScanEnabled && archiveUiState !is CaptureArchiveUiState.Working)"))
-        assertTrue(header.contains("!fullComposeEnabled"))
-        assertTrue(header.contains("!manualRefreshInProgress"))
+        // Full Compose is no longer a reason to disable the control: the manual path runs the full
+        // pipeline once, so the gate is the in-flight refresh plus an active archive import.
+        assertTrue(header.contains("manualRefreshAvailable = true"))
+        assertTrue(header.contains("if (!manualRefreshInProgress &&"))
         assertTrue(header.contains("if (autoScanEnabled) performAction(ViewerAction.TOGGLE_AUTO_SCAN)"))
         assertTrue(header.contains("manualRefreshRequest += 1"))
     }

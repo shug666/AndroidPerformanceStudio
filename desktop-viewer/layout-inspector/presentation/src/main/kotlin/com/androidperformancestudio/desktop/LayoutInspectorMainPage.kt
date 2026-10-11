@@ -186,15 +186,26 @@ internal const val DEFAULT_HIDE_SYSTEM_COMPOSABLES: Boolean = false
 /** Node id prefix the Compose projection puts on full-fidelity composable nodes. */
 internal const val COMPOSE_NODE_ID_PREFIX = "compose-inspection:"
 
+/**
+ * Identity of one automatic full-Compose preparation attempt.
+ *
+ * The foreground package is part of the key. Bringing a different app to the front has to retry
+ * preflight instead of reusing the previous attempt: a native View app that fails the Compose
+ * preflight must not stop the next Compose app from being prepared, and an app that was authorized
+ * earlier must not be attached after another app took over the screen.
+ */
 internal fun automaticComposePreflightKey(
     serial: String?,
+    packageName: String?,
     mode: CaptureTargetMode,
-    fullComposeEnabled: Boolean,
-    hasAuthorization: Boolean,
-): String? =
-    serial?.takeIf {
-        mode == CaptureTargetMode.FOREGROUND_APP && !fullComposeEnabled && !hasAuthorization
-    }?.let { "$it:${mode.name}" }
+    authorizedPackage: String?,
+): String? {
+    if (mode != CaptureTargetMode.FOREGROUND_APP) return null
+    val serialValue = serial?.takeIf(String::isNotBlank) ?: return null
+    val foreground = packageName?.takeIf(String::isNotBlank) ?: return null
+    if (foreground == authorizedPackage) return null
+    return "$serialValue:${mode.name}:$foreground"
+}
 
 internal data class ComposeFallbackRecovery(
     val autoScanEnabled: Boolean = true,
@@ -270,6 +281,7 @@ fun FrameWindowScope.LayoutInspectorMainPage(
     var recompositionActive by remember { mutableStateOf(false) }
     var automaticComposePreflightAttempt by remember { mutableStateOf<String?>(null) }
     var automaticComposePreflightInProgress by remember { mutableStateOf(false) }
+    var foregroundPackage by remember { mutableStateOf<String?>(null) }
     val recompositionHeatTracker = remember { RecompositionHeatTracker() }
     var recompositionHeat by remember { mutableStateOf<Map<String, Float>>(emptyMap()) }
     LaunchedEffect(state.composeInspection?.frame?.frameId) {
@@ -331,53 +343,88 @@ fun FrameWindowScope.LayoutInspectorMainPage(
 
     val prepareFullComposeForForeground: () -> Unit = prepare@{
         val serial = selectedDeviceSerial ?: availableDevices.singleOrNull()?.serial ?: return@prepare
-        val key = automaticComposePreflightKey(
-            serial = serial,
-            mode = captureTargetMode,
-            fullComposeEnabled = fullComposeEnabled,
-            hasAuthorization = composeAuthorization != null,
-        ) ?: return@prepare
-        if (automaticComposePreflightAttempt == key || automaticComposePreflightInProgress) return@prepare
-        automaticComposePreflightAttempt = key
+        if (automaticComposePreflightInProgress) return@prepare
         automaticComposePreflightInProgress = true
         coroutineScope.launch {
-            val prepared = runCatching {
-                withContext(Dispatchers.IO) {
-                    val packageName = deviceClient.foregroundPackageName(serial)
-                    val bundleRoot = resolveComposeAgentBundle()
-                    composeInjectionManager.preflight(serial, packageName, bundleRoot)
-                }
-            }
-            automaticComposePreflightInProgress = false
-            prepared.fold(
-                onSuccess = { target ->
-                    composeAuthorization = AuthorizedComposeTarget(
-                        target,
-                        ComposeInspectionAuthorization.authorize(target.preflight),
-                    )
-                    // The scan mode stays whatever the user selected: full fidelity now works from
-                    // either mode, so activation must not switch the user to live capture.
-                    fullComposeEnabled = true
-                },
-                onFailure = { error ->
-                    // Complete Compose requires the verified AOSP runtime bundle. Native View and
-                    // compatible Semantics capture must remain available when that bundle is absent,
-                    // but the reason has to stay visible instead of degrading silently.
-                    val reason = "Full Compose inspection unavailable: " +
-                        (error.message ?: error.javaClass.simpleName)
-                    System.err.println("[layout-inspector] " + reason)
-                    store.noteComposeInspectionUnavailable(reason)
-                    val recovery = composeFallbackRecovery()
-                    fullComposeEnabled = recovery.fullComposeEnabled
+            try {
+                val foreground = withContext(Dispatchers.IO) {
+                    runCatching { deviceClient.foregroundPackageName(serial) }.getOrNull()
+                }?.takeIf(String::isNotBlank) ?: return@launch
+                val authorizedPackage = composeAuthorization?.prepared?.preflight?.packageName
+                val key = automaticComposePreflightKey(
+                    serial = serial,
+                    packageName = foreground,
+                    mode = captureTargetMode,
+                    authorizedPackage = authorizedPackage,
+                ) ?: return@launch
+                if (automaticComposePreflightAttempt == key) return@launch
+                automaticComposePreflightAttempt = key
+                // A different foreground app invalidates the previous target. Reusing it would
+                // attach one app's session while another app owns the screen, so the captured tree
+                // would not describe the screen.
+                if (authorizedPackage != null && authorizedPackage != foreground) {
+                    composeSession = null
                     composeAuthorization = null
-                    recompositionActive = recovery.recompositionActive
-                },
-            )
+                    fullComposeEnabled = false
+                    recompositionActive = false
+                }
+                val prepared = runCatching {
+                    withContext(Dispatchers.IO) {
+                        val bundleRoot = resolveComposeAgentBundle()
+                        composeInjectionManager.preflight(serial, foreground, bundleRoot)
+                    }
+                }
+                prepared.fold(
+                    onSuccess = { target ->
+                        composeAuthorization = AuthorizedComposeTarget(
+                            target,
+                            ComposeInspectionAuthorization.authorize(target.preflight),
+                        )
+                        // The scan mode stays whatever the user selected: full fidelity now works from
+                        // either mode, so activation must not switch the user to live capture.
+                        fullComposeEnabled = true
+                    },
+                    onFailure = { error ->
+                        // Complete Compose requires the verified AOSP runtime bundle. Native View and
+                        // compatible Semantics capture must remain available when that bundle is absent,
+                        // but the reason has to stay visible instead of degrading silently.
+                        val reason = "Full Compose inspection unavailable: " +
+                            (error.message ?: error.javaClass.simpleName)
+                        System.err.println("[layout-inspector] " + reason)
+                        store.noteComposeInspectionUnavailable(reason)
+                        val recovery = composeFallbackRecovery()
+                        fullComposeEnabled = recovery.fullComposeEnabled
+                        composeAuthorization = null
+                        recompositionActive = recovery.recompositionActive
+                    },
+                )
+            } finally {
+                automaticComposePreflightInProgress = false
+            }
         }
     }
 
     LaunchedEffect(selectedDeviceSerial, availableDevices, captureTargetMode, fullComposeEnabled, composeAuthorization) {
         prepareFullComposeForForeground()
+    }
+
+    // The foreground app can change without any Layout Inspector state changing, so poll for it and
+    // prepare the new package. Without this the first attempt stayed sticky: preparing a native View
+    // app used to block every later Compose app, and a previously authorized app was reused after
+    // another app took the foreground.
+    LaunchedEffect(selectedDeviceSerial, availableDevices, captureTargetMode) {
+        val serial = selectedDeviceSerial ?: availableDevices.singleOrNull()?.serial ?: return@LaunchedEffect
+        foregroundPackage = null
+        while (currentCoroutineContext().isActive) {
+            val foreground = withContext(Dispatchers.IO) {
+                runCatching { deviceClient.foregroundPackageName(serial) }.getOrNull()
+            }?.takeIf(String::isNotBlank)
+            if (foreground != null && foreground != foregroundPackage) {
+                foregroundPackage = foreground
+                prepareFullComposeForForeground()
+            }
+            delay(FOREGROUND_PACKAGE_POLL_MILLIS.milliseconds)
+        }
     }
 
     LaunchedEffect(autoScanEnabled, selectedDeviceSerial, captureTargetMode, fullComposeEnabled, composeAuthorization) {
@@ -3751,6 +3798,7 @@ private fun FindingsResizeSeparator(onDrag: (Float) -> Unit) {
 private const val CAPTURE_INTERVAL_MILLIS = 1_000L
 private const val ACTIVE_COMPOSE_CAPTURE_INTERVAL_MILLIS = 200L
 private const val RECONNECT_INTERVAL_MILLIS = 1_000L
+private const val FOREGROUND_PACKAGE_POLL_MILLIS = 1_000L
 
 @Composable
 private fun HierarchySearchBar(
