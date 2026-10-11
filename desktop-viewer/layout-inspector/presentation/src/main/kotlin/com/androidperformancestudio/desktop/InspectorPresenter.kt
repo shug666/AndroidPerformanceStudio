@@ -6,6 +6,7 @@ import com.androidperformancestudio.presentation.generated.resources.*
 import com.androidperformancestudio.application.ConnectionStatus
 import com.androidperformancestudio.application.InspectorState
 import com.androidperformancestudio.application.textContent
+import com.androidperformancestudio.compose.inspection.ComposableNode
 import com.androidperformancestudio.protocol.Bounds
 import com.androidperformancestudio.protocol.UiNode
 import com.androidperformancestudio.protocol.ViewNode
@@ -21,6 +22,8 @@ data class TreeRowModel(
     val visible: Boolean,
     val hasChildren: Boolean,
     val resourceLabel: String? = null,
+    /** Compact Compose facts (lambda count, stability risk) shown next to the node label. */
+    val composeBadge: String? = null,
 )
 
 data class WindowChoiceModel(val id: String, val title: String)
@@ -95,6 +98,7 @@ internal object InspectorPresenter {
     ): InspectorScreenModel {
         val nodeNumbers = mutableMapOf<String, String>()
         val nextIndexByDepth = mutableMapOf<Int, Int>()
+        val composeBadges = composeBadges(state)
         val rows = buildList {
             state.activeRoot?.appendRows(
                 target = this,
@@ -102,6 +106,7 @@ internal object InspectorPresenter {
                 selectedNodeId = state.selectedNodeId,
                 nodeNumbers = nodeNumbers,
                 nextIndexByDepth = nextIndexByDepth,
+                composeBadges = composeBadges,
             )
         }
         val selected = state.selectedNode
@@ -283,12 +288,41 @@ internal object InspectorPresenter {
         Severity.ERROR -> FindingTone.ERROR
     }
 
+    /**
+     * Per-node Compose facts for the tree. The full parameter, modifier and semantics lists stay in
+     * the details pane; this only carries what decides whether a composable is worth opening, which is
+     * how many lambdas it takes and whether it can actually skip.
+     */
+    private fun composeBadges(state: InspectorState): Map<String, String> {
+        val frame = state.composeInspection?.frame ?: return emptyMap()
+        val functions = state.composeCompilerReport?.functions.orEmpty()
+        val badges = mutableMapOf<String, String>()
+        val pending = ArrayDeque<ComposableNode>()
+        frame.roots.forEach { root -> root.nodes.forEach(pending::addLast) }
+        while (pending.isNotEmpty()) {
+            val node = pending.removeFirst()
+            pending.addAll(node.children)
+            val function =
+                functions.firstOrNull { candidate ->
+                    candidate.name == node.name &&
+                        (candidate.sourceFile == null || node.source?.fileName == candidate.sourceFile)
+                }
+            val risky =
+                function != null &&
+                    (function.skippable == false || function.parameters.any { it.stability.name == "UNSTABLE" })
+            val badge = composeTreeBadge(frame.details[node.id].toComposeSummary(), risky)
+            if (badge.isNotEmpty()) badges[COMPOSE_NODE_ID_PREFIX + node.id] = badge
+        }
+        return badges
+    }
+
     private fun UiNode.appendRows(
         target: MutableList<TreeRowModel>,
         depth: Int,
         selectedNodeId: String?,
         nodeNumbers: MutableMap<String, String>,
         nextIndexByDepth: MutableMap<Int, Int>,
+        composeBadges: Map<String, String>,
     ) {
         val index = nextIndexByDepth.getOrDefault(depth, 0)
         nextIndexByDepth[depth] = index + 1
@@ -307,6 +341,7 @@ internal object InspectorPresenter {
                 ?.substringAfterLast('/')
                 ?.takeIf(String::isNotBlank)
                 ?.let { "id/$it" },
+            composeBadge = composeBadges[id],
         )
         children.forEach { child ->
             child.appendRows(
@@ -315,6 +350,7 @@ internal object InspectorPresenter {
                 selectedNodeId = selectedNodeId,
                 nodeNumbers = nodeNumbers,
                 nextIndexByDepth = nextIndexByDepth,
+                composeBadges = composeBadges,
             )
         }
     }

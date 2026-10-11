@@ -2074,6 +2074,18 @@ private fun HierarchyPane(
                                     softWrap = false,
                                 )
                             }
+                            row.composeBadge?.let { badge ->
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    badge,
+                                    color = colors.accent,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = ViewerTypography.secondary.fontSize,
+                                    lineHeight = ViewerTypography.dense.lineHeight,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                )
+                            }
                         }
                     }
                 }
@@ -2857,7 +2869,7 @@ private fun rememberScreenshot(bytes: ByteArray?): ImageBitmap? =
     }
 
 @Composable
-private fun DetailsPane(
+internal fun DetailsPane(
     state: InspectorState,
     modifier: Modifier,
     onOpenMemoryProfiler: ((String) -> Unit)? = null,
@@ -2877,17 +2889,10 @@ private fun DetailsPane(
     val categories = DetailCategory.entries.filter { category -> details.sections.any { it.category == category } }
     val activeCategory = selectedCategory.takeIf(categories::contains) ?: categories.firstOrNull()
     val detailsListState = rememberLazyListState()
-    // A newly selected composable opens on its Compose tab, so PARAMETERS and MODIFIER are visible
-    // without a manual tab click; every other selection opens on its first available tab. This must
-    // stay the only writer of selectedCategory for a new selection, or it would undo the switch.
-    val composeSelection = state.selectedNodeId?.startsWith(COMPOSE_NODE_ID_PREFIX) == true
+    // This must stay the only writer of selectedCategory for a new selection, or it would undo the
+    // switch that defaultDetailCategory just made.
     LaunchedEffect(details.id) {
-        selectedCategory =
-            if (composeSelection && DetailCategory.COMPOSE in categories) {
-                DetailCategory.COMPOSE
-            } else {
-                categories.firstOrNull() ?: DetailCategory.OVERVIEW
-            }
+        selectedCategory = defaultDetailCategory(state.selectedNodeId, categories)
         detailsListState.scrollToItem(0)
     }
     LaunchedEffect(activeCategory) {

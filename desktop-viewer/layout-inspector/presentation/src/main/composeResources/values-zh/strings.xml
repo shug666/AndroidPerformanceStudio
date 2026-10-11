@@ -188,6 +188,12 @@
     <string name="detail_label_compose_line">行号</string>
     <string name="detail_label_compose_offset">字符偏移</string>
     <string name="detail_label_compose_package_hash">包哈希</string>
+    <string name="detail_section_compose_summary">COMPOSE 摘要</string>
+    <string name="detail_label_compose_summary_source">源码位置</string>
+    <string name="detail_label_compose_summary_parameters">参数数量</string>
+    <string name="detail_label_compose_summary_lambdas">Lambda 参数</string>
+    <string name="detail_label_compose_summary_modifiers">Modifier 数量</string>
+    <string name="detail_label_compose_summary_semantics">语义（合并 / 未合并）</string>
     <string name="detail_label_recompose_count">重组次数</string>
     <string name="detail_label_skip_count">跳过次数</string>
     <string name="detail_label_class">类</string>

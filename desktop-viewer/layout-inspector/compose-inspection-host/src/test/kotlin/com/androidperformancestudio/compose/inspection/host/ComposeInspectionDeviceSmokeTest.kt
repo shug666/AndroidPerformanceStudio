@@ -72,6 +72,11 @@ class ComposeInspectionDeviceSmokeTest {
                     "[smoke] details=" + details.size + " withModifiers=" + withModifiers +
                         " withParameters=" + withParameters,
                 )
+                // A lambda parameter carries the definition site of its lambda, which is what the
+                // details pane summarises and what stops a recomposition from skipping.
+                details.values.flatMap { it.parameters }.filter { it.type == "LAMBDA" }.take(3).forEach { value ->
+                    println("[smoke] lambda parameter " + value.name + "=" + (value.value ?: ""))
+                }
                 assertTrue(withModifiers + withParameters > 0) {
                     "No node carried modifiers or parameters; the MODIFIER section would stay empty"
                 }

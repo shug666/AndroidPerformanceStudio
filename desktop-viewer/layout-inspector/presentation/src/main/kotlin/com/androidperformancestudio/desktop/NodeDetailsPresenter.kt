@@ -185,7 +185,77 @@ internal object NodeDetailsPresenter {
             composeCompilerReport,
             language,
         ).map { it.copy(category = DetailCategory.COMPOSE) } +
+            listOfNotNull(composeOverviewSection(node, composeInspection, composeCompilerReport, language)) +
             rawPropertiesSection(node, attributes, language).map { it.copy(category = DetailCategory.EVIDENCE) }
+    }
+
+    /**
+     * The Compose facts worth seeing while walking the tree instead of opening the Compose tab: where
+     * the composable is defined, how many of its parameters are lambdas (and where those lambdas come
+     * from), and whether it carries modifiers or semantics. The complete lists stay on the Compose tab.
+     */
+    private fun composeOverviewSection(
+        node: UiNode,
+        document: ComposeInspectionDocument?,
+        compilerReport: ComposeCompilerReport?,
+        language: UiLanguage,
+    ): DetailSectionModel? {
+        val composeNode = node as? ComposeNode ?: return null
+        val nodeId = composeNode.id.removePrefix(COMPOSE_INSPECTION_ID_PREFIX).toLongOrNull() ?: return null
+        val frame = document?.frame ?: return null
+        val inspectedNode =
+            frame.roots.firstNotNullOfOrNull { root ->
+                root.nodes.firstNotNullOfOrNull { it.find(nodeId) }
+            } ?: return null
+        // Without a collected detail the counts would read as zero rather than unknown.
+        val summary = frame.details[nodeId]?.toComposeSummary() ?: return null
+        val function =
+            compilerReport?.functions?.firstOrNull { candidate ->
+                candidate.name == inspectedNode.name &&
+                    (candidate.sourceFile == null || inspectedNode.source?.fileName == candidate.sourceFile)
+            }
+        val unstable = function?.parameters?.filter { it.stability.name == "UNSTABLE" }.orEmpty()
+        val rows = buildList {
+            inspectedNode.source?.let { source ->
+                add(
+                    row(
+                        language,
+                        Res.string.detail_label_compose_summary_source,
+                        source.fileName + ":" + source.lineNumber,
+                    ),
+                )
+            }
+            add(row(language, Res.string.detail_label_compose_summary_parameters, summary.parameterCount))
+            if (summary.lambdaCount > 0) {
+                add(row(language, Res.string.detail_label_compose_summary_lambdas, summary.lambdaCount))
+                summary.lambdaParameters.forEach { lambda ->
+                    add(DetailRowModel(lambda.name, lambda.location ?: "—"))
+                }
+            }
+            add(row(language, Res.string.detail_label_compose_summary_modifiers, summary.modifierCount))
+            add(
+                row(
+                    language,
+                    Res.string.detail_label_compose_summary_semantics,
+                    summary.mergedSemanticsCount.toString() + " / " + summary.unmergedSemanticsCount,
+                ),
+            )
+            if (function != null) {
+                add(row(language, Res.string.detail_label_skippable, function.skippable))
+                add(
+                    row(
+                        language,
+                        Res.string.detail_label_unstable_parameters,
+                        unstable.joinToString { it.name + ": " + it.type }.ifBlank { "—" },
+                    ),
+                )
+            }
+        }
+        return DetailSectionModel(
+            title = localizedStringResource(Res.string.detail_section_compose_summary, language),
+            rows = rows,
+            highlightsRenderingRisk = unstable.isNotEmpty() || function?.skippable == false,
+        )
     }
 
     private fun composeInspectionSections(

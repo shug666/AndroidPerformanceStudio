@@ -188,6 +188,12 @@
     <string name="detail_label_compose_line">Line</string>
     <string name="detail_label_compose_offset">Offset</string>
     <string name="detail_label_compose_package_hash">Package hash</string>
+    <string name="detail_section_compose_summary">COMPOSE SUMMARY</string>
+    <string name="detail_label_compose_summary_source">Source</string>
+    <string name="detail_label_compose_summary_parameters">Parameters</string>
+    <string name="detail_label_compose_summary_lambdas">Lambda parameters</string>
+    <string name="detail_label_compose_summary_modifiers">Modifiers</string>
+    <string name="detail_label_compose_summary_semantics">Semantics (merged / unmerged)</string>
     <string name="detail_label_recompose_count">Recompose count</string>
     <string name="detail_label_skip_count">Skip count</string>
     <string name="detail_label_class">Class</string>

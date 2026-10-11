@@ -42,7 +42,7 @@ internal class ComposeInspectionClient(
                         .setRootViewId(rootViewId)
                         .setSkipSystemComposables(false)
                         .setGeneration(generation)
-                        .setExtractAllParameters(false),
+                        .setExtractAllParameters(true),
                 )
                 .build()
             val response = composeResponse(command)

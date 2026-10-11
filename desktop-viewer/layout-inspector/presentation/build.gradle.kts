@@ -1,3 +1,5 @@
+@file:OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -38,6 +40,8 @@ dependencies {
     implementation(libs.compose.components.resources)
     implementation(libs.compose.material3)
     testImplementation(project(":test-fixtures"))
+    testImplementation(compose.uiTest)
+    testImplementation(compose.desktop.currentOs)
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
