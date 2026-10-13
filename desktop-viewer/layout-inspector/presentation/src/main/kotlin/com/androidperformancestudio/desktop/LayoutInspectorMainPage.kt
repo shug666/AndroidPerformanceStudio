@@ -1806,75 +1806,77 @@ private fun LayoutInspectorStatusBar(
 ) {
     val colors = LocalViewerColors.current
     val language = LocalLayoutInspectorLanguage.current
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(ViewerDimensions.footerHeight)
-                .background(colors.toolbar)
-                .border(
-                    ViewerDimensions.hairline,
-                    colors.border,
-                    RoundedCornerShape(0.dp),
-                )
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        StatusBarValue(
-            label = localizedStringResource(Res.string.package_name, language),
-            value = statusBarPackageName(model, language),
-            valueColor = colors.primaryText,
-            monospace = true,
-        )
-        StatusBarDivider()
-        ProfilerCompactButton(
-            text = localizedStringResource(Res.string.import_compose_compiler_reports, language),
-            selected = composeCompilerReportLoaded,
-            onClick = onImportComposeCompilerReports,
-        )
-        if (composeCompilerReportLoaded) {
+    SelectionContainer {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(ViewerDimensions.footerHeight)
+                    .background(colors.toolbar)
+                    .border(
+                        ViewerDimensions.hairline,
+                        colors.border,
+                        RoundedCornerShape(0.dp),
+                    )
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             StatusBarValue(
-                label = localizedStringResource(Res.string.compose_compiler_report, language),
-                value = localizedStringResource(Res.string.loaded, language),
+                label = localizedStringResource(Res.string.package_name, language),
+                value = statusBarPackageName(model, language),
                 valueColor = colors.primaryText,
-            )
-        }
-        StatusBarDivider()
-        if (fullComposeEnabled) {
-            ProfilerCompactButton(
-                text = localizedStringResource(Res.string.system_composables, language),
-                selected = !hideSystemComposables,
-                onClick = onToggleSystemComposables,
-            )
-            ProfilerCompactButton(
-                text = localizedStringResource(
-                    if (recompositionActive) Res.string.stop_recomposition else Res.string.start_recomposition,
-                    language,
-                ),
-                selected = recompositionActive,
-                enabled = recompositionControlsEnabled,
-                onClick = onToggleRecomposition,
-            )
-            ProfilerCompactButton(
-                text = localizedStringResource(Res.string.reset_recomposition, language),
-                enabled = recompositionControlsEnabled,
-                onClick = onResetRecomposition,
+                monospace = true,
             )
             StatusBarDivider()
-        }
-        StatusBarValue(
-            label = localizedStringResource(Res.string.metrics, language),
-            value = model.metricsText,
-            valueColor = colors.subtleText,
-        )
-        model.timelineText?.let { timelineText ->
+            ProfilerCompactButton(
+                text = localizedStringResource(Res.string.import_compose_compiler_reports, language),
+                selected = composeCompilerReportLoaded,
+                onClick = onImportComposeCompilerReports,
+            )
+            if (composeCompilerReportLoaded) {
+                StatusBarValue(
+                    label = localizedStringResource(Res.string.compose_compiler_report, language),
+                    value = localizedStringResource(Res.string.loaded, language),
+                    valueColor = colors.primaryText,
+                )
+            }
+            StatusBarDivider()
+            if (fullComposeEnabled) {
+                ProfilerCompactButton(
+                    text = localizedStringResource(Res.string.system_composables, language),
+                    selected = !hideSystemComposables,
+                    onClick = onToggleSystemComposables,
+                )
+                ProfilerCompactButton(
+                    text = localizedStringResource(
+                        if (recompositionActive) Res.string.stop_recomposition else Res.string.start_recomposition,
+                        language,
+                    ),
+                    selected = recompositionActive,
+                    enabled = recompositionControlsEnabled,
+                    onClick = onToggleRecomposition,
+                )
+                ProfilerCompactButton(
+                    text = localizedStringResource(Res.string.reset_recomposition, language),
+                    enabled = recompositionControlsEnabled,
+                    onClick = onResetRecomposition,
+                )
+                StatusBarDivider()
+            }
             StatusBarValue(
-                label = localizedStringResource(Res.string.timeline, language),
-                value = timelineText,
+                label = localizedStringResource(Res.string.metrics, language),
+                value = model.metricsText,
                 valueColor = colors.subtleText,
             )
+            model.timelineText?.let { timelineText ->
+                StatusBarValue(
+                    label = localizedStringResource(Res.string.timeline, language),
+                    value = timelineText,
+                    valueColor = colors.subtleText,
+                )
+            }
         }
     }
 }

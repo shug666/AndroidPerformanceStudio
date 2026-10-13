@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -323,36 +324,38 @@ private fun FrameProfilerStatusBar(
 ) {
     val colors = LocalViewerColors.current
     val status = errorMessage ?: operationMessage
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(ViewerDimensions.footerHeight)
-                .background(colors.toolbar)
-                .border(
-                    ViewerDimensions.hairline,
-                    colors.border,
-                    RoundedCornerShape(0.dp),
-                ).horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        status?.let {
-            Text(
-                text = "${localizedStringResource(Res.string.status, language)}:",
-                color = colors.mutedText,
-                fontSize = ViewerTypography.label.fontSize,
-                maxLines = 1,
-            )
-            Spacer(Modifier.width(4.dp))
-            Text(
-                text = it,
-                color = if (errorMessage != null) MaterialTheme.colorScheme.error else colors.secondaryText,
-                fontSize = ViewerTypography.secondary.fontSize,
-                lineHeight = ViewerTypography.secondary.lineHeight,
-                maxLines = 1,
-            )
+    SelectionContainer {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(ViewerDimensions.footerHeight)
+                    .background(colors.toolbar)
+                    .border(
+                        ViewerDimensions.hairline,
+                        colors.border,
+                        RoundedCornerShape(0.dp),
+                    ).horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            status?.let {
+                Text(
+                    text = "${localizedStringResource(Res.string.status, language)}:",
+                    color = colors.mutedText,
+                    fontSize = ViewerTypography.label.fontSize,
+                    maxLines = 1,
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = it,
+                    color = if (errorMessage != null) MaterialTheme.colorScheme.error else colors.secondaryText,
+                    fontSize = ViewerTypography.secondary.fontSize,
+                    lineHeight = ViewerTypography.secondary.lineHeight,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }

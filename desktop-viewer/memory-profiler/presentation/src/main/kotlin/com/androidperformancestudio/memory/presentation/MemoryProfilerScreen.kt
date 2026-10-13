@@ -41,6 +41,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -411,73 +412,75 @@ private fun MemoryProfilerStatusBar(
 ) {
     val colors = LocalViewerColors.current
     var hasStatus = false
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(ViewerDimensions.footerHeight)
-                .background(colors.toolbar)
-                .border(
-                    ViewerDimensions.hairline,
-                    colors.border,
-                    RoundedCornerShape(0.dp),
-                ).horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .testTag("memory-profiler-status-bar"),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        state.operationMessage?.let { message ->
-            CircularProgressIndicator(
-                modifier = Modifier.size(16.dp),
-                strokeWidth = 2.dp,
-            )
-            Text(
-                text = state.loadPhase.name,
-                color = colors.mutedText,
-                fontSize = ViewerTypography.label.fontSize,
-                maxLines = 1,
-            )
-            MemoryProfilerStatusMessage(
-                label = localizedStringResource(Res.string.in_progress, language),
-                message = message,
-                messageColor = colors.secondaryText,
-            )
-            ProfilerCompactButton(
-                text = localizedStringResource(Res.string.cancel, language),
-                onClick = actions.onCancelOperation,
-            )
-            hasStatus = true
-        }
-        state.error?.let { error ->
-            if (hasStatus) MemoryProfilerStatusDivider()
-            MemoryProfilerStatusMessage(
-                label = error.title,
-                message = error.detail,
-                messageColor = MaterialTheme.colorScheme.error,
-            )
-            ProfilerCompactButton(
-                text = error.retryLabel,
-                onClick = actions.onRetry,
-            )
-            hasStatus = true
-        }
-        state.cleanupWarning?.let { warning ->
-            if (hasStatus) MemoryProfilerStatusDivider()
-            MemoryProfilerStatusMessage(
-                label = localizedStringResource(Res.string.cleanup_warning, language),
-                message = warning,
-                messageColor = MaterialTheme.colorScheme.tertiary,
-            )
-            hasStatus = true
-        }
-        state.warning?.let { warning ->
-            if (hasStatus) MemoryProfilerStatusDivider()
-            MemoryProfilerStatusMessage(
-                label = localizedStringResource(Res.string.warning, language),
-                message = warning,
-                messageColor = MaterialTheme.colorScheme.tertiary,
-            )
+    SelectionContainer {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(ViewerDimensions.footerHeight)
+                    .background(colors.toolbar)
+                    .border(
+                        ViewerDimensions.hairline,
+                        colors.border,
+                        RoundedCornerShape(0.dp),
+                    ).horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .testTag("memory-profiler-status-bar"),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            state.operationMessage?.let { message ->
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                )
+                Text(
+                    text = state.loadPhase.name,
+                    color = colors.mutedText,
+                    fontSize = ViewerTypography.label.fontSize,
+                    maxLines = 1,
+                )
+                MemoryProfilerStatusMessage(
+                    label = localizedStringResource(Res.string.in_progress, language),
+                    message = message,
+                    messageColor = colors.secondaryText,
+                )
+                ProfilerCompactButton(
+                    text = localizedStringResource(Res.string.cancel, language),
+                    onClick = actions.onCancelOperation,
+                )
+                hasStatus = true
+            }
+            state.error?.let { error ->
+                if (hasStatus) MemoryProfilerStatusDivider()
+                MemoryProfilerStatusMessage(
+                    label = error.title,
+                    message = error.detail,
+                    messageColor = MaterialTheme.colorScheme.error,
+                )
+                ProfilerCompactButton(
+                    text = error.retryLabel,
+                    onClick = actions.onRetry,
+                )
+                hasStatus = true
+            }
+            state.cleanupWarning?.let { warning ->
+                if (hasStatus) MemoryProfilerStatusDivider()
+                MemoryProfilerStatusMessage(
+                    label = localizedStringResource(Res.string.cleanup_warning, language),
+                    message = warning,
+                    messageColor = MaterialTheme.colorScheme.tertiary,
+                )
+                hasStatus = true
+            }
+            state.warning?.let { warning ->
+                if (hasStatus) MemoryProfilerStatusDivider()
+                MemoryProfilerStatusMessage(
+                    label = localizedStringResource(Res.string.warning, language),
+                    message = warning,
+                    messageColor = MaterialTheme.colorScheme.tertiary,
+                )
+            }
         }
     }
 }

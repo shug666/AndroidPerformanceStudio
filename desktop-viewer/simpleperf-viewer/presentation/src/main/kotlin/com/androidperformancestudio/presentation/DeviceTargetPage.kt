@@ -536,20 +536,22 @@ private fun WorkspaceFooter(
     actions: DeviceTargetActions,
     style: ViewerColors,
 ) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .height(ViewerDimensions.footerHeight)
-            .background(style.toolbar)
-            .border(
-                ViewerDimensions.hairline,
-                style.border,
-                RoundedCornerShape(0.dp),
-            ).padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CaptureStatus(state, captureState, reportState, style, Modifier.weight(1f))
-        CaptureActions(captureState, actions, style)
+    SelectionContainer {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(ViewerDimensions.footerHeight)
+                .background(style.toolbar)
+                .border(
+                    ViewerDimensions.hairline,
+                    style.border,
+                    RoundedCornerShape(0.dp),
+                ).padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CaptureStatus(state, captureState, reportState, style, Modifier.weight(1f))
+            CaptureActions(captureState, actions, style)
+        }
     }
 }
 

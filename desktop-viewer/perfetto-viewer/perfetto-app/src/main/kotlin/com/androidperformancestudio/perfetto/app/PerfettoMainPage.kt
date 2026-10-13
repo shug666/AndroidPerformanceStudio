@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -589,41 +590,43 @@ private fun PerfettoStatusBar(
     val statusText =
         selectedDevice?.let { localizedStringResource(Res.string.device_connected, language, it.displayName) }
             ?: localizedStringResource(Res.string.no_online_device, language)
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(ViewerDimensions.footerHeight)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(
-                    ViewerDimensions.hairline,
-                    MaterialTheme.colorScheme.outline,
-                    RoundedCornerShape(0.dp),
-                ).horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "${localizedStringResource(Res.string.device_status, language)}:",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = ViewerTypography.label.fontSize,
-            maxLines = 1,
-        )
-        PerfettoStatusDot(
-            color =
-                if (selectedDevice?.online == true) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.error
-                },
-        )
-        Text(
-            text = statusText,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = ViewerTypography.label.fontSize,
-            maxLines = 1,
-        )
+    SelectionContainer {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(ViewerDimensions.footerHeight)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .border(
+                        ViewerDimensions.hairline,
+                        MaterialTheme.colorScheme.outline,
+                        RoundedCornerShape(0.dp),
+                    ).horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "${localizedStringResource(Res.string.device_status, language)}:",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = ViewerTypography.label.fontSize,
+                maxLines = 1,
+            )
+            PerfettoStatusDot(
+                color =
+                    if (selectedDevice?.online == true) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+            )
+            Text(
+                text = statusText,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = ViewerTypography.label.fontSize,
+                maxLines = 1,
+            )
+        }
     }
 }
 

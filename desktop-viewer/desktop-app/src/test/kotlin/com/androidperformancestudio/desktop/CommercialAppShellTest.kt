@@ -15,6 +15,38 @@ import org.junit.jupiter.api.Test
 
 class CommercialAppShellTest {
     @Test
+    fun `global and feature status bars keep text selection scoped to their footer`() {
+        val footers =
+            mapOf(
+                "src/main/kotlin/com/androidperformancestudio/desktop/shell/CommercialAppShell.kt" to "StudioStatusBar",
+                "../layout-inspector/presentation/src/main/kotlin/com/androidperformancestudio/desktop/LayoutInspectorMainPage.kt" to
+                    "LayoutInspectorStatusBar",
+                "../perfetto-viewer/perfetto-app/src/main/kotlin/com/androidperformancestudio/perfetto/app/PerfettoMainPage.kt" to
+                    "PerfettoStatusBar",
+                "../memory-profiler/presentation/src/main/kotlin/com/androidperformancestudio/memory/presentation/MemoryProfilerScreen.kt" to
+                    "MemoryProfilerStatusBar",
+                "../frame-profiler/frame-app/src/main/kotlin/com/androidperformancestudio/frame/app/FrameProfilerMainPage.kt" to
+                    "FrameProfilerStatusBar",
+                "../startup-profiler/startup-app/src/main/kotlin/com/androidperformancestudio/startup/app/StartupProfilerMainPage.kt" to
+                    "StartupProfilerStatusBar",
+                "../simpleperf-viewer/method-recording-app/src/main/kotlin/com/androidperformancestudio/methodrecording/app/MethodRecordingMainPage.kt" to
+                    "MethodRecordingStatusBar",
+                "../simpleperf-viewer/presentation/src/main/kotlin/com/androidperformancestudio/presentation/DeviceTargetPage.kt" to
+                    "WorkspaceFooter",
+                "../battery-profiler/battery-app/src/main/kotlin/com/androidperformancestudio/battery/app/BatteryProfilerMainPage.kt" to
+                    "BatteryProfilerStatusBar",
+            )
+
+        footers.forEach { (path, functionName) ->
+            val source = Files.readString(Path.of(path))
+            val footer = source.substringAfter("private fun $functionName(").substringBefore("\n@Composable")
+            assertTrue(source.contains("import androidx.compose.foundation.text.selection.SelectionContainer"))
+            assertTrue(Regex("SelectionContainer \\{\\s*Row\\(").containsMatchIn(footer), functionName)
+            assertTrue(footer.contains(".height("), "$functionName must retain its fixed height")
+        }
+    }
+
+    @Test
     fun `desktop window honors the commercial minimum size`() {
         val main = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/Main.kt"))
 

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -188,33 +189,35 @@ private fun MethodRecordingStatusBar(
                 localizedStringResource(Res.string.devices_connected, language, onlineDeviceCount)
             else -> localizedStringResource(Res.string.no_devices, language)
         }
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(ViewerDimensions.footerHeight)
-                .background(colors.toolbar)
-                .border(
-                    ViewerDimensions.hairline,
-                    colors.border,
-                    RoundedCornerShape(0.dp),
-                ).horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "${localizedStringResource(Res.string.device_status, language)}:",
-            color = colors.mutedText,
-            fontSize = ViewerTypography.label.fontSize,
-            maxLines = 1,
-        )
-        Text(
-            text = deviceStatus,
-            color = if (onlineDeviceCount > 0) colors.secondaryText else colors.mutedText,
-            fontSize = ViewerTypography.secondary.fontSize,
-            lineHeight = ViewerTypography.secondary.lineHeight,
-            maxLines = 1,
-        )
+    SelectionContainer {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(ViewerDimensions.footerHeight)
+                    .background(colors.toolbar)
+                    .border(
+                        ViewerDimensions.hairline,
+                        colors.border,
+                        RoundedCornerShape(0.dp),
+                    ).horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "${localizedStringResource(Res.string.device_status, language)}:",
+                color = colors.mutedText,
+                fontSize = ViewerTypography.label.fontSize,
+                maxLines = 1,
+            )
+            Text(
+                text = deviceStatus,
+                color = if (onlineDeviceCount > 0) colors.secondaryText else colors.mutedText,
+                fontSize = ViewerTypography.secondary.fontSize,
+                lineHeight = ViewerTypography.secondary.lineHeight,
+                maxLines = 1,
+            )
+        }
     }
 }

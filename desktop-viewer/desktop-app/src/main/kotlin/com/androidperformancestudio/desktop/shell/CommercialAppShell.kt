@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -380,30 +381,32 @@ private fun StudioStatusBar(
     noActiveArtifactLabel: String,
 ) {
     val colors = LocalViewerColors.current
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(StudioTokens.globalStatusBarHeight)
-                .background(colors.toolbar)
-                .border(width = StudioTokens.borderWidth, color = colors.border)
-                .padding(horizontal = StudioTokens.compactContentPadding),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
-    ) {
-        Text(
-            text = destinationTitle,
-            color = colors.secondaryText,
-            fontSize = ViewerTypography.label.fontSize,
-            lineHeight = ViewerTypography.label.lineHeight,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(Modifier.weight(1f))
-        StudioStatusChip(
-            label = workspaceContext.artifactLabel ?: noActiveArtifactLabel,
-            tone = if (workspaceContext.artifactLabel == null) StudioStatusTone.NEUTRAL else StudioStatusTone.INFO,
-        )
+    SelectionContainer {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(StudioTokens.globalStatusBarHeight)
+                    .background(colors.toolbar)
+                    .border(width = StudioTokens.borderWidth, color = colors.border)
+                    .padding(horizontal = StudioTokens.compactContentPadding),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
+        ) {
+            Text(
+                text = destinationTitle,
+                color = colors.secondaryText,
+                fontSize = ViewerTypography.label.fontSize,
+                lineHeight = ViewerTypography.label.lineHeight,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.weight(1f))
+            StudioStatusChip(
+                label = workspaceContext.artifactLabel ?: noActiveArtifactLabel,
+                tone = if (workspaceContext.artifactLabel == null) StudioStatusTone.NEUTRAL else StudioStatusTone.INFO,
+            )
+        }
     }
 }
 
