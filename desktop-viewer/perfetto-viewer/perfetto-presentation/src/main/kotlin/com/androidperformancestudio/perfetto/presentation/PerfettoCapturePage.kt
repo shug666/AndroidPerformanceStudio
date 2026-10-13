@@ -1,7 +1,5 @@
 package com.androidperformancestudio.perfetto.presentation
 
-import com.androidperformancestudio.ui.ViewerTypography
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -78,6 +76,7 @@ import com.androidperformancestudio.perfetto_presentation.generated.resources.sy
 import com.androidperformancestudio.perfetto_presentation.generated.resources.target_package
 import com.androidperformancestudio.perfetto_presentation.generated.resources.trace_template
 import com.androidperformancestudio.ui.UiLanguage
+import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
 import java.nio.file.Path
 
@@ -186,7 +185,7 @@ private fun PerfettoDataSourcesPanel(
     ) {
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             capabilities?.queryError?.let { error ->
                 Text(
@@ -198,40 +197,70 @@ private fun PerfettoDataSourcesPanel(
             }
             if (selectedTemplate != PerfettoTraceTemplate.CUSTOM) {
                 PerfettoProbeGroup.entries.forEach { group ->
-                    val probes = PerfettoProbe.entries.filter { it.group == group }
-                    Text(
-                        text = group.displayName.uppercase(),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = ViewerTypography.dense.fontSize,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(top = 4.dp),
+                    PerfettoDataSourceGroupCard(
+                        group = group,
+                        probes = PerfettoProbe.entries.filter { it.group == group },
+                        enabledProbes = enabledProbes,
+                        targetPackage = targetPackage,
+                        capabilities = capabilities,
+                        onProbeChange = onProbeChange,
                     )
-                    probes.chunked(2).forEach { probeRow ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            probeRow.forEach { probe ->
-                                val reason =
-                                    capabilities?.unsupportedReason(probe)
-                                        ?: if (probe.requiresTargetPackage && targetPackage.isBlank()) {
-                                            "Requires a target package"
-                                        } else {
-                                            null
-                                        }
-                                PerfettoProbeOption(
-                                    probe = probe,
-                                    checked = probe in enabledProbes && reason == null,
-                                    reason = reason,
-                                    onProbeChange = onProbeChange,
-                                    modifier = Modifier.weight(1f),
-                                )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+@Suppress("FunctionNaming", "ktlint:standard:function-naming")
+private fun PerfettoDataSourceGroupCard(
+    group: PerfettoProbeGroup,
+    probes: List<PerfettoProbe>,
+    enabledProbes: Set<PerfettoProbe>,
+    targetPackage: String,
+    capabilities: PerfettoDeviceCapabilities?,
+    onProbeChange: (PerfettoProbe, Boolean) -> Unit,
+) {
+    val shape = RoundedCornerShape(4.dp)
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .border(1.dp, MaterialTheme.colorScheme.outline, shape)
+                .padding(7.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = group.displayName.uppercase(),
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = ViewerTypography.secondary.fontSize,
+            fontWeight = FontWeight.SemiBold,
+        )
+        probes.chunked(2).forEach { probeRow ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                probeRow.forEach { probe ->
+                    val reason =
+                        capabilities?.unsupportedReason(probe)
+                            ?: if (probe.requiresTargetPackage && targetPackage.isBlank()) {
+                                "Requires a target package"
+                            } else {
+                                null
                             }
-                            if (probeRow.size == 1) {
-                                Spacer(Modifier.weight(1f))
-                            }
-                        }
-                    }
+                    PerfettoProbeOption(
+                        probe = probe,
+                        checked = probe in enabledProbes && reason == null,
+                        reason = reason,
+                        onProbeChange = onProbeChange,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (probeRow.size == 1) {
+                    Spacer(Modifier.weight(1f))
                 }
             }
         }
