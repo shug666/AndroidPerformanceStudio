@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="back_to_home">Back to home</string>
+    <string name="import_run">Import Run</string>
     <string name="import_current">Import Current</string>
     <string name="import_baseline">Import Baseline</string>
     <string name="export_report">Export Report</string>
@@ -10,4 +11,7 @@
     <string name="imported_current">Imported current result %1$s</string>
     <string name="import_failed">Import failed</string>
     <string name="benchmark_json">Benchmark JSON</string>
+    <string name="export_pdf">Export PDF</string>
+    <string name="reports_exported">Exported %1$s</string>
+    <string name="reports_missing_source">Source file is no longer available: %1$s</string>
 </resources>

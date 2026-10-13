@@ -154,6 +154,92 @@ public data class RegressionPolicy(
     val requireSameDevice: Boolean = true,
 )
 
+/**
+ * One exported report. The index records what was produced and where it lives; it deliberately does
+ * not convert report bodies into a shared schema (implementation plan §16.2).
+ */
+public data class BenchmarkReportEntry(
+    val id: String,
+    val title: String,
+    val format: String,
+    val createdAt: Instant,
+    val path: String,
+    val sizeBytes: Long,
+)
+
+/**
+ * Release gate decision. The implementation plan (§15.4, §2.3) forbids inventing a numeric
+ * performance score for the first commercial iteration, so the gate answers PASS / FAIL /
+ * INCONCLUSIVE from the comparisons and a versioned policy instead.
+ */
+public enum class GateDecision { PASS, FAIL, INCONCLUSIVE }
+
+/** Machine-stable reason identifiers so presentations localize them instead of matching prose. */
+public enum class GateReason {
+    INCOMPATIBLE_EVIDENCE,
+    BLOCKING_REGRESSIONS,
+    INCONCLUSIVE_EVIDENCE,
+    INCONCLUSIVE_DISALLOWED,
+    NO_BLOCKING_REGRESSION,
+}
+
+/**
+ * Versioned release gate policy. [policyVersion] is exported with every report so a decision can be
+ * reproduced after the policy changes.
+ */
+public data class ReleaseGatePolicy(
+    val policyVersion: String = "1",
+    val blockingMetricPatterns: List<String> = emptyList(),
+    val failOnRegression: Boolean = true,
+    val maxAllowedRegressions: Int = 0,
+    val allowInconclusive: Boolean = true,
+    val minimumConfidence: EvidenceConfidence = EvidenceConfidence.EXACT,
+) {
+    /** An empty pattern list treats every metric as blocking. */
+    public fun blocksMetric(metricName: String): Boolean =
+        blockingMetricPatterns.isEmpty() ||
+            blockingMetricPatterns.any { pattern -> metricName.contains(pattern, ignoreCase = true) }
+}
+
+public data class ReleaseGateResult(
+    val decision: GateDecision,
+    val policyVersion: String,
+    val blockingComparisons: List<MetricComparison>,
+    val reasons: List<GateReason>,
+)
+
+/** One historical value of a case/metric pair, used by the trend query. */
+public data class MetricHistoryPoint(
+    val runId: String,
+    val importedAt: Instant,
+    val buildLabel: String?,
+    val gitCommit: String?,
+    val deviceModel: String?,
+    val apiLevel: Int?,
+    val value: Double,
+    val sampleCount: Int,
+)
+
+/**
+ * Metric history across runs. The trend only compares compatible environments, so the points keep
+ * the device/API identity and callers must surface [environmentVaries] instead of drawing a trend
+ * that silently mixes devices.
+ */
+public data class MetricHistory(
+    val caseIdentity: String,
+    val metricName: String,
+    val unit: String,
+    val direction: MetricDirection,
+    val minimumSampleCount: Int,
+    val points: List<MetricHistoryPoint>,
+) {
+    public val environmentVaries: Boolean
+        get() = points.map { it.deviceModel to it.apiLevel }.distinct().size > 1
+
+    public val hasLowSamplePoints: Boolean
+        get() = points.any { it.sampleCount < minimumSampleCount }
+}
+
 public fun List<Double>.medianOrNull(): Double? {
     if (isEmpty()) return null
     val sorted = sorted()

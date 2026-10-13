@@ -3,6 +3,7 @@
 package com.androidperformancestudio.benchmark.export
 
 import com.androidperformancestudio.benchmark.model.BaselineProfileComparison
+import com.androidperformancestudio.benchmark.model.ReleaseGateResult
 import com.androidperformancestudio.benchmark.model.RegressionClassification
 import com.androidperformancestudio.benchmark.model.RegressionReport
 import kotlinx.serialization.json.Json
@@ -116,6 +117,104 @@ public class BenchmarkReportExporter {
         }
         return temporary.toString()
     }
+
+    /**
+     * Release export: the gate decision, its policy version and the compatibility issues travel with
+     * the comparison rows, because a report is only reproducible together with the policy it used.
+     */
+    public fun writeJson(
+        report: RegressionReport,
+        gate: ReleaseGateResult,
+        output: Path,
+    ) = write(
+        output,
+        json.encodeToString(
+            buildJsonObject {
+                put("schemaVersion", 2)
+                put("baselineRunId", report.baselineRunId)
+                put("currentRunId", report.currentRunId)
+                put("createdAt", report.createdAt.toString())
+                put("regressionCount", report.regressionCount)
+                put(
+                    "releaseGate",
+                    buildJsonObject {
+                        put("decision", gate.decision.name)
+                        put("policyVersion", gate.policyVersion)
+                        put("blockingComparisonCount", gate.blockingComparisons.size)
+                        put("reasons", buildJsonArray { gate.reasons.forEach { reason -> add(reason.name) } })
+                    },
+                )
+                put(
+                    "compatibilityIssues",
+                    buildJsonArray {
+                        report.compatibilityIssues.forEach { issue ->
+                            add(
+                                buildJsonObject {
+                                    put("field", issue.field)
+                                    issue.baseline?.let { put("baseline", it) }
+                                    issue.current?.let { put("current", it) }
+                                    put("hard", issue.hard)
+                                },
+                            )
+                        }
+                    },
+                )
+                put(
+                    "comparisons",
+                    buildJsonArray {
+                        report.comparisons.forEach { comparison ->
+                            add(
+                                buildJsonObject {
+                                    put("case", comparison.caseIdentity)
+                                    put("metric", comparison.metricName)
+                                    put("unit", comparison.unit)
+                                    comparison.baselineValue?.let { put("baseline", it) }
+                                    comparison.currentValue?.let { put("current", it) }
+                                    comparison.absoluteDelta?.let { put("absoluteDelta", it) }
+                                    comparison.relativeDeltaPercent?.let { put("relativeDeltaPercent", it) }
+                                    put("classification", comparison.classification.name)
+                                    put("confidence", comparison.confidence.name)
+                                    put("blocking", comparison in gate.blockingComparisons)
+                                    put("reasons", buildJsonArray { comparison.reasons.forEach { reason -> add(reason) } })
+                                },
+                            )
+                        }
+                    },
+                )
+            },
+        ),
+    )
+
+    /** CSV carries the same gate columns so a spreadsheet can filter blocking rows. */
+    public fun writeCsv(
+        report: RegressionReport,
+        gate: ReleaseGateResult,
+        output: Path,
+    ) = write(
+        output,
+        buildString {
+            appendLine("case,metric,unit,baseline,current,absolute_delta,relative_delta_percent,classification,confidence,blocking,policy_version")
+            report.comparisons.forEach { c ->
+                appendLine(
+                    listOf(
+                        c.caseIdentity,
+                        c.metricName,
+                        c.unit,
+                        c.baselineValue,
+                        c.currentValue,
+                        c.absoluteDelta,
+                        c.relativeDeltaPercent,
+                        c.classification,
+                        c.confidence,
+                        c in gate.blockingComparisons,
+                        gate.policyVersion,
+                    ).joinToString(",") {
+                        csv(it?.toString().orEmpty())
+                    },
+                )
+            }
+        },
+    )
 
     public fun writeCsv(
         report: RegressionReport,

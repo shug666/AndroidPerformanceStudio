@@ -231,7 +231,10 @@ class ProfilerThemeSupportTest {
             "battery-profiler/battery-app/src/main/kotlin/com/androidperformancestudio/battery/presentation/BatteryProfilerScreen.kt",
             "network-profiler/presentation/src/main/kotlin/com/androidperformancestudio/network/presentation/NetworkProfilerScreen.kt",
             "gpu-inspector-integration/presentation/src/main/kotlin/com/androidperformancestudio/gpu/presentation/GpuIntegrationScreen.kt",
-            "benchmark-regression/presentation/src/main/kotlin/com/androidperformancestudio/benchmark/presentation/BenchmarkRegressionScreen.kt",
+            "benchmark-regression/presentation/src/main/kotlin/com/androidperformancestudio/benchmark/presentation/BenchmarkReportsScreen.kt",
+            "benchmark-regression/presentation/src/main/kotlin/com/androidperformancestudio/benchmark/presentation/BenchmarkComparisonTable.kt",
+            "benchmark-regression/presentation/src/main/kotlin/com/androidperformancestudio/benchmark/presentation/BenchmarkTrendPanel.kt",
+            "benchmark-regression/presentation/src/main/kotlin/com/androidperformancestudio/benchmark/presentation/BenchmarkCompareSettingsDialog.kt",
         ).map(desktopViewer::resolve)
     }
 

@@ -2,6 +2,45 @@
 
 This is a continuation checkpoint for the [phased implementation plan](android-performance-studio-commercial-ui-implementation.md), not an assertion that the full commercial UI is finished.
 
+## 2026-10-13: Benchmark & Reports workspace (page 10)
+
+### Implemented
+
+- `:benchmark-model` gains the versioned release gate contract from the plan (§15.4): `GateDecision`
+  (PASS / FAIL / INCONCLUSIVE), `GateReason`, `ReleaseGatePolicy` (policy version, blocking metric
+  patterns, regression allowance, minimum confidence, fail-on-regression, allow-inconclusive) and
+  `ReleaseGateResult`, plus the trend types `MetricHistoryPoint` / `MetricHistory`. Per §2.3 the
+  design's 86/100 score is **not** implemented: the gate decision replaces it.
+- `:analysis-regression` gains `ReleaseGateEvaluator`: environment incompatibility outranks the
+  regression verdict (→ INCONCLUSIVE), a regression below the policy minimum confidence can only make
+  the gate inconclusive, and blocking patterns plus the allowed-regression count decide FAIL.
+- `:benchmark-storage-sqlite` persists run identity (`version_name`, `git_commit`, `api_level`) with
+  an in-place column migration, and adds `metricHistory(case, metric, limit)` and `listMetricKeys()`
+  so the trend plots stored history instead of the current pair only.
+- `:benchmark-export-adapters` adds `BenchmarkPdfExporter` (dependency-free PDF 1.4 writer),
+  gate-aware `writeJson` / `writeCsv` overloads that carry the policy version and compatibility
+  issues, and `BenchmarkReportIndexStore` (report catalogue; deleting an index entry never deletes
+  the user's file).
+- `:benchmark-presentation` replaces the comparison-card list with the commercial workspace:
+  baseline/current selectors, compare/import/export PDF/export CSV/share/settings toolbar, four
+  summary cards, the comparison table (search plus severity/status filters, verdict and confidence),
+  a metric trend chart that flags mixed environments and low-sample points, and the Report Summary
+  column (decision, reasons, counts, policy, recent reports, generate). The plan's inspector columns
+  replace the mock's Owner/Status columns, which have no evidence source.
+- `:benchmark-app` loads stored runs as selector options, re-parses their source JSON for a
+  comparison, writes exports through the report index, and adds the compare-settings dialog.
+- Application version bumped to `0.6.0`.
+
+### Verification
+
+- `:benchmark-model:test`, `:analysis-regression:test`, `:benchmark-storage-sqlite:test`,
+  `:benchmark-export-adapters:test`, `:benchmark-presentation:test` and `:benchmark-app:test` pass,
+  including the new `ReleaseGateEvaluatorTest`, `BenchmarkReportsStateTest`,
+  `BenchmarkReportsLocalizationTest`, the metric-history store test and the PDF/CSV/JSON/index
+  exporter tests.
+- `:desktop-app:compileKotlin` and `:desktop-app:test` pass; `ProfilerThemeSupportTest` now covers
+  all four new presentation files (theme roles, no fixed light-only colors).
+
 ## 2026-10-11: Compose inspection agent built entirely in-repo
 
 ### Implemented

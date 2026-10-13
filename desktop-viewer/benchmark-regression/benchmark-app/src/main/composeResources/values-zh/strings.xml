@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="back_to_home">返回主页</string>
+    <string name="import_run">导入结果</string>
     <string name="import_current">导入当前结果</string>
     <string name="import_baseline">导入基线</string>
     <string name="export_report">导出报告</string>
@@ -10,4 +11,7 @@
     <string name="imported_current">已导入当前结果 %1$s</string>
     <string name="import_failed">导入失败</string>
     <string name="benchmark_json">基准测试 JSON</string>
+    <string name="export_pdf">导出 PDF</string>
+    <string name="reports_exported">已导出 %1$s</string>
+    <string name="reports_missing_source">源文件已不存在：%1$s</string>
 </resources>
