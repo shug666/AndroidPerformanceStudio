@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,7 +31,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.application.CapabilityStatus
@@ -168,14 +171,28 @@ private fun ToolbarCaptureActions(
 ) {
     val language = currentSimpleperfLanguage()
     val captureActive = captureState.isCaptureActive()
+    val refreshLabel = localizedStringResource(SimpleperfViewerRes.sp_target_refresh, language)
+    val refreshingLabel = localizedStringResource(SimpleperfViewerRes.sp_target_refreshing, language)
+    val textMeasurer = rememberTextMeasurer()
+    val refreshTextStyle =
+        LocalTextStyle.current.copy(
+            fontSize = ViewerTypography.secondary.fontSize,
+            lineHeight = ViewerTypography.label.lineHeight,
+            fontWeight = FontWeight.Normal,
+        )
+    val refreshLabelWidth =
+        maxOf(
+            textMeasurer.measure(refreshLabel, refreshTextStyle, maxLines = 1).size.width,
+            textMeasurer.measure(refreshingLabel, refreshTextStyle, maxLines = 1).size.width,
+        )
+    // Reserve both labels plus the shared text button's 10.dp horizontal padding per side.
+    val refreshButtonWidth = with(LocalDensity.current) { refreshLabelWidth.toDp() } + 20.dp
     MacOSTextButton(
-        localizedStringResource(
-            if (state.isLoading) SimpleperfViewerRes.sp_target_refreshing else SimpleperfViewerRes.sp_target_refresh,
-            language,
-        ),
+        if (state.isLoading) refreshingLabel else refreshLabel,
         actions.onRefresh,
         style,
         enabled = enabled && !state.isLoading,
+        modifier = Modifier.width(refreshButtonWidth),
     )
     HeaderSpacer()
     MacOSTextButton(
