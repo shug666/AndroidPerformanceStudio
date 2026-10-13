@@ -36,6 +36,7 @@
     <string name="compare_settings">对比设置</string>
     <string name="select_run">选择一次结果</string>
     <string name="import_run">导入结果</string>
+    <string name="orchestrate_run">编排运行</string>
     <string name="run_option_detail">%1$s · %2$s</string>
     <string name="compared_benchmarks">对比基准项</string>
     <string name="improvements">性能提升项</string>

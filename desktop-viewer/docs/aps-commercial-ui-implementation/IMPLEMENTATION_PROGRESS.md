@@ -2,6 +2,29 @@
 
 This is a continuation checkpoint for the [phased implementation plan](android-performance-studio-commercial-ui-implementation.md), not an assertion that the full commercial UI is finished.
 
+## 2026-10-14: In-app Macrobenchmark orchestration
+
+### Implemented
+
+- The Benchmark workspace can now execute the same plan the CLI exposes as `macro-run` without leaving
+  the app: project root, Gradle task, benchmark filter, compilation mode, startup mode, scenario,
+  warmups, iterations, trace directory, result JSON path and timeout, validated before a plan is built.
+- `:benchmark-cli`'s runner gained a cancellation hook and a per-chunk output listener. The desktop
+  caller polls the cancel flag (200 ms) and destroys the Gradle process, so "cancel" is a real stop
+  rather than a UI-only state; a stopped run reports `cancelled` and is never reported as success.
+- The dialog streams live output, reports exit code / timeout / cancellation, and on a clean exit
+  imports the produced JSON into the history store and makes it the current run, comparing immediately
+  when a baseline is already selected.
+- Result discovery stays honest about where AndroidX writes the file: an explicit path is used only
+  when it exists, otherwise the newest `benchmarkData` / additional-output JSON under the project is
+  chosen (skipping `.git`, `node_modules`, `.gradle`, `.idea`).
+
+### Verification
+
+- `:benchmark-app:test` covers form validation (project / warmups / iterations / timeout), plan mapping
+  and result discovery; `:benchmark-cli:test` now covers cancellation in addition to the timeout.
+- All benchmark module tests plus `:desktop-app:compileKotlin` and `:desktop-app:test` pass.
+
 ## 2026-10-13: Benchmark & Reports workspace (page 10)
 
 ### Implemented

@@ -21,6 +21,8 @@ import com.androidperformancestudio.benchmark.benchmark_app.generated.resources.
 import com.androidperformancestudio.benchmark.benchmark_app.generated.resources.Res
 import com.androidperformancestudio.benchmark.export.BenchmarkPdfExporter
 import com.androidperformancestudio.benchmark.export.BenchmarkReportExporter
+import com.androidperformancestudio.benchmark.cli.MacrobenchmarkCommandBuilder
+import com.androidperformancestudio.benchmark.cli.MacrobenchmarkProcessRunner
 import com.androidperformancestudio.benchmark.export.BenchmarkReportIndexStore
 import com.androidperformancestudio.benchmark.model.BenchmarkReportEntry
 import com.androidperformancestudio.benchmark.model.BenchmarkRun
@@ -51,7 +53,9 @@ import java.awt.Desktop
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicBoolean
 
+private const val OUTPUT_POLL_MILLIS = 400L
 private const val TREND_WINDOW = 10
 private const val TREND_CONFIDENCE_MINIMUM_SAMPLES = 3
 
@@ -73,6 +77,14 @@ public fun FrameWindowScope.BenchmarkRegressionMainPage(
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf(BenchmarkReportsState()) }
     var settingsVisible by remember { mutableStateOf(false) }
+    var orchestrationVisible by remember { mutableStateOf(false) }
+    var orchestrationForm by remember { mutableStateOf(BenchmarkRunPlanForm()) }
+    var orchestrationRunning by remember { mutableStateOf(false) }
+    var orchestrationProblem by remember { mutableStateOf<BenchmarkPlanProblem?>(null) }
+    var orchestrationStatus by remember { mutableStateOf<String?>(null) }
+    var orchestrationOutput by remember { mutableStateOf("") }
+    val orchestrationCancelled = remember { AtomicBoolean(false) }
+    val orchestrationBuffer = remember { StringBuilder() }
 
     fun refreshOptions() {
         scope.launch {
@@ -102,6 +114,92 @@ public fun FrameWindowScope.BenchmarkRegressionMainPage(
         val gate = gateEvaluator.evaluate(report, gatePolicy)
         state = state.copy(report = report, gate = gate, error = null)
         refreshTrend(state)
+    }
+
+    /** Imports the JSON a finished orchestration run produced and makes it the current run. */
+    fun importOrchestrationResult(
+        projectRoot: Path,
+        explicitResult: String?,
+    ) {
+        scope.launch {
+            val located = withContext(Dispatchers.IO) { BenchmarkResultLocator.locate(projectRoot, explicitResult) }
+            if (located == null) {
+                orchestrationStatus = localizedStringResource(Res.string.orchestrate_result_missing, language)
+                return@launch
+            }
+            val parsed = withContext(Dispatchers.IO) {
+                runCatching {
+                    val run = parser.parse(located)
+                    SqliteBenchmarkStore.open(storePath).use { store -> store.save(run) }
+                    run
+                }
+            }
+            parsed.fold(
+                onSuccess = { run ->
+                    val baseline = state.baseline
+                    state = state.copy(currentId = run.id, current = run, error = null)
+                    orchestrationStatus =
+                        localizedStringResource(Res.string.orchestrate_imported, language, located.fileName.toString())
+                    refreshOptions()
+                    if (baseline != null) compare(baseline, run, state.regressionPolicy, state.gatePolicy)
+                },
+                onFailure = { failure ->
+                    orchestrationStatus = failure.message ?: localizedStringResource(Res.string.import_failed, language)
+                },
+            )
+        }
+    }
+
+    fun startOrchestration() {
+        val validation = orchestrationForm.validate()
+        if (validation is BenchmarkPlanValidation.Rejected) {
+            orchestrationProblem = validation.problem
+            return
+        }
+        val ready = validation as BenchmarkPlanValidation.Ready
+        orchestrationProblem = null
+        orchestrationCancelled.set(false)
+        synchronized(orchestrationBuffer) { orchestrationBuffer.setLength(0) }
+        orchestrationOutput = ""
+        orchestrationStatus = null
+        orchestrationRunning = true
+        scope.launch {
+            val outcome = withContext(Dispatchers.IO) {
+                runCatching {
+                    MacrobenchmarkProcessRunner(ready.timeoutSeconds).run(
+                        command = MacrobenchmarkCommandBuilder.build(ready.plan),
+                        isCancelled = { orchestrationCancelled.get() },
+                        onOutput = { chunk -> synchronized(orchestrationBuffer) { orchestrationBuffer.append(chunk) } },
+                    )
+                }
+            }
+            orchestrationRunning = false
+            outcome.fold(
+                onSuccess = { result ->
+                    orchestrationStatus =
+                        when {
+                            result.cancelled -> localizedStringResource(Res.string.orchestrate_cancelled, language)
+                            result.timedOut -> localizedStringResource(Res.string.orchestrate_timed_out, language)
+                            else -> localizedStringResource(Res.string.orchestrate_finished, language, result.exitCode)
+                        }
+                    if (result.succeeded) {
+                        importOrchestrationResult(ready.plan.projectRoot, ready.resultJson)
+                    }
+                },
+                onFailure = { failure ->
+                    orchestrationStatus = failure.message ?: localizedStringResource(Res.string.import_failed, language)
+                },
+            )
+        }
+    }
+
+    // The runner drains on its own thread, so the dialog reads a synchronized snapshot instead.
+    androidx.compose.runtime.LaunchedEffect(orchestrationRunning) {
+        while (true) {
+            orchestrationOutput = synchronized(orchestrationBuffer) { orchestrationBuffer.toString() }
+            if (!orchestrationRunning) break
+            kotlinx.coroutines.delay(OUTPUT_POLL_MILLIS)
+        }
     }
 
     fun loadRun(
@@ -181,6 +279,7 @@ public fun FrameWindowScope.BenchmarkRegressionMainPage(
             actions =
                 BenchmarkReportsActions(
                     onImportRun = { chooseBenchmarkJson(window, language)?.let { importRun(parser, storePath, it, language, scope) { refreshOptions() } } },
+                    onOrchestrateRun = { orchestrationVisible = true },
                     onSelectBaseline = { id -> state.runOptions.firstOrNull { it.id == id }?.let { loadRun(it, asBaseline = true) } },
                     onSelectCurrent = { id -> state.runOptions.firstOrNull { it.id == id }?.let { loadRun(it, asBaseline = false) } },
                     onCompare = {
@@ -235,6 +334,22 @@ public fun FrameWindowScope.BenchmarkRegressionMainPage(
                 val current = state.current
                 if (baseline != null && current != null) compare(baseline, current, regression, gate)
             },
+        )
+    }
+
+    if (orchestrationVisible) {
+        BenchmarkOrchestrationDialog(
+            form = orchestrationForm,
+            onFormChange = { orchestrationForm = it },
+            running = orchestrationRunning,
+            output = orchestrationOutput,
+            status = orchestrationStatus,
+            problem = orchestrationProblem,
+            language = language,
+            parent = window,
+            onRun = { startOrchestration() },
+            onCancelRun = { orchestrationCancelled.set(true) },
+            onClose = { orchestrationVisible = false },
         )
     }
 

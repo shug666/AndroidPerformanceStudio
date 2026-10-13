@@ -9,6 +9,7 @@ dependencies {
     implementation(project(":analysis-regression"))
     implementation(project(":benchmark-storage-sqlite"))
     implementation(project(":benchmark-export-adapters"))
+    implementation(project(":benchmark-cli"))
     implementation(project(":benchmark-presentation"))
     implementation(compose.desktop.currentOs)
     implementation(libs.compose.material3)

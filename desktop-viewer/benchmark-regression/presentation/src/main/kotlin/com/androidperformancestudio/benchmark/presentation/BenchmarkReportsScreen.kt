@@ -48,6 +48,7 @@ import com.androidperformancestudio.ui.studio.StudioTokens
 /** Callbacks the workspace supplies; every action maps to a real artifact or stored run. */
 public data class BenchmarkReportsActions(
     val onImportRun: () -> Unit = {},
+    val onOrchestrateRun: () -> Unit = {},
     val onSelectBaseline: (String) -> Unit = {},
     val onSelectCurrent: (String) -> Unit = {},
     val onCompare: () -> Unit = {},
@@ -194,6 +195,12 @@ private fun BenchmarkToolbar(
             ProfilerCompactButton(
                 text = localizedStringResource(Res.string.import_run, language),
                 onClick = actions.onImportRun,
+                enabled = !state.busy,
+            )
+            Spacer(Modifier.width(StudioTokens.panelGap))
+            ProfilerCompactButton(
+                text = localizedStringResource(Res.string.orchestrate_run, language),
+                onClick = actions.onOrchestrateRun,
                 enabled = !state.busy,
             )
             Spacer(Modifier.width(StudioTokens.panelGap))

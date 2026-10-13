@@ -36,6 +36,7 @@
     <string name="compare_settings">Compare Settings</string>
     <string name="select_run">Select a run</string>
     <string name="import_run">Import Run</string>
+    <string name="orchestrate_run">Run Benchmark</string>
     <string name="run_option_detail">%1$s · %2$s</string>
     <string name="compared_benchmarks">Compared Benchmarks</string>
     <string name="improvements">Improvements</string>
