@@ -628,8 +628,42 @@ fun FrameWindowScope.LayoutInspectorMainPage(
             throw error
         } catch (error: Throwable) {
             manualRefreshSession.invalidate()
-            store.connectionFailed(error.message ?: error.javaClass.simpleName)
-            state = store.state
+            val reason = "Full Compose inspection failed: " + (error.message ?: error.javaClass.simpleName)
+            if (fullComposeEnabled) {
+                fullComposeEnabled = false
+                composeAuthorization = null
+                recompositionActive = false
+                try {
+                    val frame = withContext(Dispatchers.IO) {
+                        timer.measure("captureCompatibleFallback") {
+                            manualRefreshSession.capture(selectedDeviceSerial)
+                        }
+                    }
+                    val snapshot = timer.measure("decodeFallbackSnapshot") {
+                        protocolCodec.decodeSnapshot(frame.snapshotJson)
+                    }
+                    timer.measure("publishFallbackCapture") {
+                        store.loadCapture(
+                            snapshot = snapshot,
+                            screenshotPng = frame.screenshotPng,
+                        )
+                        importedRawArtifacts = null
+                        hiddenLayerState = HiddenLayerState()
+                        store.noteComposeInspectionUnavailable(reason)
+                        state = store.state
+                        aiAnalysisUiState = AiAnalysisUiState.Idle
+                    }
+                } catch (fallbackError: Throwable) {
+                    store.connectionFailed(
+                        "$reason; compatible inspection fallback failed: " +
+                            (fallbackError.message ?: fallbackError.javaClass.simpleName),
+                    )
+                    state = store.state
+                }
+            } else {
+                store.connectionFailed(error.message ?: error.javaClass.simpleName)
+                state = store.state
+            }
         } finally {
             manualRefreshInProgress = false
         }
@@ -3027,7 +3061,11 @@ internal fun DetailsPane(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.weight(1f)) {
-                PanelTitle(localizedStringResource(Res.string.properties, language), details.id)
+                PropertiesPanelTitle(
+                    title = localizedStringResource(Res.string.properties_title, language),
+                    label = localizedStringResource(Res.string.properties_label, language),
+                    trailing = details.id,
+                )
             }
             val className = details.className.takeUnless { it == "—" || it.isBlank() }
             if (onOpenMemoryProfiler != null && className != null) {
@@ -3062,6 +3100,34 @@ internal fun DetailsPane(
                     },
                 ) {
                     Text(localizedStringResource(Res.string.open_compose_source, language), fontSize = ViewerTypography.label.fontSize)
+                }
+            }
+        }
+        state.composeInspectionWarning?.let { warning ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(colors.riskSectionBackground)
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = localizedStringResource(Res.string.compose_inspection_unavailable, language),
+                        color = colors.warning,
+                        fontSize = ViewerTypography.label.fontSize,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = warning,
+                        color = colors.secondaryText,
+                        fontSize = ViewerTypography.dense.fontSize,
+                        lineHeight = ViewerTypography.secondary.lineHeight,
+                        maxLines = 3,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
@@ -3701,6 +3767,45 @@ private fun PanelTitle(title: String, trailing: String) {
     PanelTitle(title) {
         Text(trailing, color = colors.mutedText, fontSize = ViewerTypography.secondary.fontSize, fontFamily = FontFamily.Monospace)
     }
+}
+
+@Composable
+private fun PropertiesPanelTitle(
+    title: String,
+    label: String,
+    trailing: String,
+) {
+    val colors = LocalViewerColors.current
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(PanelHeaderLayout.HEIGHT_DP.dp)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            color = colors.primaryText,
+            fontSize = ViewerTypography.body.fontSize,
+            fontWeight = FontWeight.Bold,
+            lineHeight = ViewerTypography.body.lineHeight,
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = label,
+            color = colors.mutedText,
+            fontSize = ViewerTypography.label.fontSize,
+            lineHeight = ViewerTypography.label.lineHeight,
+        )
+        Spacer(Modifier.weight(1f))
+        Text(
+            text = trailing,
+            color = colors.mutedText,
+            fontSize = ViewerTypography.secondary.fontSize,
+            fontFamily = FontFamily.Monospace,
+        )
+    }
+    HorizontalDivider(color = colors.border)
 }
 
 @Composable

@@ -21,4 +21,14 @@ class DetailsPaneCategoryWiringTest {
         assertTrue(pane.contains("onOpenMemoryProfiler(className)"))
         assertTrue(pane.contains("onOpenComposeSource("))
     }
+
+    @Test
+    fun `manual Compose refresh falls back and shows why`() {
+        val source = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/LayoutInspectorMainPage.kt"))
+        assertTrue(source.contains("captureCompatibleFallback"))
+        assertTrue(source.contains("manualRefreshSession.capture(selectedDeviceSerial)"))
+        assertTrue(source.contains("store.noteComposeInspectionUnavailable(reason)"))
+        assertTrue(source.contains("state.composeInspectionWarning?.let"))
+        assertTrue(source.contains("Res.string.compose_inspection_unavailable"))
+    }
 }

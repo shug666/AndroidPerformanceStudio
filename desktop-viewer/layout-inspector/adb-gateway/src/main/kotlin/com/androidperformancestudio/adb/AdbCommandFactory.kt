@@ -100,6 +100,12 @@ object AdbCommandFactory {
         return runAs(serial, packageName, "cp", from, to)
     }
 
+    fun runAsCopyToAppDataRoot(serial: String, packageName: String, from: String, fileName: String): List<String> {
+        requireSafeRemotePath(from)
+        requireSafeAppDataFileName(fileName)
+        return runAs(serial, packageName, "cp", from, fileName)
+    }
+
     fun runAsMkdir(serial: String, packageName: String, path: String): List<String> {
         requireSafeRemotePath(path)
         return runAs(serial, packageName, "mkdir", "-p", path)
@@ -109,6 +115,12 @@ object AdbCommandFactory {
         require(mode in setOf("400", "444", "500", "700")) { "Unsafe file mode" }
         requireSafeRemotePath(path)
         return runAs(serial, packageName, "chmod", mode, path)
+    }
+
+    fun runAsChmodAppDataRootFile(serial: String, packageName: String, mode: String, fileName: String): List<String> {
+        require(mode in setOf("400", "444", "500", "700")) { "Unsafe file mode" }
+        requireSafeAppDataFileName(fileName)
+        return runAs(serial, packageName, "chmod", mode, fileName)
     }
 
     /**
@@ -158,8 +170,13 @@ object AdbCommandFactory {
 
     private val safeRemotePath = Regex("/[A-Za-z0-9_./-]+")
     private val safePackageApkPath = Regex("/[A-Za-z0-9_./~+=-]+")
+    private val safeAppDataFileName = Regex("[A-Za-z0-9_-][A-Za-z0-9_.-]*")
 
     private fun requireSafeRemotePath(path: String) {
         require(safeRemotePath.matches(path) && path.split('/').none { it == ".." }) { "Unsafe remote path" }
+    }
+
+    private fun requireSafeAppDataFileName(fileName: String) {
+        require(safeAppDataFileName.matches(fileName)) { "Unsafe app data file name" }
     }
 }

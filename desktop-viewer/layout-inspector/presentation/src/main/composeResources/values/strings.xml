@@ -57,6 +57,9 @@
     <string name="hierarchy">HIERARCHY</string>
     <string name="canvas">CANVAS</string>
     <string name="properties">PROPERTIES</string>
+    <string name="properties_title">Node Properties</string>
+    <string name="compose_inspection_unavailable">Compose inspection unavailable</string>
+    <string name="properties_label">PROPERTIES</string>
     <string name="details_tab_overview">Overview</string>
     <string name="details_tab_layout">Layout</string>
     <string name="details_tab_drawing">Drawing</string>

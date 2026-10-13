@@ -150,8 +150,10 @@ class ComposeInjectionManager(
         val suffix = token.value.take(32)
         val staging = "/data/local/tmp/aps-ui-inspector-$suffix"
         val privateDir = "${prepared.appDataDir}/code_cache/aps-ui-inspector-$suffix"
+        val appDataRootFileNames = listOf(AGENT_FILE_NAME, SERVICE_FILE_NAME, PAYLOAD_FILE_NAME)
+        val privateFiles = appDataRootFileNames.map { "${prepared.appDataDir}/$it" } + "$privateDir/view.jar"
         val stagedFiles = listOf("agent.so", "service.jar", "payload.jar", "view.jar").map { "$staging-$it" }
-        val privateFiles = listOf("agent.so", "service.jar", "payload.jar", "view.jar").map { "$privateDir/$it" }
+        val cleanupPrivatePaths = privateFiles.take(3) + privateDir
         try {
             listOf(
                 prepared.bundle.nativeAgent,
@@ -161,10 +163,20 @@ class ComposeInjectionManager(
             ).zip(stagedFiles).forEach { (local, remote) ->
                 checked(AdbCommandFactory.push(target.serial, local.toString(), remote))
             }
+            cleanupPrivatePaths.take(3).forEach { path ->
+                checked(AdbCommandFactory.runAsRemoveTree(target.serial, target.packageName, path))
+            }
             checked(AdbCommandFactory.runAsMkdir(target.serial, target.packageName, privateDir))
-            stagedFiles.zip(privateFiles).forEach { (from, to) ->
-                checked(AdbCommandFactory.runAsCopy(target.serial, target.packageName, from, to))
-                checked(AdbCommandFactory.runAsChmod(target.serial, target.packageName, "444", to))
+            stagedFiles.forEachIndexed { index, from ->
+                if (index < appDataRootFileNames.size) {
+                    val fileName = appDataRootFileNames[index]
+                    checked(AdbCommandFactory.runAsCopyToAppDataRoot(target.serial, target.packageName, from, fileName))
+                    checked(AdbCommandFactory.runAsChmodAppDataRootFile(target.serial, target.packageName, "444", fileName))
+                } else {
+                    val destination = privateFiles[index]
+                    checked(AdbCommandFactory.runAsCopy(target.serial, target.packageName, from, destination))
+                    checked(AdbCommandFactory.runAsChmod(target.serial, target.packageName, "444", destination))
+                }
             }
             checked(AdbCommandFactory.removeRemote(target.serial, stagedFiles))
             val options = "${privateFiles[1]};${privateFiles[2]};${target.pid};${token.value}"
@@ -180,14 +192,15 @@ class ComposeInjectionManager(
                 token = token,
                 privateViewInspectorPath = privateFiles[3],
                 processRunner = processRunner,
-                cleanupPrivateFiles = privateFiles,
+                privateDirectory = privateDir,
+                cleanupPrivatePaths = cleanupPrivatePaths,
                 cleanupStagedFiles = stagedFiles,
             )
         } catch (error: Throwable) {
             processRunner.run(AdbCommandFactory.removeRemote(target.serial, stagedFiles))
-            processRunner.run(
-                AdbCommandFactory.runAsRemoveTree(target.serial, target.packageName, privateDir),
-            )
+            cleanupPrivatePaths.forEach { path ->
+                processRunner.run(AdbCommandFactory.runAsRemoveTree(target.serial, target.packageName, path))
+            }
             throw error
         }
     }
@@ -207,7 +220,10 @@ class ComposeInjectionManager(
             if (checked(AdbCommandFactory.readUnixSockets(serial)).stdout.contains(expected)) return
             sleeper((100L shl attempt.coerceAtMost(3)))
         }
-        error("Timed out waiting for Compose inspector agent socket")
+        error(
+            "Timed out waiting for Compose inspector agent socket for PID $pid; check device logcat for " +
+                "ActivityThread or nativeloader attach errors",
+        )
     }
 
     private fun checked(arguments: List<String>): ProcessResult = processRunner.run(arguments).also { result ->
@@ -217,6 +233,9 @@ class ComposeInjectionManager(
     private fun socketName(pid: Int) = "ui_inspector_$pid"
 
     private companion object {
+        const val AGENT_FILE_NAME = "lib_ui_inspector_agent.so"
+        const val SERVICE_FILE_NAME = "lib_ui_inspector_service.jar"
+        const val PAYLOAD_FILE_NAME = "lib_ui_inspector_payload.jar"
         const val MAX_APK_SPLITS = 32
         const val MAX_APK_BYTES = 512L * 1024 * 1024
         const val SOCKET_RELEASE_ATTEMPTS = 20
@@ -241,18 +260,17 @@ class InjectedComposeSession internal constructor(
     val token: InspectorSessionToken,
     val privateViewInspectorPath: String,
     private val processRunner: ProcessRunner,
-    private val cleanupPrivateFiles: List<String>,
+    private val privateDirectory: String,
+    private val cleanupPrivatePaths: List<String>,
     private val cleanupStagedFiles: List<String>,
 ) : AutoCloseable {
     private val closed = AtomicBoolean(false)
-
-    private fun privateDir(): String = cleanupPrivateFiles.first().substringBeforeLast('/')
 
     fun deployComposeInspector(resolved: ResolvedComposeInspector): String {
         check(!closed.get()) { "Compose injection session is closed" }
         require(resolved.identity.sha256 == resolved.jar.sha256()) { "Compose inspector checksum changed after resolution" }
         val staged = "/data/local/tmp/aps-compose-${resolved.identity.sha256.take(16)}.jar"
-        val destination = privateDir() + "/compose-${resolved.identity.sha256.take(16)}.jar"
+        val destination = "$privateDirectory/compose-${resolved.identity.sha256.take(16)}.jar"
         try {
             checked(AdbCommandFactory.push(serial, resolved.jar.toString(), staged))
             checked(AdbCommandFactory.runAsCopy(serial, packageName, staged, destination))
@@ -271,12 +289,11 @@ class InjectedComposeSession internal constructor(
         if (!closed.compareAndSet(false, true)) return
         processRunner.run(AdbCommandFactory.removeForward(serial, hostPort))
         processRunner.run(AdbCommandFactory.removeRemote(serial, cleanupStagedFiles))
-        // Remove the deployment directory tree rather than its files plus rmdir: ART dexopts the
-        // deployed jars into an oat directory of its own, so rmdir failed and left the directory
-        // (and its oat cache) behind on every session.
-        processRunner.run(
-            AdbCommandFactory.runAsRemoveTree(serial, packageName, privateDir()),
-        )
+        // ART dexopts deployed jars into an oat subdirectory, so remove the session cache tree.
+        // The native agent lives at app-data root for Android's linker and is removed separately.
+        cleanupPrivatePaths.forEach { path ->
+            processRunner.run(AdbCommandFactory.runAsRemoveTree(serial, packageName, path))
+        }
     }
 
     private fun checked(arguments: List<String>): ProcessResult = processRunner.run(arguments).also { result ->

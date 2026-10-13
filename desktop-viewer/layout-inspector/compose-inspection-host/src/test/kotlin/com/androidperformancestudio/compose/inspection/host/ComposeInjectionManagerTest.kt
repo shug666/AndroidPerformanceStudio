@@ -10,6 +10,7 @@ import java.util.Properties
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -51,6 +52,68 @@ class ComposeInjectionManagerTest {
         assertEquals("https://example.test/maven/", prepared.preflight.inspectorSource)
         assertTrue(prepared.preflight.inspectorDownloadRequired)
         assertTrue(commands.none { it.contains("attach-agent") })
+    }
+
+    @Test
+    fun `attach stores native agent at app data root and cleans only session paths`() {
+        val bundle = createBundle(tempDir.resolve("bundle"))
+        val commands = mutableListOf<List<String>>()
+        var socketVisible = false
+        val runner = ProcessRunner { arguments ->
+            commands += arguments
+            when {
+                arguments.takeLast(2) == listOf("getprop", "ro.build.version.sdk") -> ProcessResult(0, "35\n", "")
+                arguments.takeLast(2) == listOf("getprop", "ro.product.cpu.abi") -> ProcessResult(0, "arm64-v8a\n", "")
+                arguments.contains("pwd") -> ProcessResult(0, "/data/user/0/dev.sample\n", "")
+                arguments.contains("pidof") -> ProcessResult(0, "1234\n", "")
+                arguments.takeLast(2) == listOf("cat", "/proc/net/unix") -> ProcessResult(
+                    0,
+                    if (socketVisible) "@ui_inspector_1234\n" else "Num RefCount Protocol Flags Type St Inode Path\n",
+                    "",
+                )
+                arguments.contains("pm") -> ProcessResult(0, "package:/data/app/~~abc==/dev.sample/base.apk\n", "")
+                arguments.contains("pull") -> {
+                    Files.write(Path.of(arguments.last()), apkWithComposeVersion("1.11.4"))
+                    ProcessResult(0, "1 file pulled", "")
+                }
+                arguments.contains("attach-agent") -> {
+                    socketVisible = true
+                    ProcessResult(0, "", "")
+                }
+                else -> ProcessResult(0, "", "")
+            }
+        }
+        val manager = ComposeInjectionManager(
+            processRunner = runner,
+            portAllocator = { 43210 },
+            sleeper = {},
+        )
+        val prepared = manager.preflight("device", "dev.sample", bundle)
+        val token = InspectorSessionToken.parse("a".repeat(64))
+
+        val session = manager.attach(
+            prepared,
+            ComposeInspectionAuthorization.authorize(prepared.preflight),
+            token,
+        )
+
+        val agentPath = "/data/user/0/dev.sample/lib_ui_inspector_agent.so"
+        val servicePath = "/data/user/0/dev.sample/lib_ui_inspector_service.jar"
+        val payloadPath = "/data/user/0/dev.sample/lib_ui_inspector_payload.jar"
+        val privateDirectory = "/data/user/0/dev.sample/code_cache/aps-ui-inspector-${token.value.take(32)}"
+        val attachArgument = commands.single { it.contains("attach-agent") }.last().removeSurrounding("'")
+        assertEquals(agentPath, attachArgument.substringBefore('='))
+        assertFalse(attachArgument.substringBefore('=').contains("code_cache"))
+        assertTrue(attachArgument.contains(servicePath))
+        assertTrue(attachArgument.contains(payloadPath))
+        assertTrue(commands.any { it.takeLast(3) == listOf("cp", "/data/local/tmp/aps-ui-inspector-${token.value.take(32)}-agent.so", "lib_ui_inspector_agent.so") })
+
+        session.close()
+
+        val removedPaths = commands
+            .filter { it.contains("run-as") && it.contains("rm") && it.contains("-rf") }
+            .map(List<String>::last)
+        assertEquals(listOf(agentPath, servicePath, payloadPath, privateDirectory), removedPaths.takeLast(4))
     }
 
     private fun createBundle(root: Path): Path {

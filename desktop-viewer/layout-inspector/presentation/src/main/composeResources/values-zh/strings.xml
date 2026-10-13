@@ -57,6 +57,9 @@
     <string name="hierarchy">层级结构</string>
     <string name="canvas">画布</string>
     <string name="properties">属性</string>
+    <string name="properties_title">节点属性</string>
+    <string name="compose_inspection_unavailable">Compose 检查暂不可用</string>
+    <string name="properties_label">PROPERTIES</string>
     <string name="details_tab_overview">概览</string>
     <string name="details_tab_layout">布局</string>
     <string name="details_tab_drawing">绘制</string>

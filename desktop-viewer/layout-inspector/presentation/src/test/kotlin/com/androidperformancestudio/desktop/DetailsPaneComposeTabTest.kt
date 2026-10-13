@@ -81,7 +81,25 @@ class DetailsPaneComposeTabTest {
         }
     }
 
-    private fun inspectorState(selectedNodeId: String = "compose-inspection:" + COMPOSABLE_ID): InspectorState {
+    @Test
+    fun `compatible view refresh keeps the Compose failure visible`() {
+        runComposeUiTest {
+            setContent {
+                DetailsPane(
+                    state = inspectorState(selectedNodeId = "view:1", composeWarning = "Timed out waiting for Compose inspector agent socket"),
+                    modifier = Modifier,
+                )
+            }
+
+            onNodeWithText("Compose inspection unavailable").assertIsDisplayed()
+            onNodeWithText("Timed out waiting for Compose inspector agent socket", substring = true).assertIsDisplayed()
+        }
+    }
+
+    private fun inspectorState(
+        selectedNodeId: String = "compose-inspection:" + COMPOSABLE_ID,
+        composeWarning: String? = null,
+    ): InspectorState {
         val composable = ComposableNode(
             id = COMPOSABLE_ID,
             anchorHash = 7,
@@ -143,6 +161,7 @@ class DetailsPaneComposeTabTest {
                 frame = frame,
             ),
         )
+        composeWarning?.let(store::noteComposeInspectionUnavailable)
         check(store.selectNode(selectedNodeId)) { "selection was rejected: " + selectedNodeId }
         return store.state
     }
