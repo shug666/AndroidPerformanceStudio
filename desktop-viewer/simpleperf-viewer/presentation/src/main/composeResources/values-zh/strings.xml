@@ -75,6 +75,7 @@
     <string name="sp_capture_capture_status">采集状态</string>
     <string name="sp_capture_stop_analyze">停止并分析</string>
     <string name="sp_capture_cancel">取消</string>
+    <string name="sp_capture_enable_root_retry">启用 ADB Root 并重试</string>
     <string name="sp_capture_get_data">获取数据</string>
     <string name="sp_capture_automatic_capture_report_hint">点击“获取数据”即可自动运行 Simpleperf 并打开报告，无需输入命令。</string>
     <string name="sp_capture_parameters">参数</string>

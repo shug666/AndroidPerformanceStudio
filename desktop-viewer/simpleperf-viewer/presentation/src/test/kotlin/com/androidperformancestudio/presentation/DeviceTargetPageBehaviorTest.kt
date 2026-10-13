@@ -317,6 +317,50 @@ class DeviceTargetPageBehaviorTest {
         }
 
     @Test
+    fun `failed privileged capture offers explicit adb root retry`() =
+        runDesktopComposeUiTest(width = 1100, height = 760) {
+            var rootRetryCount = 0
+            val baseState = readyState(ThreadOption(pid = 42, tid = 43, name = "RenderThread"))
+            val baseSelection = requireNotNull(baseState.selection)
+            val state =
+                baseState.copy(
+                    selection =
+                        baseSelection.copy(
+                            capabilities =
+                                baseSelection.capabilities.copy(
+                                    status = CapabilityStatus.LIMITED,
+                                    root = "AVAILABLE_AFTER_ADB_ROOT",
+                                    profilingScope = "PROFILEABLE_OR_DEBUGGABLE_APPS",
+                                    limitations = listOf("ADB_ROOT_NOT_ACTIVE"),
+                                ),
+                        ),
+                )
+
+            setContent {
+                HomeScreen(
+                    state = state,
+                    captureState =
+                        CaptureState.Failed(
+                            StudioError(
+                                ErrorCategory.CONFIGURATION,
+                                "TARGET_PROCESS_UNAVAILABLE",
+                                "Selected process unavailable",
+                            ),
+                            Path.of("session"),
+                        ),
+                    reportState = ReportState(),
+                    actions = deviceActions(onEnableRootAndRetry = { rootRetryCount++ }),
+                    reportActions = goldenActions(),
+                )
+            }
+
+            onNodeWithText("Enable adb root and retry").performClick()
+
+            assertEquals(1, rootRetryCount)
+            onNodeWithText("Get data").assertDoesNotExist()
+        }
+
+    @Test
     fun `capture button changes from get data to stop and analyze`() =
         runDesktopComposeUiTest(width = 1100, height = 760) {
             var stopCount = 0
@@ -418,6 +462,7 @@ private fun deviceActions(
     onStartCapture: () -> Unit = {},
     onStopCapture: () -> Unit = {},
     onCancelCapture: () -> Unit = {},
+    onEnableRootAndRetry: () -> Unit = {},
 ) = DeviceTargetActions(
     onRefresh = {},
     onSelectDevice = onSelectDevice,
@@ -432,6 +477,7 @@ private fun deviceActions(
     onStartCapture = onStartCapture,
     onStopCapture = onStopCapture,
     onCancelCapture = onCancelCapture,
+    onEnableRootAndRetry = onEnableRootAndRetry,
 )
 
 private const val TOOLBAR_LEFT_ALIGNMENT_LIMIT = 20f

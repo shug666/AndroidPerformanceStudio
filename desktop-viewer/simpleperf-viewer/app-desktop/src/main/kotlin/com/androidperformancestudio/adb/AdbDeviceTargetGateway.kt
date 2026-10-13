@@ -21,8 +21,10 @@ class AdbDeviceTargetGateway private constructor(
         bundledSimpleperfAbis: Set<String> = emptySet(),
     ) : this(GatewayOperations.create(adbExecutable), bundledSimpleperfAbis)
 
+    @Suppress("LongParameterList")
     internal constructor(
         refreshDevices: suspend () -> StudioResult<List<AndroidDeviceInfo>>,
+        activateRoot: suspend (String) -> StudioResult<Unit> = { StudioResult.Success(Unit) },
         readProperties: suspend (String) -> StudioResult<AndroidDeviceProperties>,
         detectCapabilities: suspend (AndroidDeviceProperties) -> StudioResult<DeviceCapabilities>,
         refreshTargets: suspend (String) -> StudioResult<AdbTargetSnapshot>,
@@ -31,6 +33,7 @@ class AdbDeviceTargetGateway private constructor(
     ) : this(
         GatewayOperations(
             refreshDevices = refreshDevices,
+            activateRoot = activateRoot,
             readProperties = readProperties,
             detectCapabilities = detectCapabilities,
             refreshTargets = refreshTargets,
@@ -44,6 +47,8 @@ class AdbDeviceTargetGateway private constructor(
             is StudioResult.Failure -> result
             is StudioResult.Success -> StudioResult.Success(result.value.map(AndroidDeviceInfo::toOption))
         }
+
+    override suspend fun activateRoot(serial: String): StudioResult<Unit> = operations.activateRoot(serial)
 
     override suspend fun loadSelection(serial: String): StudioResult<DeviceSelection> =
         when (val result = operations.readProperties(serial)) {
@@ -97,6 +102,7 @@ class AdbDeviceTargetGateway private constructor(
 
 private data class GatewayOperations(
     val refreshDevices: suspend () -> StudioResult<List<AndroidDeviceInfo>>,
+    val activateRoot: suspend (String) -> StudioResult<Unit>,
     val readProperties: suspend (String) -> StudioResult<AndroidDeviceProperties>,
     val detectCapabilities: suspend (AndroidDeviceProperties) -> StudioResult<DeviceCapabilities>,
     val refreshTargets: suspend (String) -> StudioResult<AdbTargetSnapshot>,
@@ -105,10 +111,12 @@ private data class GatewayOperations(
     companion object {
         fun create(adbExecutable: Path): GatewayOperations {
             val targetMonitor = AndroidTargetMonitors.shared(adbExecutable)
+            val rootController = AdbRootController(adbExecutable)
             val propertyReader = AdbDevicePropertiesReader(adbExecutable)
             val capabilityDetector = AdbDeviceCapabilityDetector(adbExecutable)
             return GatewayOperations(
                 refreshDevices = { targetMonitor.refreshDevices() },
+                activateRoot = { serial -> rootController.activate(serial) },
                 readProperties = { serial -> propertyReader.read(serial) },
                 detectCapabilities = { properties -> capabilityDetector.detect(properties) },
                 refreshTargets = { serial -> targetMonitor.refreshTargets(serial) },

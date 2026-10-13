@@ -33,7 +33,9 @@ class CaptureConfigurationWorkspaceTest {
         assertTrue(source.contains("SimpleperfViewerRes.sp_capture_get_data"))
         assertTrue(source.contains("SimpleperfViewerRes.sp_capture_stop_analyze"))
         assertFalse(source.contains("label = \"Get data\""))
-        assertTrue(source.contains("onClick = if (captureActive) actions.onStopCapture else actions.onStartCapture"))
+        assertTrue(source.contains("captureActive -> actions.onStopCapture"))
+        assertTrue(source.contains("enableRootAndRetry -> actions.onEnableRootAndRetry"))
+        assertTrue(source.contains("else -> actions.onStartCapture"))
         assertFalse(source.contains("Continue to Capture"))
         assertFalse(source.contains("Back to Device & Target"))
     }

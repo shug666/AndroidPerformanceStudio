@@ -171,6 +171,7 @@ private fun ToolbarCaptureActions(
 ) {
     val language = currentSimpleperfLanguage()
     val captureActive = captureState.isCaptureActive()
+    val enableRootAndRetry = state.canEnableRootAndRetry(captureState)
     val refreshLabel = localizedStringResource(SimpleperfViewerRes.sp_target_refresh, language)
     val refreshingLabel = localizedStringResource(SimpleperfViewerRes.sp_target_refreshing, language)
     val textMeasurer = rememberTextMeasurer()
@@ -198,14 +199,19 @@ private fun ToolbarCaptureActions(
     MacOSTextButton(
         label =
             localizedStringResource(
-                if (captureActive) {
-                    SimpleperfViewerRes.sp_capture_stop_analyze
-                } else {
-                    SimpleperfViewerRes.sp_capture_get_data
+                when {
+                    captureActive -> SimpleperfViewerRes.sp_capture_stop_analyze
+                    enableRootAndRetry -> SimpleperfViewerRes.sp_capture_enable_root_retry
+                    else -> SimpleperfViewerRes.sp_capture_get_data
                 },
                 language,
             ),
-        onClick = if (captureActive) actions.onStopCapture else actions.onStartCapture,
+        onClick =
+            when {
+                captureActive -> actions.onStopCapture
+                enableRootAndRetry -> actions.onEnableRootAndRetry
+                else -> actions.onStartCapture
+            },
         style = style,
         enabled =
             if (captureActive) {
@@ -583,8 +589,9 @@ private fun CaptureStatus(
 ) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         val error = state.error
-        val color = if (error == null) style.online else style.error
-        val fileInfo = reportState.footerFileInfo() ?: captureState.footerFileInfo()
+        val hasCaptureError = captureState is CaptureState.Failed
+        val color = if (error != null || hasCaptureError) style.error else style.online
+        val fileInfo = captureFooterFileInfo(error != null || hasCaptureError, reportState, captureState)
         StatusDot(color)
         Spacer(Modifier.width(7.dp))
         Text(
@@ -637,12 +644,25 @@ private fun CaptureStatus(
     }
 }
 
+private fun captureFooterFileInfo(
+    hasError: Boolean,
+    reportState: ReportState,
+    captureState: CaptureState,
+): FooterFileInfo? =
+    if (hasError) {
+        null
+    } else {
+        reportState.footerFileInfo() ?: captureState.footerFileInfo()
+    }
+
 private data class FooterFileInfo(
     val name: String,
     val path: String,
 )
 
 private const val ADB_NOT_FOUND_ERROR_CODE = "ADB_NOT_FOUND"
+private const val ROOT_AVAILABLE_AFTER_ADB_ROOT = "AVAILABLE_AFTER_ADB_ROOT"
+private val ROOT_RECOVERABLE_CAPTURE_ERRORS = setOf("TARGET_PROCESS_UNAVAILABLE", "TARGET_PERMISSION_DENIED")
 
 private fun ReportState.footerFileInfo(): FooterFileInfo? =
     when (val current = loadState) {
@@ -692,6 +712,12 @@ private fun CaptureActions(
             )
         }
     }
+}
+
+private fun DeviceTargetState.canEnableRootAndRetry(captureState: CaptureState): Boolean {
+    val failure = captureState as? CaptureState.Failed ?: return false
+    return selection?.capabilities?.root == ROOT_AVAILABLE_AFTER_ADB_ROOT &&
+        failure.error.code in ROOT_RECOVERABLE_CAPTURE_ERRORS
 }
 
 private fun String.trimLabelSeparator(): String = trimEnd().trimEnd(':', '：')

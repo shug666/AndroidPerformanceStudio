@@ -8,6 +8,7 @@ import com.androidperformancestudio.capture.DeviceSimpleperfAvailability
 import com.androidperformancestudio.capture.SamplingParameters
 import com.androidperformancestudio.capture.SamplingTemplate
 import com.androidperformancestudio.capture.SimpleperfTarget
+import com.androidperformancestudio.model.ErrorCategory
 import com.androidperformancestudio.model.StudioError
 import com.androidperformancestudio.model.StudioResult
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -152,6 +153,8 @@ data class CaptureSetup(
 interface DeviceTargetGateway {
     suspend fun refreshDevices(): StudioResult<List<DeviceOption>>
 
+    suspend fun activateRoot(serial: String): StudioResult<Unit>
+
     suspend fun loadSelection(serial: String): StudioResult<DeviceSelection>
 
     suspend fun loadThreads(
@@ -170,30 +173,34 @@ class DeviceTargetController(
 ) {
     private val mutableState = MutableStateFlow(DeviceTargetState())
     private val processSelection = AndroidProcessSelection(ProcessOption::pid)
-    private val processSelectionSubscription = processSelection.register { choice ->
-        val current = mutableState.value
-        val target = current.selectedTarget
-        if (choice.selectedPid == null && (target is CaptureTarget.Process || target is CaptureTarget.Thread)) {
-            mutableState.value =
-                current.copy(
-                    selectedTarget = current.selectedPackageName?.let(CaptureTarget::App),
-                    captureSetup = null,
-                    threads = emptyList(),
-                ).withDefaultCaptureSetup()
-        } else if (choice.selectedPid != null && current.selectedProcessId != choice.selectedPid) {
-            val process = choice.processes.firstOrNull { it.pid == choice.selectedPid }
-            if (process != null) {
+    private val processSelectionSubscription =
+        processSelection.register { choice ->
+            val current = mutableState.value
+            val target = current.selectedTarget
+            if (choice.selectedPid == null && (target is CaptureTarget.Process || target is CaptureTarget.Thread)) {
                 mutableState.value =
-                    current.copy(
-                        selectedTarget = CaptureTarget.Process(process.pid, process.name),
-                        captureSetup = null,
-                        threads = emptyList(),
-                    ).withDefaultCaptureSetup()
+                    current
+                        .copy(
+                            selectedTarget = current.selectedPackageName?.let(CaptureTarget::App),
+                            captureSetup = null,
+                            threads = emptyList(),
+                        ).withDefaultCaptureSetup()
+            } else if (choice.selectedPid != null && current.selectedProcessId != choice.selectedPid) {
+                val process = choice.processes.firstOrNull { it.pid == choice.selectedPid }
+                if (process != null) {
+                    mutableState.value =
+                        current
+                            .copy(
+                                selectedTarget = CaptureTarget.Process(process.pid, process.name),
+                                captureSetup = null,
+                                threads = emptyList(),
+                            ).withDefaultCaptureSetup()
+                }
             }
         }
-    }
     private val idleCaptureState = MutableStateFlow<CaptureState>(CaptureState.Idle)
     private val captureStartMutex = Mutex()
+    private val rootActivationMutex = Mutex()
     val state: StateFlow<DeviceTargetState> = mutableState.asStateFlow()
     val captureState: StateFlow<CaptureState> = captureSession?.state ?: idleCaptureState.asStateFlow()
     val cancelCapture: () -> Unit = { captureSession?.cancel() }
@@ -296,13 +303,14 @@ class DeviceTargetController(
         if (serial == null || packageName == null || !processSelection.selectProcess(pid)) return
         val process = processSelection.snapshot.processes.first { it.pid == pid }
         mutableState.value =
-            mutableState.value.copy(
-                selectedTarget = CaptureTarget.Process(process.pid, process.name),
-                captureSetup = null,
-                threads = emptyList(),
-                isLoading = true,
-                error = null,
-            ).withDefaultCaptureSetup()
+            mutableState.value
+                .copy(
+                    selectedTarget = CaptureTarget.Process(process.pid, process.name),
+                    captureSetup = null,
+                    threads = emptyList(),
+                    isLoading = true,
+                    error = null,
+                ).withDefaultCaptureSetup()
         val result = gateway.loadThreads(serial, pid)
         val latest = mutableState.value
         if (latest.selectedPackageName == packageName && latest.selectedProcessId == pid) {
@@ -354,6 +362,49 @@ class DeviceTargetController(
 
     fun backToTargets() {
         mutableState.value = mutableState.value.copy(page = WorkspacePage.DEVICE_TARGET)
+    }
+
+    suspend fun activateRoot(): StudioResult<Unit> {
+        if (!rootActivationMutex.tryLock()) {
+            return StudioResult.Failure(
+                StudioError(
+                    ErrorCategory.CONFIGURATION,
+                    "ADB_ROOT_IN_PROGRESS",
+                    "ADB root activation is already in progress",
+                ),
+            )
+        }
+        return try {
+            val serial = mutableState.value.selectedSerial
+            if (serial == null) {
+                val failure =
+                    StudioResult.Failure(
+                        StudioError(ErrorCategory.CONFIGURATION, "ADB_ROOT_DEVICE_REQUIRED", "Select a device first"),
+                    )
+                mutableState.value = mutableState.value.copy(error = failure.error)
+                failure
+            } else {
+                mutableState.value = mutableState.value.copy(isLoading = true, error = null)
+                when (val result = gateway.activateRoot(serial)) {
+                    is StudioResult.Failure -> {
+                        mutableState.value = mutableState.value.copy(isLoading = false, error = result.error)
+                        result
+                    }
+                    is StudioResult.Success -> {
+                        val current = mutableState.value
+                        mutableState.value =
+                            current.copy(
+                                selection = current.selection?.withActiveRoot(),
+                                isLoading = false,
+                                error = null,
+                            )
+                        result
+                    }
+                }
+            }
+        } finally {
+            rootActivationMutex.unlock()
+        }
     }
 
     suspend fun startCapture(): CaptureState? {
@@ -417,3 +468,21 @@ private fun ProcessOption.belongsToPackage(packageName: String): Boolean {
     if (name == packageName) return true
     return name.startsWith("$packageName:")
 }
+
+private fun DeviceSelection.withActiveRoot(): DeviceSelection {
+    val remainingLimitations = capabilities.limitations.filterNot(ROOT_LIMITATIONS::contains)
+    return copy(
+        capabilities =
+            capabilities.copy(
+                status = if (remainingLimitations.isEmpty()) CapabilityStatus.READY else CapabilityStatus.LIMITED,
+                root = ROOT_ACTIVE,
+                profilingScope = PROFILING_SCOPE_ANY_PROCESS,
+                limitations = remainingLimitations,
+            ),
+    )
+}
+
+private const val ROOT_ACTIVE = "ACTIVE"
+private const val PROFILING_SCOPE_ANY_PROCESS = "ANY_PROCESS"
+private val ROOT_LIMITATIONS =
+    setOf("ADB_ROOT_NOT_ACTIVE", "ROOT_UNAVAILABLE", "APP_MUST_BE_PROFILEABLE_OR_DEBUGGABLE", "DEBUGGABLE_APP_REQUIRED")

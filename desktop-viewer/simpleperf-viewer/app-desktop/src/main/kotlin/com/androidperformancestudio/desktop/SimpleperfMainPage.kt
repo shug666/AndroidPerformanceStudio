@@ -453,21 +453,33 @@ private fun DeviceTargetController.deviceActions(
         onSelectTemplate = ::selectSamplingTemplate,
         onUpdateSamplingParameters = ::updateSamplingParameters,
         onStartCapture = {
-            scope.launch {
-                when (val captured = startCapture()) {
-                    is CaptureState.Completed ->
-                        when (val imported = offlineImporter.importCapturedSession(captured.sessionDirectory)) {
-                            is StudioResult.Success -> sessionOpener(imported.value.sessionDirectory)
-                            is StudioResult.Failure ->
-                                reportController.showFailure(captured.sessionDirectory, imported.error)
-                        }
-                    else -> Unit
-                }
-            }
+            scope.launch { captureAndOpen(reportController, offlineImporter, sessionOpener) }
         },
         onStopCapture = { scope.launch { stopCapture() } },
         onCancelCapture = cancelCapture,
+        onEnableRootAndRetry = {
+            scope.launch {
+                if (activateRoot() is StudioResult.Success) {
+                    captureAndOpen(reportController, offlineImporter, sessionOpener)
+                }
+            }
+        },
     )
+
+private suspend fun DeviceTargetController.captureAndOpen(
+    reportController: ReportController,
+    offlineImporter: OfflineProfileImporter,
+    sessionOpener: suspend (Path) -> Unit,
+) {
+    when (val captured = startCapture()) {
+        is CaptureState.Completed ->
+            when (val imported = offlineImporter.importCapturedSession(captured.sessionDirectory)) {
+                is StudioResult.Success -> sessionOpener(imported.value.sessionDirectory)
+                is StudioResult.Failure -> reportController.showFailure(captured.sessionDirectory, imported.error)
+            }
+        else -> Unit
+    }
+}
 
 private data class WorkspaceDependencies(
     val deviceGateway: DeviceTargetGateway,
@@ -545,6 +557,8 @@ private class UnavailableDeviceTargetGateway(
     private val failure: StudioResult.Failure,
 ) : DeviceTargetGateway {
     override suspend fun refreshDevices(): StudioResult<List<DeviceOption>> = failure
+
+    override suspend fun activateRoot(serial: String): StudioResult<Unit> = failure
 
     override suspend fun loadSelection(serial: String): StudioResult<DeviceSelection> = failure
 

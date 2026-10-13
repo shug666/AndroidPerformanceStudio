@@ -166,7 +166,7 @@ class SimpleperfCaptureSessionTest {
             val failure = assertIs<CaptureState.Failed>(result)
             assertEquals(expected.category, failure.error.category)
             assertEquals(expected.code, failure.error.code)
-            assertTrue(failure.error.message.contains("failed to open perf event"))
+            assertEquals("failed to open perf event", failure.error.message)
             assertEquals(remoteCleanupArguments(), requests.last().arguments)
             assertEquals("failed to open perf event", failure.sessionDirectory.resolve("record.stderr.log").readText())
             assertEquals("removed", failure.sessionDirectory.resolve("cleanup.stdout.log").readText())
@@ -221,6 +221,90 @@ class SimpleperfCaptureSessionTest {
             assertEquals(
                 "The selected app is not debuggable/profileable. Select a debuggable or profileable app, " +
                     "or use a rooted/userdebug device.",
+                failure.error.message,
+            )
+            assertEquals(stderr, failure.sessionDirectory.resolve("record.stderr.log").readText())
+        }
+
+    @Test
+    fun `explains when the selected process or thread is inaccessible`() =
+        runBlocking {
+            listOf(
+                "simpleperf E utils.cpp:440] no process with pid 2928",
+                "simpleperf E utils.cpp:422] Non existing thread '2928'",
+            ).forEach { stderr ->
+                val root = Files.createTempDirectory("aps-capture-target-unavailable-")
+                val session =
+                    SimpleperfCaptureSession(
+                        simpleperfPreparer = preparedDeviceSimpleperf(),
+                        adbClient =
+                            ProcessInvocationAdbClient { request, _ ->
+                                if ("record" in request.arguments) {
+                                    failed(
+                                        request = request,
+                                        error =
+                                            StudioError(
+                                                category = ErrorCategory.PROCESS_EXIT,
+                                                code = "PROCESS_EXIT_1",
+                                                message = "Process exited with code 1",
+                                            ),
+                                        stderr = stderr,
+                                    )
+                                } else {
+                                    completed(request, stdout = "")
+                                }
+                            },
+                    )
+
+                val failure = assertIs<CaptureState.Failed>(session.capture(captureRequest(root)))
+
+                assertEquals(ErrorCategory.CONFIGURATION, failure.error.category)
+                assertEquals("TARGET_PROCESS_UNAVAILABLE", failure.error.code)
+                assertEquals(
+                    "Selected process unavailable. Refresh/reselect it, or activate adb root " +
+                        "for privileged/system apps.",
+                    failure.error.message,
+                )
+                assertEquals(stderr, failure.sessionDirectory.resolve("record.stderr.log").readText())
+            }
+        }
+
+    @Test
+    fun `explains when simpleperf lacks target permission`() =
+        runBlocking {
+            val root = Files.createTempDirectory("aps-capture-permission-denied-")
+            val stderr =
+                "simpleperf E event_selection_set.cpp:739] failed to open perf event file " +
+                    "for event_type cpu-clock:u: Permission denied"
+            val session =
+                SimpleperfCaptureSession(
+                    simpleperfPreparer = preparedDeviceSimpleperf(),
+                    adbClient =
+                        ProcessInvocationAdbClient { request, _ ->
+                            if ("record" in request.arguments) {
+                                failed(
+                                    request = request,
+                                    error =
+                                        StudioError(
+                                            category = ErrorCategory.PROCESS_EXIT,
+                                            code = "PROCESS_EXIT_1",
+                                            message = "Process exited with code 1",
+                                        ),
+                                    stderr = stderr,
+                                )
+                            } else {
+                                completed(request, stdout = "")
+                            }
+                        },
+                )
+
+            val failure = assertIs<CaptureState.Failed>(session.capture(captureRequest(root)))
+
+            assertEquals(ErrorCategory.CONFIGURATION, failure.error.category)
+            assertEquals("TARGET_PERMISSION_DENIED", failure.error.code)
+            assertEquals(
+                "Permission denied. Select a debuggable/profileable app or activate adb root " +
+                    "for privileged/system apps.",
                 failure.error.message,
             )
             assertEquals(stderr, failure.sessionDirectory.resolve("record.stderr.log").readText())

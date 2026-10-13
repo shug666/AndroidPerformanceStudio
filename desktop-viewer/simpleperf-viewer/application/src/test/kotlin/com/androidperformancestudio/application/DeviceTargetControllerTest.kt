@@ -271,6 +271,38 @@ class DeviceTargetControllerTest {
         }
 
     @Test
+    fun `activates adb root while preserving the selected capture target`() =
+        runBlocking {
+            val gateway = FakeDeviceTargetGateway()
+            val controller = DeviceTargetController(gateway)
+            controller.refreshDevices()
+            controller.selectPackage("com.example.camera")
+            controller.selectProcess(321)
+            val target =
+                controller.state.value.captureSetup
+                    ?.parameters
+                    ?.target
+
+            val result = controller.activateRoot()
+
+            assertIs<StudioResult.Success<Unit>>(result)
+            assertEquals(1, gateway.rootActivations)
+            val capabilities = requireNotNull(controller.state.value.selection).capabilities
+            assertEquals("ACTIVE", capabilities.root)
+            assertEquals("ANY_PROCESS", capabilities.profilingScope)
+            assertEquals(CapabilityStatus.READY, capabilities.status)
+            assertEquals(emptyList(), capabilities.limitations)
+            assertEquals(
+                target,
+                controller.state.value.captureSetup
+                    ?.parameters
+                    ?.target,
+            )
+            assertFalse(controller.state.value.isLoading)
+            assertNull(controller.state.value.error)
+        }
+
+    @Test
     fun `starts capture with selected device capability and configured session location`() =
         runBlocking {
             val sessionRoot = Files.createTempDirectory("aps-controller-capture-")
@@ -396,12 +428,19 @@ class DeviceTargetControllerTest {
                 ),
             ),
         private val capabilityStatus: CapabilityStatus = CapabilityStatus.LIMITED,
+        private val rootResult: StudioResult<Unit> = StudioResult.Success(Unit),
     ) : DeviceTargetGateway {
         var selectionLoads: Int = 0
+        var rootActivations: Int = 0
         var packages: List<PackageOption> =
             listOf(PackageOption("com.example.camera"), PackageOption("com.example.music"))
 
         override suspend fun refreshDevices(): StudioResult<List<DeviceOption>> = deviceResult
+
+        override suspend fun activateRoot(serial: String): StudioResult<Unit> {
+            rootActivations += 1
+            return rootResult
+        }
 
         override suspend fun loadSelection(serial: String): StudioResult<DeviceSelection> {
             selectionLoads += 1
@@ -419,7 +458,7 @@ class DeviceTargetControllerTest {
                             profilingScope = "Profileable or debuggable apps",
                             simpleperf = "simpleperf 1.0",
                             eventNames = listOf("cpu-clock", "cpu-cycles"),
-                            limitations = listOf("Root unavailable"),
+                            limitations = listOf("ROOT_UNAVAILABLE"),
                         ),
                     packages = packages,
                     processes =

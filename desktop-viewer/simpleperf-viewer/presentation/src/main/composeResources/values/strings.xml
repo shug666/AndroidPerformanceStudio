@@ -75,6 +75,7 @@
     <string name="sp_capture_capture_status">Capture status</string>
     <string name="sp_capture_stop_analyze">Stop and analyze</string>
     <string name="sp_capture_cancel">Cancel</string>
+    <string name="sp_capture_enable_root_retry">Enable adb root and retry</string>
     <string name="sp_capture_get_data">Get data</string>
     <string name="sp_capture_automatic_capture_report_hint">Click Get data to run Simpleperf automatically and open the report. No command input is required.</string>
     <string name="sp_capture_parameters">Parameters</string>

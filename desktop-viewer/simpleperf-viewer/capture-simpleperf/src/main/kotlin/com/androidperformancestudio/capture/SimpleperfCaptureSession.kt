@@ -508,16 +508,33 @@ private fun HostCommandResult.outputOrNull(): HostCommandOutput? =
 
 private fun HostCommandResult.Failed.captureError(): StudioError {
     val stderr = output?.stderr?.text.orEmpty()
-    return if (error.category == ErrorCategory.PROCESS_EXIT && NOT_PROFILEABLE_ERROR in stderr) {
-        StudioError(
-            category = ErrorCategory.CONFIGURATION,
-            code = "TARGET_NOT_PROFILEABLE",
-            message =
-                "The selected app is not debuggable/profileable. Select a debuggable or profileable app, " +
-                    "or use a rooted/userdebug device.",
-        )
-    } else {
-        error
+    if (error.category != ErrorCategory.PROCESS_EXIT) return error
+    return when {
+        NOT_PROFILEABLE_ERROR.containsMatchIn(stderr) ->
+            StudioError(
+                category = ErrorCategory.CONFIGURATION,
+                code = "TARGET_NOT_PROFILEABLE",
+                message =
+                    "The selected app is not debuggable/profileable. Select a debuggable or profileable app, " +
+                        "or use a rooted/userdebug device.",
+            )
+        TARGET_PROCESS_UNAVAILABLE_ERROR.containsMatchIn(stderr) ->
+            StudioError(
+                category = ErrorCategory.CONFIGURATION,
+                code = "TARGET_PROCESS_UNAVAILABLE",
+                message =
+                    "Selected process unavailable. Refresh/reselect it, or activate adb root " +
+                        "for privileged/system apps.",
+            )
+        PERF_EVENT_PERMISSION_ERROR.containsMatchIn(stderr) ->
+            StudioError(
+                category = ErrorCategory.CONFIGURATION,
+                code = "TARGET_PERMISSION_DENIED",
+                message =
+                    "Permission denied. Select a debuggable/profileable app or activate adb root " +
+                        "for privileged/system apps.",
+            )
+        else -> error
     }
 }
 
@@ -553,8 +570,15 @@ private fun Throwable.toAdbStudioError(): StudioError {
             is AdbCommandFailedException -> "PROCESS_EXIT_$exitCode"
             else -> "ADB_COMMAND_FAILED"
         }
-    return StudioError(category, code, message ?: "ADB command failed", this)
+    return StudioError(category, code, adbUserMessage(), this)
 }
+
+private fun Throwable.adbUserMessage(): String =
+    if (this is AdbCommandFailedException) {
+        standardError.trim().ifEmpty { message ?: "ADB command failed" }
+    } else {
+        message ?: "ADB command failed"
+    }
 
 private fun SamplingParameters.captureTimeout() = durationSeconds?.seconds?.plus(15.seconds) ?: 24.hours
 
@@ -565,7 +589,11 @@ private val CPU_CALL_STACKS = CapabilityId("cpu.call_stacks")
 private val CPU_THREAD_TIMELINE = CapabilityId("cpu.thread_timeline")
 private val SIMPLEPERF_CLOCK = ClockDomain("simpleperf.perf_time")
 
-private const val NOT_PROFILEABLE_ERROR = "doesn't exist or isn't debuggable/profileable"
+private val NOT_PROFILEABLE_ERROR = Regex("doesn't exist or isn't debuggable/profileable", RegexOption.IGNORE_CASE)
+private val TARGET_PROCESS_UNAVAILABLE_ERROR =
+    Regex("(?:no (?:process|thread) with (?:pid|tid)|non existing (?:process|thread))", RegexOption.IGNORE_CASE)
+private val PERF_EVENT_PERMISSION_ERROR =
+    Regex("(?:failed to open perf event.*permission denied|operation not permitted)", RegexOption.IGNORE_CASE)
 
 private fun ioError(
     code: String,

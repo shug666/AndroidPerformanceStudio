@@ -160,6 +160,8 @@ object SimpleperfViewerRes {
         get() = Res.string.sp_capture_stop_analyze
     val sp_capture_cancel: StringResource
         get() = Res.string.sp_capture_cancel
+    val sp_capture_enable_root_retry: StringResource
+        get() = Res.string.sp_capture_enable_root_retry
     val sp_capture_get_data: StringResource
         get() = Res.string.sp_capture_get_data
     val sp_capture_automatic_capture_report_hint: StringResource

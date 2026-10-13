@@ -4,6 +4,7 @@ package com.androidperformancestudio.ui
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Shapes
@@ -377,7 +378,11 @@ public fun ViewerTheme(
     val colorScheme = viewerMaterialColorScheme(darkTheme, accentColor)
     val density = LocalDensity.current
     val scaledDensity = remember(density, displayScale) { scaledViewerDensity(density, displayScale) }
-    CompositionLocalProvider(LocalViewerColors provides colors, LocalDensity provides scaledDensity) {
+    CompositionLocalProvider(
+        LocalViewerColors provides colors,
+        LocalDensity provides scaledDensity,
+        LocalContentColor provides colorScheme.onSurface,
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = typography,
@@ -422,6 +427,7 @@ public fun ProvideViewerThemeContext(
     CompositionLocalProvider(
         LocalViewerColors provides viewerThemeContext.colors,
         LocalDensity provides viewerThemeContext.density,
+        LocalContentColor provides viewerThemeContext.colorScheme.onSurface,
     ) {
         MaterialTheme(
             colorScheme = viewerThemeContext.colorScheme,
