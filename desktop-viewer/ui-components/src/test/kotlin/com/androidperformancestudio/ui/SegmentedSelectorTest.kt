@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class SegmentedSelectorTest {
@@ -132,6 +133,32 @@ class SegmentedSelectorTest {
             onNodeWithTag("segmented-selector-item-7").performScrollTo().performClick()
             onNodeWithTag("segmented-selector-item-7").assertIsSelected()
             assertEquals(7, selected)
+        }
+
+    @Test
+    fun `equal width items fill the available row and remain selectable`() =
+        runDesktopComposeUiTest(width = 340, height = 200) {
+            var selected by mutableStateOf("Overview")
+            setContent {
+                ViewerTheme(darkTheme = false) {
+                    SegmentedSelector(
+                        items = listOf("Overview", "Layout", "Drawing", "Accessibility", "Evidence"),
+                        selectedItem = selected,
+                        onItemSelected = { selected = it },
+                        itemLabel = { it },
+                        modifier = Modifier.width(300.dp),
+                        equalWidthItems = true,
+                        style = SegmentedSelectorStyle.COMPACT_OUTLINED,
+                    )
+                }
+            }
+
+            val widths = (0..4).map {
+                onNodeWithTag("segmented-selector-item-$it").fetchSemanticsNode().boundsInRoot.width
+            }
+            assertTrue(widths.max() - widths.min() <= 1f, "Expected equal segment widths, got $widths")
+            onNodeWithTag("segmented-selector-item-4").performClick().assertIsSelected()
+            assertEquals("Evidence", selected)
         }
 
     @Test

@@ -3066,20 +3066,15 @@ internal fun DetailsPane(
             }
         }
         if (categories.isNotEmpty()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).background(colors.sectionBackground),
-            ) {
-                categories.forEach { category ->
-                    TextButton(onClick = { selectedCategory = category }) {
-                        Text(
-                            text = localizedStringResource(category.detailsTabTitle, language),
-                            color = if (category == activeCategory) colors.accent else colors.secondaryText,
-                            fontSize = ViewerTypography.secondary.fontSize,
-                            fontWeight = if (category == activeCategory) FontWeight.SemiBold else FontWeight.Normal,
-                        )
-                    }
-                }
-            }
+            SegmentedSelector(
+                items = categories,
+                selectedItem = activeCategory,
+                onItemSelected = { selectedCategory = it },
+                itemLabel = { category -> localizedStringResource(category.detailsTabTitle, language) },
+                modifier = Modifier.fillMaxWidth().background(colors.sectionBackground),
+                equalWidthItems = true,
+                style = SegmentedSelectorStyle.COMPACT_OUTLINED,
+            )
             HorizontalDivider(color = colors.border)
         }
         LazyColumn(state = detailsListState, modifier = Modifier.fillMaxSize()) {

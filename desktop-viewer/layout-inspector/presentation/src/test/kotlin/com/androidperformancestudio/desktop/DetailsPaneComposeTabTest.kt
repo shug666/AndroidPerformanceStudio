@@ -3,6 +3,7 @@ package com.androidperformancestudio.desktop
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
@@ -27,6 +28,7 @@ import com.androidperformancestudio.protocol.LayoutSnapshot
 import com.androidperformancestudio.protocol.ViewNode
 import com.androidperformancestudio.protocol.WindowSnapshot
 import com.androidperformancestudio.protocol.WindowType
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
@@ -42,6 +44,14 @@ class DetailsPaneComposeTabTest {
         runComposeUiTest {
             setContent { DetailsPane(state = inspectorState(), modifier = Modifier) }
 
+            onNodeWithText("Compose").assertIsDisplayed()
+            val widths = (0..2).map {
+                onNodeWithTag("segmented-selector-item-$it").fetchSemanticsNode().boundsInRoot.width
+            }
+            assertTrue(
+                widths.max() - widths.min() <= 1f,
+                "Expected visible Compose categories to be equal width: $widths",
+            )
             onNodeWithText("MODIFIERS", substring = true).assertIsDisplayed()
         }
     }
@@ -65,6 +75,7 @@ class DetailsPaneComposeTabTest {
         runComposeUiTest {
             setContent { DetailsPane(state = inspectorState(selectedNodeId = "view:1"), modifier = Modifier) }
 
+            onNodeWithText("Compose").assertDoesNotExist()
             onNodeWithText("MODIFIERS", substring = true).assertDoesNotExist()
             onNodeWithText("COMPOSE SUMMARY", substring = true).assertDoesNotExist()
         }

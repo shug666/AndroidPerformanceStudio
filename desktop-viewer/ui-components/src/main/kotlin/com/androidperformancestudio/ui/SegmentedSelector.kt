@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -45,6 +46,7 @@ public enum class SegmentedSelectorStyle {
  * Selection is controlled by the caller: update [selectedItem] in [onItemSelected].
  * [onSelectedItemClick] is optional for controls where a selected item also triggers an action.
  * When there are many choices, the row scrolls horizontally.
+ * Set [equalWidthItems] to divide the available width evenly between items.
  */
 @Composable
 @Suppress("FunctionName", "LongParameterList", "ktlint:standard:function-naming")
@@ -58,6 +60,7 @@ public fun <T> SegmentedSelector(
     itemEnabled: (T) -> Boolean = { true },
     selectorDescription: String? = null,
     maxWidth: Dp = ViewerDimensions.segmentedMaxWidth,
+    equalWidthItems: Boolean = false,
     style: SegmentedSelectorStyle = SegmentedSelectorStyle.PILL,
     onSelectedItemClick: ((T) -> Unit)? = null,
     colors: ViewerColors = LocalViewerColors.current,
@@ -73,7 +76,7 @@ public fun <T> SegmentedSelector(
     Row(
         modifier =
             modifier
-                .widthIn(max = maxWidth)
+                .then(if (equalWidthItems) Modifier.fillMaxWidth() else Modifier.widthIn(max = maxWidth))
                 .height(controlHeight)
                 .clip(trackShape)
                 .background(trackColor)
@@ -83,7 +86,7 @@ public fun <T> SegmentedSelector(
                         contentDescription = selectorDescription
                     },
                 )
-                .horizontalScroll(rememberScrollState())
+                .then(if (equalWidthItems) Modifier else Modifier.horizontalScroll(rememberScrollState()))
                 .padding(if (compact) 0.dp else 2.dp)
                 .selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 2.dp),
@@ -96,7 +99,13 @@ public fun <T> SegmentedSelector(
                 modifier =
                     Modifier
                         .height(itemHeight)
-                        .widthIn(min = ViewerDimensions.segmentedMinItemWidth)
+                        .then(
+                            if (equalWidthItems) {
+                                Modifier.weight(1f)
+                            } else {
+                                Modifier.widthIn(min = ViewerDimensions.segmentedMinItemWidth)
+                            },
+                        )
                         .clip(segmentedItemShape(compact, index, items.size, itemHeight))
                         .background(
                             if (selected) {

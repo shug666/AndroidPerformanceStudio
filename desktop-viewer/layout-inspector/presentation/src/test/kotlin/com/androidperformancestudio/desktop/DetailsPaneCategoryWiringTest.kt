@@ -13,6 +13,9 @@ class DetailsPaneCategoryWiringTest {
 
         assertTrue(pane.contains("DetailCategory.entries.filter { category -> details.sections.any { it.category == category } }"))
         assertTrue(pane.contains("defaultDetailCategory(state.selectedNodeId, categories)"))
+        assertTrue(pane.contains("items = categories"))
+        assertTrue(pane.contains("equalWidthItems = true"))
+        assertTrue(pane.contains("SegmentedSelectorStyle.COMPACT_OUTLINED"))
         assertTrue(pane.contains("details.sections.filter { it.category == activeCategory }"))
         assertTrue(pane.contains("LazyColumn(state = detailsListState"))
         assertTrue(pane.contains("onOpenMemoryProfiler(className)"))
