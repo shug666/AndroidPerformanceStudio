@@ -11,12 +11,13 @@
 - [x] 2.3 `completeCapture` 移除 `waitForRemoteStop` 调用;自动完成时 shell 已返回直接拉文件
 - [x] 2.4 `PerfettoCaptureState.Recording` 的 `pid`:确认下游使用方,移除或置 0 占位
 
-## 3. Stop / 取消改用 shell 取消
+## 3. Stop / 取消改用 SIGTERM(真机修正)
 
 - [x] 3.1 引入可取消标志(AtomicBoolean 或持有 shell 的 Job/协程句柄)
-- [x] 3.2 `AdbClient.shell` 调用传入 `isCancellationRequested` 回调
-- [x] 3.3 `stopCapture` / `cancelCapture` 置取消标志中断阻塞中的 shell;设备 perfetto flush 已采数据后退出
-- [x] 3.4 中断后仍拉回部分 trace(若非空)再 `cleanupDeviceFiles`
+- [x] 3.2 `AdbClient.shell` 调用传入 `isCancellationRequested` 回调(仅作保底,Stop 主路径不用)
+- [x] 3.3 `stopCapture` 改为给设备 perfetto 发 `pkill -TERM -f 'perfetto -c - --txt'`(不中断 adb shell);perfetto 优雅 flush 写文件后退出,shell 自然返回
+- [x] 3.4 保底:SIGTERM 后 job 仍 active 则置 `captureCancellationRequested` 强制中断,避免挂起
+- [x] 3.5 中断后仍拉回部分 trace(若非空)再 `cleanupDeviceFiles`
 
 ## 4. 状态与元数据同步
 
