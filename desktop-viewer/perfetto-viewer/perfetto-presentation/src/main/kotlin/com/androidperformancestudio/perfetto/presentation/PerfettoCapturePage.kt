@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -388,18 +390,23 @@ private fun PollIntervalField(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 @Suppress("ktlint:standard:function-naming")
 private fun AtraceCategorySelector(
     selected: Set<String>,
     onChange: (Set<String>) -> Unit,
 ) {
-    Column(
+    FlowRow(
         modifier = Modifier.fillMaxWidth().padding(start = 27.dp, top = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
         PerfettoAtraceCategory.entries.forEach { category ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(end = 4.dp),
+            ) {
                 Checkbox(
                     checked = category.id in selected,
                     onCheckedChange = { enabled ->
