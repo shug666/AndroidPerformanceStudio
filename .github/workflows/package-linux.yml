@@ -1,0 +1,128 @@
+name: Package Linux
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "App version for the packages, for example 0.1.1 (defaults to a git-derived dev version)"
+        required: false
+        type: string
+        default: ""
+  push:
+    branches:
+      - "pkg-linux/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-linux-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Package Linux ${{ matrix.arch }} DEB and RPM
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Resolve package version
+        id: ver
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${INPUT_VERSION}" ]]; then
+            version="${INPUT_VERSION#v}"
+          else
+            # Derive a dev version from the latest tag (or 0.0.0 if none), e.g. 0.1.1-dev.3.gabcd123
+            version="$(git describe --tags --always --dirty=dev 2>/dev/null | sed 's/^v//' || echo 0.0.0)"
+            # jpackage requires a positive numeric first component; fall back if needed.
+            if ! [[ "${version}" =~ ^[0-9]+ ]]; then
+              version="0.0.0-${version}"
+            fi
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "Resolved package version: ${version}"
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24.19.0"
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Set up pinned npm
+        run: npm install --global npm@11.17.0
+
+      - name: Build profiler assets
+        shell: bash
+        run: |
+          npm install --global yarn@1
+          ./scripts/firefox-profiler.sh all
+          ./scripts/build-perfetto-ui.sh download
+          PERFETTO_TOOLS_DIR="$PWD/build/perfetto-tools" ./scripts/install-trace-processor.sh
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+          cache-dependency-path: |
+            desktop-viewer/*.gradle.kts
+            desktop-viewer/gradle/libs.versions.toml
+            desktop-viewer/gradle/wrapper/gradle-wrapper.properties
+            desktop-viewer/**/build.gradle.kts
+
+      - name: Install Linux packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fakeroot rpm
+
+      - name: Build DEB and RPM
+        run: ./desktop-viewer/gradlew -p desktop-viewer :desktop-app:packageDeb :desktop-app:packageRpm -PappVersion=${{ steps.ver.outputs.version }} -Ptarget.arch=${{ matrix.arch }} --no-daemon
+
+      - name: Prepare Linux assets
+        shell: bash
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          deb_packages=(desktop-viewer/desktop-app/build/compose/binaries/main/deb/*.deb)
+          if [[ "${#deb_packages[@]}" -ne 1 || ! -f "${deb_packages[0]}" ]]; then
+            echo "::error::Expected exactly one DEB package."
+            exit 1
+          fi
+          rpm_packages=(desktop-viewer/desktop-app/build/compose/binaries/main/rpm/*.rpm)
+          if [[ "${#rpm_packages[@]}" -ne 1 || ! -f "${rpm_packages[0]}" ]]; then
+            echo "::error::Expected exactly one RPM package."
+            exit 1
+          fi
+          mkdir -p release-assets
+          cp "${deb_packages[0]}" "release-assets/AndroidPerfermanceStudio-$VERSION-linux-$ARCH.deb"
+          cp "${rpm_packages[0]}" "release-assets/AndroidPerfermanceStudio-$VERSION-linux-$ARCH.rpm"
+
+      - name: Upload Linux installers as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-installers-${{ matrix.arch }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
