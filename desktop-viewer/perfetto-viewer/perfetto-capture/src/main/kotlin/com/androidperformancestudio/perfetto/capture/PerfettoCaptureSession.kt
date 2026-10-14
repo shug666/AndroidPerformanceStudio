@@ -157,12 +157,33 @@ class PerfettoCaptureSession(
 
     suspend fun stopCapture(): StudioResult<PerfettoCaptureState.Completed> =
         withContext(Dispatchers.IO) {
-            // Signal the foreground perfetto shell to terminate gracefully; perfetto flushes
-            // whatever it has collected and exits, after which the capture job pulls the trace.
+            // Ask the device-side perfetto to stop gracefully by sending SIGTERM. perfetto flushes
+            // whatever it has collected, writes the trace, and exits; the blocking adb shell then
+            // returns normally and the capture job pulls the (partial, non-empty) trace.
+            //
+            // We deliberately do NOT cancel the adb shell (captureCancellationRequested) here:
+            // killing the adb process tears down the pipe abruptly and perfetto dies before it
+            // can flush, producing a 0-byte trace. SIGTERM lets perfetto finish writing first.
             stopRequested.set(true)
-            captureCancellationRequested.set(true)
-            // The capture job owns completion; wait for it to finish pulling the trace.
+            val adbClient = activeAdbClient
+            val serial = activeDeviceSerial
+            if (adbClient != null && !serial.isNullOrBlank()) {
+                adbCall {
+                    adbClient.shell(
+                        serial,
+                        listOf("sh", "-c", "pkill -TERM -f 'perfetto -c - --txt'"),
+                        5.seconds,
+                    )
+                }
+            }
+            // The capture job owns completion; wait for the shell to return after perfetto exits.
             captureJob?.join()
+            // Fallback: if perfetto ignored SIGTERM and the shell is still blocked after the join
+            // window, force the adb shell to terminate so the session does not hang forever.
+            if (captureJob?.isActive == true) {
+                captureCancellationRequested.set(true)
+                captureJob?.join()
+            }
             val finalState = _state.value
             if (finalState is PerfettoCaptureState.Completed) {
                 StudioResult.Success(finalState)

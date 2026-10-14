@@ -32,10 +32,13 @@ Trace Analyzer 捕获 trace 后报 `captured Perfetto trace must not be empty`�
 ### D2. shell timeout 按 duration 动态设置
 当前 `adbClient.shell(..., 60.seconds)` 固定 60s。改为 `duration_ms + 余量`(如 `durationSeconds + 30` 秒),避免长时长采集(最大 600s)触发 AdbClient 超时,又给 perfetto 写文件留余量。
 
-### D3. Stop/取消用 isCancellationRequested
-前台运行无独立后台 PID 可 `kill -TERM`。Stop 路径改为:`AdbClient.shell` 的 `isCancellationRequested` 回调返回 true 时,adb 进程被中断,设备端 perfetto 收到连接中断/信号后 flush 已采数据并退出,再拉文件拿部分 trace。
-- `completeCapture(requestRemoteStop)` 中,`requestRemoteStop=true`(用户 Stop)时通过取消正在阻塞的 shell 调用来中断;`requestRemoteStop=false`(自动完成)时 shell 已自然返回,直接拉文件。
-- 需让阻塞中的 shell 调用可被外部取消:用 `AtomicBoolean`/`Job` 持有取消标志,Stop 时置位。
+### D3. Stop/取消用 SIGTERM 给设备 perfetto(经真机修正)
+初始方案用 `isCancellationRequested` 中断 adb shell 来停止采集。真机验证发现这会**粗暴杀掉 adb 进程、断开管道,perfetto 来不及 flush,产出 0 字节文件**——手动 Stop 时空 trace 的根因。
+
+修正(已真机验证):Stop 时给设备端 perfetto 发 SIGTERM(`pkill -TERM -f 'perfetto -c - --txt'`),perfetto 收到信号后 `disabling tracing`、优雅 flush 已采数据并写文件、正常退出,阻塞的 adb shell 随之返回,capture job pull 回**非空部分 trace**。**不设 `captureCancellationRequested`**(那会粗暴中断 adb)。
+- 保底:发 SIGTERM 后 `captureJob.join()`;若 perfetto 未响应 SIGTERM、job 仍 active,再置 `captureCancellationRequested` 强制中断 adb,避免永久挂起。
+- 自动完成(到 duration):shell 自然返回,无需 SIGTERM。
+- 真机实测:`pkill -TERM` 后 perfetto `Wrote 914664 bytes`(914KB 部分 trace),shell 正常返回。
 
 ### D4. 移除后台 PID 相关逻辑
 删除 `stopRemoteCapture`/`waitForRemoteStop`/`forceStopRemoteCapture`/`activePerfettoPid` 及 `REMOTE_STOP_*` 常量。`PerfettoCaptureState.Recording` 的 `pid` 字段:前台运行无意义,改为移除或保留为 0 占位(倾向移除以避免误导)。`CaptureMetadata.command` 去掉 `--background-wait`。
