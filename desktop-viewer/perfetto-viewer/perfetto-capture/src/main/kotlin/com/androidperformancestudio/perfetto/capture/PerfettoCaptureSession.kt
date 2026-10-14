@@ -19,7 +19,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,14 +31,13 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import java.util.UUID
-import kotlin.time.Duration.Companion.milliseconds
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration.Companion.seconds
 
 private const val DEVICE_CONFIG_PATH = "/data/local/tmp/perfetto-config.pbtxt"
 private const val DEVICE_TRACE_PATH = "/data/misc/perfetto-traces/aps-perfetto-trace.pftrace"
 private const val MILLISECONDS_PER_SECOND = 1_000L
-private const val REMOTE_STOP_POLL_ATTEMPTS = 20
-private const val REMOTE_STOP_POLL_DELAY_MILLIS = 250L
+private const val CAPTURE_TIMEOUT_MARGIN_SECONDS = 30L
 private val CUSTOM_DURATION_PATTERN = Regex("(?m)^\\s*duration_ms\\s*:\\s*(\\d+)\\s*$")
 
 internal fun automaticCompletionDelayMillis(config: PerfettoCaptureConfig): Long? =
@@ -65,14 +63,15 @@ class PerfettoCaptureSession(
     private val stateMutex = Mutex()
     private val completionMutex = Mutex()
     private val captureScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var completionJob: Job? = null
     private var activeConfig: PerfettoCaptureConfig? = null
     private var activeAdbClient: AdbClient? = null
     private var activeDeviceSerial: String? = null
-    private var activePerfettoPid: Long? = null
     private var activeDeviceModel: String = "unknown"
     private var activeAndroidSdk: Int = 0
     private var recordingStartedAt: Instant? = null
+    private var captureJob: Job? = null
+    private val captureCancellationRequested = AtomicBoolean(false)
+    private val stopRequested = AtomicBoolean(false)
 
     suspend fun startCapture(
         adbPath: String,
@@ -123,33 +122,59 @@ class PerfettoCaptureSession(
                 return@withContext pushResult
             }
 
-            val startResult = startDeviceCapture(adbClient, deviceSerial)
-            when (startResult) {
-                is StudioResult.Success -> {
-                    val (startTime, pid) = startResult.value
-                    val deviceInfo = readDeviceInfo(adbClient, deviceSerial)
-                    activeAdbClient = adbClient
-                    activeDeviceSerial = deviceSerial
-                    activePerfettoPid = pid
-                    activeDeviceModel = deviceInfo.first
-                    activeAndroidSdk = deviceInfo.second
-                    recordingStartedAt = startTime
-                    _state.value = PerfettoCaptureState.Recording(startTime, pid)
-                    scheduleAutomaticCompletion(config)
-                    return@withContext StudioResult.Success(Unit)
+            // Foreground perfetto blocks for duration_ms; run it on the capture scope so the
+            // Recording state is observable and the capture can be stopped by cancelling the job.
+            val startedAt = Instant.now()
+            val deviceInfo = readDeviceInfo(adbClient, deviceSerial)
+            activeAdbClient = adbClient
+            activeDeviceSerial = deviceSerial
+            activeDeviceModel = deviceInfo.first
+            activeAndroidSdk = deviceInfo.second
+            recordingStartedAt = startedAt
+            captureCancellationRequested.set(false)
+            stopRequested.set(false)
+            _state.value = PerfettoCaptureState.Recording(startedAt, pid = 0L)
+
+            captureJob =
+                captureScope.launch {
+                    val runResult = runDeviceCapture(adbClient, deviceSerial, config)
+                    when (runResult) {
+                        is StudioResult.Success -> completeCapture()
+                        is StudioResult.Failure -> {
+                            if (stopRequested.get()) {
+                                // User-initiated stop: perfetto was interrupted after flushing
+                                // whatever it had collected; attempt to pull the partial trace.
+                                completeCapture()
+                            } else {
+                                setFailed(runResult.error)
+                                cleanupDeviceFiles(adbClient, deviceSerial)
+                            }
+                        }
+                    }
                 }
-                is StudioResult.Failure -> {
-                    cleanupDeviceFiles(adbClient, deviceSerial)
-                    setFailed(startResult.error)
-                    return@withContext startResult
-                }
-            }
+            return@withContext StudioResult.Success(Unit)
         }
 
     suspend fun stopCapture(): StudioResult<PerfettoCaptureState.Completed> =
         withContext(Dispatchers.IO) {
-            completionJob?.cancel()
-            completeCapture(requestRemoteStop = true)
+            // Signal the foreground perfetto shell to terminate gracefully; perfetto flushes
+            // whatever it has collected and exits, after which the capture job pulls the trace.
+            stopRequested.set(true)
+            captureCancellationRequested.set(true)
+            // The capture job owns completion; wait for it to finish pulling the trace.
+            captureJob?.join()
+            val finalState = _state.value
+            if (finalState is PerfettoCaptureState.Completed) {
+                StudioResult.Success(finalState)
+            } else {
+                val error = (finalState as? PerfettoCaptureState.Failed)?.error
+                    ?: StudioError(
+                        category = ErrorCategory.UNKNOWN,
+                        code = "CAPTURE_NOT_COMPLETED",
+                        message = "Capture did not complete after stop",
+                    )
+                StudioResult.Failure(error)
+            }
         }
 
     fun cancelCapture() {
@@ -170,49 +195,30 @@ class PerfettoCaptureSession(
         }
     }
 
-    private suspend fun startDeviceCapture(
+    /**
+     * Runs perfetto in the foreground, matching the official capture command. The shell blocks
+     * until [duration_ms] elapses and perfetto has written the trace, so when it returns the
+     * trace file is complete. A timeout margin is added on top of the capture duration so long
+     * captures do not hit the adb shell timeout.
+     */
+    private suspend fun runDeviceCapture(
         adbClient: AdbClient,
         deviceSerial: String,
-    ): StudioResult<Pair<Instant, Long>> {
-        val shellCommand = "cat $DEVICE_CONFIG_PATH | perfetto --txt -c - -o $DEVICE_TRACE_PATH --background-wait"
-
-        val startedAt = Instant.now()
-        return when (val result = adbCall { adbClient.shell(deviceSerial, listOf("sh", "-c", shellCommand), 60.seconds) }) {
-            is StudioResult.Failure -> result
-            is StudioResult.Success -> {
-                val output = result.value.stdout + "\n" + result.value.stderr
-                val pid =
-                    Regex("(?m)^\\s*(\\d+)\\s*$")
-                        .find(output)
-                        ?.groupValues
-                        ?.get(1)
-                        ?.toLongOrNull()
-                if (pid == null || pid <= 0) {
-                    StudioResult.Failure(
-                        StudioError(
-                            category = ErrorCategory.PROCESS_EXIT,
-                            code = "PERFETTO_PID_MISSING",
-                            message = "Perfetto started without returning a background process id",
-                        ),
-                    )
-                } else {
-                    StudioResult.Success(Pair(startedAt, pid))
-                }
-            }
+        config: PerfettoCaptureConfig,
+    ): StudioResult<Unit> {
+        val shellCommand = "cat $DEVICE_CONFIG_PATH | perfetto -c - --txt -o $DEVICE_TRACE_PATH"
+        val timeoutSeconds = config.durationSeconds.toLong() + CAPTURE_TIMEOUT_MARGIN_SECONDS
+        return adbCall {
+            adbClient.shell(
+                deviceSerial,
+                listOf("sh", "-c", shellCommand),
+                timeoutSeconds.seconds,
+                isCancellationRequested = { captureCancellationRequested.get() },
+            )
         }
     }
 
-    private fun scheduleAutomaticCompletion(config: PerfettoCaptureConfig) {
-        completionJob?.cancel()
-        val delayMillis = automaticCompletionDelayMillis(config) ?: return
-        completionJob =
-            captureScope.launch {
-                delay(delayMillis.milliseconds)
-                completeCapture(requestRemoteStop = false)
-            }
-    }
-
-    private suspend fun completeCapture(requestRemoteStop: Boolean): StudioResult<PerfettoCaptureState.Completed> =
+    private suspend fun completeCapture(): StudioResult<PerfettoCaptureState.Completed> =
         completionMutex.withLock {
             val currentState = _state.value
             val config =
@@ -220,29 +226,12 @@ class PerfettoCaptureSession(
                     code = "NO_ACTIVE_CONFIG",
                     message = "No active capture config",
                 )
-            if (currentState !is PerfettoCaptureState.Recording) {
+            if (currentState !is PerfettoCaptureState.Recording && currentState !is PerfettoCaptureState.Pulling) {
                 return@withLock captureFailure(code = "NOT_RECORDING", message = "Capture is not recording")
             }
 
             val adbClient = activeAdbClient ?: return@withLock captureFailure("ADB_CLIENT_MISSING", "Capture ADB client is unavailable")
             val serial = activeDeviceSerial.orEmpty()
-            val pid = activePerfettoPid
-            if (requestRemoteStop && pid != null) stopRemoteCapture(adbClient, serial, pid)
-            if (pid != null && !waitForRemoteStop(adbClient, serial, pid)) {
-                stopRemoteCapture(adbClient, serial, pid)
-                if (!waitForRemoteStop(adbClient, serial, pid)) {
-                    forceStopRemoteCapture(adbClient, serial, pid)
-                    cleanupDeviceFiles(adbClient, serial)
-                    val error =
-                        StudioError(
-                            category = ErrorCategory.PROCESS_TIMEOUT,
-                            code = "PERFETTO_STOP_TIMEOUT",
-                            message = "Timed out waiting for device Perfetto process $pid to stop",
-                        )
-                    setFailed(error)
-                    return@withLock StudioResult.Failure(error)
-                }
-            }
 
             _state.value = PerfettoCaptureState.Pulling(0, null)
             val traceFile = sessionDir.resolve("trace-${System.currentTimeMillis()}.pftrace")
@@ -284,7 +273,7 @@ class PerfettoCaptureSession(
                                 (Instant.now().toEpochMilli() - capturedAt.toEpochMilli()).coerceAtLeast(0) * 1_000_000,
                             traceFileSizeBytes = Files.size(traceFile),
                             config = config,
-                            command = "perfetto --txt -c - -o $DEVICE_TRACE_PATH --background-wait",
+                            command = "perfetto -c - --txt -o $DEVICE_TRACE_PATH",
                             artifact = artifact,
                         ),
                 )
@@ -292,35 +281,6 @@ class PerfettoCaptureSession(
             clearActiveCapture()
             StudioResult.Success(completed)
         }
-
-    private suspend fun stopRemoteCapture(
-        adbClient: AdbClient,
-        deviceSerial: String,
-        pid: Long,
-    ) {
-        adbCall { adbClient.shell(deviceSerial, listOf("kill", "-TERM", pid.toString()), 5.seconds) }
-    }
-
-    private suspend fun forceStopRemoteCapture(
-        adbClient: AdbClient,
-        deviceSerial: String,
-        pid: Long,
-    ) {
-        adbCall { adbClient.shell(deviceSerial, listOf("kill", "-KILL", pid.toString()), 5.seconds) }
-    }
-
-    private suspend fun waitForRemoteStop(
-        adbClient: AdbClient,
-        deviceSerial: String,
-        pid: Long,
-    ): Boolean {
-        repeat(REMOTE_STOP_POLL_ATTEMPTS) {
-            val result = adbCall { adbClient.shell(deviceSerial, listOf("kill", "-0", pid.toString()), 2.seconds) }
-            if (result is StudioResult.Failure && result.error.code == "ADB_COMMAND_FAILED") return true
-            delay(REMOTE_STOP_POLL_DELAY_MILLIS)
-        }
-        return false
-    }
 
     private suspend fun readDeviceInfo(
         adbClient: AdbClient,
@@ -399,13 +359,14 @@ class PerfettoCaptureSession(
 
     private fun clearActiveCapture() {
         activeConfig = null
-        completionJob = null
+        captureJob = null
         activeAdbClient = null
         activeDeviceSerial = null
-        activePerfettoPid = null
         activeDeviceModel = "unknown"
         activeAndroidSdk = 0
         recordingStartedAt = null
+        captureCancellationRequested.set(false)
+        stopRequested.set(false)
     }
 }
 
