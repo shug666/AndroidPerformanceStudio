@@ -6,7 +6,9 @@
 - [ ] `AGENTS.md`
 - [ ] `CONTEXT.md`
 - [ ] `DESIGN.md`
-- [ ] `android-performance-studio-commercial-ui-implementation.md`
+- [ ] `README.md`（实施索引）
+- [ ] `00-shared-foundation-and-delivery.md`
+- [ ] 当前任务对应的功能页文档（见实施索引）
 - [ ] 对应 feature 的 design / ADR
 - [ ] 对应页面 `images/*.png` 视觉参考
 - [ ] 当前运行版本的页面截图（建议）

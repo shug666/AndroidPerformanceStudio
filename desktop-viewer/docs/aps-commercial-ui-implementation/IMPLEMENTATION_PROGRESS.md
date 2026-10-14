@@ -1,6 +1,6 @@
 # Commercial UI — implementation and validation progress
 
-This is a continuation checkpoint for the [phased implementation plan](android-performance-studio-commercial-ui-implementation.md), not an assertion that the full commercial UI is finished.
+This is a continuation checkpoint for the [phased implementation plan](README.md), not an assertion that the full commercial UI is finished.
 
 ## 2026-10-14: In-app Macrobenchmark orchestration
 
