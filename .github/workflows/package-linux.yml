@@ -47,12 +47,21 @@ jobs:
           if [[ -n "${INPUT_VERSION}" ]]; then
             version="${INPUT_VERSION#v}"
           else
-            # Derive a dev version from the latest tag (or 0.0.0 if none), e.g. 0.1.1-dev.3.gabcd123
-            version="$(git describe --tags --always --dirty=dev 2>/dev/null | sed 's/^v//' || echo 0.0.0)"
-            # jpackage requires a positive numeric first component; fall back if needed.
-            if ! [[ "${version}" =~ ^[0-9]+ ]]; then
-              version="0.0.0-${version}"
+            # jpackage/Compose nativeDistributions require MAJOR.MINOR.BUILD (numeric,
+            # MAJOR/MINOR <= 255, BUILD <= 65535). With no explicit version, derive a
+            # legal dev version: use the numeric prefix of the latest tag, else 0.0.1,
+            # and fold a monotonic counter into the BUILD component for uniqueness.
+            describe="$(git describe --tags --always 2>/dev/null || true)"
+            tag="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+            base="0.0.1"
+            if [[ -n "${tag}" ]] && [[ "${tag#v}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              base="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
             fi
+            # commits-since-tag (or total commits if no tag) -> BUILD bump keeps it unique & legal.
+            since="$(git rev-list --count HEAD 2>/dev/null || echo 0)"
+            build=$(( ${base##*.} + since % 60000 ))
+            major="${base%%.*}"; rest="${base#*.}"; minor="${rest%%.*}"
+            version="${major}.${minor}.${build}"
           fi
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
           echo "Resolved package version: ${version}"
