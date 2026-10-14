@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -315,47 +318,63 @@ private fun PerfettoProbeOption(
     onAtraceCategoriesChange: (Set<String>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(
-                checked = checked,
-                onCheckedChange = { onProbeChange(probe, it) },
-                enabled = reason == null,
-                modifier = Modifier.size(22.dp),
+    val hasSubParams = probe in PerfettoCaptureConfig.DEFAULT_POLL_INTERVALS || probe == PerfettoProbe.ATRACE
+    var dialogOpen by remember { mutableStateOf(false) }
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = { onProbeChange(probe, it) },
+            enabled = reason == null,
+            modifier = Modifier.size(22.dp),
+        )
+        Column(modifier = Modifier.weight(1f).padding(start = 5.dp)) {
+            Text(
+                text = probe.displayName,
+                color =
+                    if (reason == null) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                fontSize = ViewerTypography.label.fontSize,
+                lineHeight = ViewerTypography.label.lineHeight,
             )
-            Column(modifier = Modifier.weight(1f).padding(start = 5.dp)) {
+            reason?.let {
                 Text(
-                    text = probe.displayName,
-                    color =
-                        if (reason == null) {
-                            MaterialTheme.colorScheme.onSurface
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    fontSize = ViewerTypography.label.fontSize,
-                    lineHeight = ViewerTypography.label.lineHeight,
+                    text = it,
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = ViewerTypography.micro.fontSize,
+                    lineHeight = ViewerTypography.micro.lineHeight,
                 )
-                reason?.let {
-                    Text(
-                        text = it,
-                        color = MaterialTheme.colorScheme.error,
-                        fontSize = ViewerTypography.micro.fontSize,
-                        lineHeight = ViewerTypography.micro.lineHeight,
-                    )
-                }
             }
         }
-        if (checked && reason == null && probe in PerfettoCaptureConfig.DEFAULT_POLL_INTERVALS) {
-            PollIntervalField(
+        if (checked && reason == null && hasSubParams) {
+            PerfettoCompactButton(
+                text = "⚙",
+                onClick = { dialogOpen = true },
+                selected = false,
+            )
+        }
+    }
+    if (dialogOpen) {
+        if (probe == PerfettoProbe.ATRACE) {
+            AtraceCategoryDialog(
+                initial = atraceCategories,
+                onConfirm = {
+                    onAtraceCategoriesChange(it)
+                    dialogOpen = false
+                },
+                onDismiss = { dialogOpen = false },
+            )
+        } else {
+            PollIntervalDialog(
                 probe = probe,
-                valueMs = pollIntervals[probe] ?: PerfettoCaptureConfig.DEFAULT_POLL_INTERVALS.getValue(probe),
-                onValueChange = { onPollIntervalChange(probe, it) },
-            )
-        }
-        if (checked && reason == null && probe == PerfettoProbe.ATRACE) {
-            AtraceCategorySelector(
-                selected = atraceCategories,
-                onChange = onAtraceCategoriesChange,
+                initialMs = pollIntervals[probe] ?: PerfettoCaptureConfig.DEFAULT_POLL_INTERVALS.getValue(probe),
+                onConfirm = {
+                    onPollIntervalChange(probe, it)
+                    dialogOpen = false
+                },
+                onDismiss = { dialogOpen = false },
             )
         }
     }
@@ -363,71 +382,95 @@ private fun PerfettoProbeOption(
 
 @Composable
 @Suppress("ktlint:standard:function-naming")
-private fun PollIntervalField(
+private fun PollIntervalDialog(
     probe: PerfettoProbe,
-    valueMs: Int,
-    onValueChange: (Int) -> Unit,
+    initialMs: Int,
+    onConfirm: (Int) -> Unit,
+    onDismiss: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 27.dp, top = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "Poll (ms):",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = ViewerTypography.micro.fontSize,
-            lineHeight = ViewerTypography.micro.lineHeight,
-        )
-        PerfettoCompactTextField(
-            value = valueMs.toString(),
-            onValueChange = {
-                it.toIntOrNull()?.let { ms -> onValueChange(ms) }
-            },
-            modifier = Modifier.fillMaxWidth().padding(start = 6.dp),
-        )
-    }
+    var value by remember { mutableStateOf(initialMs.toString()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(probe.displayName) },
+        text = {
+            Column {
+                Text(
+                    text = "Poll interval (ms)",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = ViewerTypography.label.fontSize,
+                )
+                PerfettoCompactTextField(
+                    value = value,
+                    onValueChange = { value = it.filter(Char::isDigit) },
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                )
+                Text(
+                    text = "Must be greater than ${PerfettoCaptureConfig.MIN_POLL_INTERVAL_MS} ms.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = ViewerTypography.micro.fontSize,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        },
+        confirmButton = {
+            PerfettoCompactButton(
+                text = "OK",
+                onClick = {
+                    value.toIntOrNull()
+                        ?.takeIf { it > PerfettoCaptureConfig.MIN_POLL_INTERVAL_MS }
+                        ?.let(onConfirm)
+                },
+            )
+        },
+        dismissButton = {
+            PerfettoCompactButton(text = "Cancel", onClick = onDismiss, selected = false)
+        },
+    )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 @Suppress("ktlint:standard:function-naming")
-private fun AtraceCategorySelector(
-    selected: Set<String>,
-    onChange: (Set<String>) -> Unit,
+private fun AtraceCategoryDialog(
+    initial: Set<String>,
+    onConfirm: (Set<String>) -> Unit,
+    onDismiss: () -> Unit,
 ) {
-    val columns = 3
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(start = 27.dp, top = 2.dp),
-        verticalArrangement = Arrangement.spacedBy(1.dp),
-    ) {
-        PerfettoAtraceCategory.entries.chunked(columns).forEach { rowCategories ->
-            Row(modifier = Modifier.fillMaxWidth()) {
-                rowCategories.forEach { category ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Checkbox(
-                            checked = category.id in selected,
-                            onCheckedChange = { enabled ->
-                                onChange(if (enabled) selected + category.id else selected - category.id)
-                            },
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Text(
-                            text = category.displayName,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = ViewerTypography.micro.fontSize,
-                            lineHeight = ViewerTypography.micro.lineHeight,
-                            modifier = Modifier.padding(start = 4.dp),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+    var selected by remember { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Atrace categories") },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    PerfettoAtraceCategory.entries.forEach { category ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(end = 4.dp),
+                        ) {
+                            Checkbox(
+                                checked = category.id in selected,
+                                onCheckedChange = { enabled ->
+                                    selected = if (enabled) selected + category.id else selected - category.id
+                                },
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Text(
+                                text = category.displayName,
+                                fontSize = ViewerTypography.label.fontSize,
+                                modifier = Modifier.padding(start = 4.dp),
+                            )
+                        }
                     }
                 }
-                repeat(columns - rowCategories.size) { Spacer(Modifier.weight(1f)) }
             }
-        }
-    }
+        },
+        confirmButton = { PerfettoCompactButton(text = "OK", onClick = { onConfirm(selected) }) },
+        dismissButton = { PerfettoCompactButton(text = "Cancel", onClick = onDismiss, selected = false) },
+    )
 }
 
 @Composable

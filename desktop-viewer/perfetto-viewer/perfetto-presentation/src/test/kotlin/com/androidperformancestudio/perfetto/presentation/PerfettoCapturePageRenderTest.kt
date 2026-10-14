@@ -79,9 +79,9 @@ class PerfettoCapturePageRenderTest {
     }
 
     @Test
-    fun `atrace categories align in three columns when atrace is enabled`() {
+    fun `atrace sub-params live behind a config button not inline`() {
         SwingUtilities.invokeAndWait {
-            ImageComposeScene(1200, 1600) {
+            ImageComposeScene(1200, 800) {
                 ViewerTheme(darkTheme = false) {
                     PerfettoCapturePage(
                         captureState = PerfettoCaptureState.Idle,
@@ -94,35 +94,18 @@ class PerfettoCapturePageRenderTest {
             }.use { scene ->
                 repeat(3) { scene.render().close() }
                 val nodes = scene.semanticsOwners.flatMap { it.unmergedRootSemanticsNode.descendants() }
-                // All atrace category labels must be present (ATRACE is enabled by default in System Overview).
+                // The atrace probe card is present (ATRACE is enabled by default in System Overview).
+                assertTrue(nodes.any { it.text == "Atrace userspace annotations" })
+                // The config button (gear) is rendered for the atrace probe.
+                assertTrue(nodes.any { it.text == "⚙" })
+                // Atrace category labels are NOT rendered inline (they live inside the dialog, which
+                // is closed by default) — the data sources panel stays compact.
                 val categoryLabels =
                     com.androidperformancestudio.perfetto.model.PerfettoAtraceCategory.entries
                         .map { it.displayName }
                 val renderedCategoryNodes =
-                    categoryLabels.mapNotNull { label ->
-                        nodes.firstOrNull { node -> node.text == label }
-                    }
-                assertEquals(categoryLabels.size, renderedCategoryNodes.size, "all atrace categories must render")
-
-                // Group category nodes by row (same y rounded), then assert each row has <= 3 and
-                // same-column nodes across rows share the same x (column alignment).
-                val byRow =
-                    renderedCategoryNodes
-                        .groupBy { (it.positionInRoot.y / 4).toInt() } // tolerance bucket
-                        .toSortedMap()
-                byRow.values.forEach { row ->
-                    assertTrue(row.size <= 3, "atrace row must have at most 3 columns, had ${row.size}")
-                }
-                // Column alignment: the set of distinct x positions is small (<= 3 columns).
-                val columnXs = renderedCategoryNodes.map { it.positionInRoot.x }.distinct()
-                assertTrue(columnXs.size <= 3, "atrace categories must align to <= 3 columns, found ${columnXs.size} distinct x positions")
-
-                val path = Path.of("build/reports/trace-layout/atrace-grid.png")
-                Files.createDirectories(path.parent)
-                scene.render().use { image ->
-                    val encoded = checkNotNull(image.encodeToData())
-                    encoded.use { Files.write(path, it.bytes) }
-                }
+                    categoryLabels.mapNotNull { label -> nodes.firstOrNull { it.text == label } }
+                assertEquals(0, renderedCategoryNodes.size, "atrace categories must not render inline while the dialog is closed")
             }
         }
     }
