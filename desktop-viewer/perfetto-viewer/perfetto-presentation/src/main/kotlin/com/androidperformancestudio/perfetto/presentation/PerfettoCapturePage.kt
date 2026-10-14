@@ -468,29 +468,30 @@ internal fun AtraceCategoryDialog(
                         selected = false,
                     )
                 }
-                Box(modifier = Modifier.heightIn(max = 360.dp)) {
+                Box(modifier = Modifier.heightIn(max = 360.dp).padding(vertical = 4.dp)) {
                     Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                         FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             all.forEach { category ->
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.widthIn(min = 140.dp).padding(end = 6.dp),
+                                    modifier = Modifier.widthIn(min = 160.dp).padding(end = 8.dp),
                                 ) {
                                     Checkbox(
                                         checked = category.id in selected,
                                         onCheckedChange = { enabled ->
                                             selected = if (enabled) selected + category.id else selected - category.id
                                         },
-                                        modifier = Modifier.size(18.dp),
+                                        modifier = Modifier.size(20.dp),
                                     )
                                     Text(
                                         text = category.displayName,
                                         fontSize = ViewerTypography.label.fontSize,
-                                        modifier = Modifier.padding(start = 4.dp),
+                                        lineHeight = ViewerTypography.label.lineHeight,
+                                        modifier = Modifier.padding(start = 8.dp),
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
