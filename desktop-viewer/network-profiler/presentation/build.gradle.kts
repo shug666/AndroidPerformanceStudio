@@ -14,4 +14,5 @@ dependencies {
     implementation(project(":analysis-network"))
     implementation(libs.compose.material3)
     implementation(libs.compose.components.resources)
+    testImplementation(libs.compose.ui.test.junit4)
 }

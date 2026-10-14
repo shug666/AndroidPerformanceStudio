@@ -112,7 +112,6 @@ class CommercialAppShellTest {
                 "ic_nav_frame_profiler",
                 "ic_nav_startup_profiler",
                 "ic_nav_battery",
-                "ic_nav_network",
                 "ic_nav_gpu_inspector",
                 "ic_nav_benchmark",
                 "ic_nav_method_recording",

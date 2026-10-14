@@ -1,13 +1,44 @@
-@file:Suppress("FunctionName", "ktlint:standard:function-naming", "LongMethod", "MagicNumber")
+@file:Suppress("FunctionName", "LongMethod", "MagicNumber", "TooManyFunctions")
 
 package com.androidperformancestudio.network.presentation
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.contracts.CaptureArtifact
 import com.androidperformancestudio.network.analysis.NetworkSummary
@@ -15,14 +46,28 @@ import com.androidperformancestudio.network.model.CallOutcome
 import com.androidperformancestudio.network.model.ConnectionUse
 import com.androidperformancestudio.network.model.EvidenceCompleteness
 import com.androidperformancestudio.network.model.HttpCall
+import com.androidperformancestudio.network.model.HttpExchange
 import com.androidperformancestudio.network.model.InstrumentationMode
 import com.androidperformancestudio.network.model.NetworkCaptureResult
 import com.androidperformancestudio.network.model.NetworkConfidence
+import com.androidperformancestudio.network.model.NetworkEvidenceSource
+import com.androidperformancestudio.network.model.NetworkPhase
 import com.androidperformancestudio.network.model.NetworkPhaseKind
 import com.androidperformancestudio.network.presentation.generated.resources.*
 import com.androidperformancestudio.network.presentation.generated.resources.Res
+import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.UiLanguage
+import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
+import com.androidperformancestudio.ui.studio.StudioDataTable
+import com.androidperformancestudio.ui.studio.StudioEvidence
+import com.androidperformancestudio.ui.studio.StudioEvidenceBadge
+import com.androidperformancestudio.ui.studio.StudioMetricCard
+import com.androidperformancestudio.ui.studio.StudioPanel
+import com.androidperformancestudio.ui.studio.StudioPanelHeader
+import com.androidperformancestudio.ui.studio.StudioStatusChip
+import com.androidperformancestudio.ui.studio.StudioStatusTone
+import com.androidperformancestudio.ui.studio.StudioTableColumn
 
 public data class NetworkProfilerState(
     val deviceSerial: String = "",
@@ -42,120 +87,567 @@ public data class NetworkProfilerActions(
 )
 
 @Composable
-public fun NetworkProfilerScreen(state: NetworkProfilerState, actions: NetworkProfilerActions, language: UiLanguage, modifier: Modifier = Modifier) {
-    Column(modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Summary(localizedStringResource(Res.string.calls, language), state.summary?.callCount?.toString() ?: "—", Modifier.weight(1f))
-            Summary(localizedStringResource(Res.string.failures, language), state.summary?.failureCount?.toString() ?: "—", Modifier.weight(1f))
-            Summary(localizedStringResource(Res.string.p50, language), state.summary?.medianDurationMs?.let { "%.1f ms".format(it) } ?: "—", Modifier.weight(1f))
-            Summary(localizedStringResource(Res.string.p95, language), state.summary?.p95DurationMs?.let { "%.1f ms".format(it) } ?: "—", Modifier.weight(1f))
-            Summary(localizedStringResource(Res.string.dropped, language), state.result?.session?.completeness?.droppedEvents?.toString() ?: "0", Modifier.weight(1f))
+public fun NetworkProfilerScreen(
+    state: NetworkProfilerState,
+    actions: NetworkProfilerActions,
+    language: UiLanguage,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalViewerColors.current
+    val selectedCall = state.result?.calls?.firstOrNull { it.callId == state.selectedCallId }
+    Column(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(colors.workspace)
+                .padding(12.dp)
+                .testTag("network-profiler-workspace"),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        SummaryCards(state, language)
+        EvidenceCoverage(state, language)
+        state.message?.let { MessageStrip(it, StudioStatusTone.INFO) }
+        state.error?.let { MessageStrip(it, StudioStatusTone.ERROR) }
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            RequestTable(
+                calls = state.result?.calls.orEmpty(),
+                selectedCallId = state.selectedCallId,
+                language = language,
+                onSelectCall = actions.selectCall,
+                modifier = Modifier.weight(1.8f).fillMaxHeight(),
+            )
+            RequestDetail(
+                call = selectedCall,
+                language = language,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            )
         }
-        state.result?.session?.coverage?.let { coverage ->
+    }
+}
+
+@Composable
+private fun SummaryCards(state: NetworkProfilerState, language: UiLanguage) {
+    val summary = state.summary
+    val completeness = state.result?.session?.completeness
+    Row(
+        modifier = Modifier.fillMaxWidth().height(108.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        StudioMetricCard(
+            label = localizedStringResource(Res.string.calls, language),
+            value = summary?.callCount?.toString() ?: "—",
+            modifier = Modifier.weight(0.72f).fillMaxHeight(),
+        )
+        StudioMetricCard(
+            label = localizedStringResource(Res.string.failures, language),
+            value = summary?.failureCount?.toString() ?: "—",
+            modifier = Modifier.weight(0.72f).fillMaxHeight(),
+            supportingText = if ((summary?.failureCount ?: 0) > 0) localizedStringResource(Res.string.failure_attention, language) else null,
+        )
+        StudioMetricCard(
+            label = localizedStringResource(Res.string.transferred_bytes, language),
+            value = summary?.transferredBytes?.let(::formatBytes) ?: "—",
+            supportingText =
+                summary?.let {
+                    localizedStringResource(
+                        Res.string.transferred_support,
+                        language,
+                        formatBytes(it.totalRequestBytes),
+                        formatBytes(it.totalResponseBytes),
+                    )
+                },
+            modifier = Modifier.weight(1.05f).fillMaxHeight(),
+        )
+        StudioMetricCard(
+            label = localizedStringResource(Res.string.median_slow_request, language),
+            value = summary?.let { "${formatDurationMs(it.medianDurationMs)} / ${formatDurationMs(it.p95DurationMs)}" } ?: "—",
+            supportingText = localizedStringResource(Res.string.median_p95_support, language),
+            modifier = Modifier.weight(1.18f).fillMaxHeight(),
+        )
+        StudioMetricCard(
+            label = localizedStringResource(Res.string.evidence_completeness, language),
+            value = completeness?.status?.displayName(language) ?: "—",
+            supportingText =
+                completeness?.let {
+                    localizedStringResource(
+                        Res.string.coverage_counts,
+                        language,
+                        it.droppedEvents,
+                        it.sequenceGaps,
+                        summary?.missingTimingCount ?: 0,
+                    )
+                },
+            modifier = Modifier.weight(1.2f).fillMaxHeight(),
+        )
+    }
+}
+
+@Composable
+private fun EvidenceCoverage(state: NetworkProfilerState, language: UiLanguage) {
+    val result = state.result ?: return
+    val coverage = result.session.coverage
+    val completeness = result.session.completeness
+    StudioPanel(Modifier.fillMaxWidth().testTag("network-evidence-coverage")) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            StudioEvidenceBadge(completeness.status.toStudioEvidence(), language)
             Text(
                 localizedStringResource(
-                    Res.string.text,
+                    Res.string.coverage_summary,
                     language,
                     coverage.instrumentationMode.displayName(language),
-                    state.result.session.completeness.status.displayName(language),
-                    coverage.observedLibraries.joinToString(),
+                    coverage.observedLibraries.joinToString().ifEmpty { "—" },
+                    result.calls.map { it.source.displayName(language) }.distinct().joinToString().ifEmpty { "—" },
                 ),
+                modifier = Modifier.weight(1f),
+                color = LocalViewerColors.current.primaryText,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
+            state.artifact?.let { artifact ->
+                Text(
+                    "${artifact.availableCapabilities.size} capabilities · ${artifact.limitations.size} limitations",
+                    color = LocalViewerColors.current.secondaryText,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+        }
+        if (coverage.instrumentationMode == InstrumentationMode.HAR_IMPORT ||
+            result.calls.any { it.source == NetworkEvidenceSource.HAR_IMPORT }
+        ) {
+            Text(
+                localizedStringResource(Res.string.har_timing_notice, language),
+                color = LocalViewerColors.current.warning,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+        if (coverage.knownLimitations.isNotEmpty()) {
             Text(
                 localizedStringResource(
                     Res.string.not_covered,
                     language,
                     coverage.knownLimitations.joinToString(),
                 ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        state.summary?.let { summary ->
-            Text(localizedStringResource(Res.string.outcome_summary, language, summary.completedCount, summary.failureCount, summary.cancelledCount, summary.incompleteCount, summary.httpStatusFamilies.entries.joinToString { "${it.key}:${it.value}" }.ifEmpty { "—" }), style = MaterialTheme.typography.bodySmall)
-            val reuse = summary.connectionReuse
-            Text(localizedStringResource(Res.string.reuse_summary, language, reuse.reuseRateAmongKnown?.let { "%.1f%%".format(it * 100) } ?: "—", reuse.newExchangeCount, reuse.reusedExchangeCount, reuse.unknownExchangeCount), style = MaterialTheme.typography.bodySmall)
-            summary.largestObservedPhase?.let { phase -> Text(localizedStringResource(Res.string.largest_phase, language, phase.kind.displayName(language), phase.medianDurationMs?.let { "%.2f ms".format(it) } ?: "—"), style = MaterialTheme.typography.bodySmall) }
-        }
-        state.message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
-        state.artifact?.let { artifact ->
-            Text(
-                "Artifact: ${artifact.completeness.name.lowercase()} · ${artifact.availableCapabilities.size} capabilities" +
-                    if (artifact.limitations.isEmpty()) "" else " · ${artifact.limitations.size} limitation(s)",
+                color = LocalViewerColors.current.secondaryText,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
-        state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) { items(state.result?.calls.orEmpty()) { call -> CallCard(call, call.callId == state.selectedCallId, language) { actions.selectCall(call.callId) } } }
-            VerticalDivider(color = MaterialTheme.colorScheme.outline)
-            val selected = state.result?.calls?.firstOrNull { it.callId == state.selectedCallId }
-            Card(Modifier.weight(1f).fillMaxHeight()) {
-                Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(localizedStringResource(Res.string.request_details, language), style = MaterialTheme.typography.titleLarge)
-                    if (selected == null) {
-                        Text(localizedStringResource(Res.string.select_a_call_to_inspect_phase_evidence, language))
-                    } else {
-                        Text(localizedStringResource(Res.string.text_b8cc21ae, language, selected.method, selected.redactedUrl))
-                        selected.exchanges.forEach { exchange ->
-                            Text(
-                                localizedStringResource(
-                                    Res.string.http_exchange,
-                                    language,
-                                    exchange.statusCode ?: "—",
-                                    exchange.protocol ?: "—",
-                                    exchange.connectionId ?: localizedStringResource(Res.string.reused_unknown, language),
-                                    exchange.connectionUse.displayName(language),
-                                ),
-                            )
-                            exchange.tlsHandshake?.let { handshake -> Text(localizedStringResource(Res.string.tls_handshake, language, handshake.tlsVersion ?: "—", handshake.cipherSuite ?: "—"), style = MaterialTheme.typography.bodySmall) }
-                            exchange.phases.forEach { phase ->
-                                Text(
-                                    localizedStringResource(
-                                        Res.string.phase_detail,
-                                        language,
-                                        phase.kind.displayName(language),
-                                        phase.durationNs
-                                            ?.div(1_000_000.0)
-                                            ?.let { "%.2f ms".format(it) }
-                                            ?: localizedStringResource(Res.string.unavailable, language),
-                                        phase.confidence.displayName(language),
-                                    ),
-                                )
-                            }
-                            exchange.failure?.let {
-                                Text(
-                                    localizedStringResource(Res.string.text_c08282b1, language, it.type, it.message ?: "null"),
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                        }
-                    }
+    }
+}
+
+@Composable
+private fun RequestTable(
+    calls: List<HttpCall>,
+    selectedCallId: String?,
+    language: UiLanguage,
+    onSelectCall: (String) -> Unit,
+    modifier: Modifier,
+) {
+    StudioDataTable(
+        columns = requestTableColumns(language),
+        title = localizedStringResource(Res.string.request_list, language),
+        modifier = modifier.testTag("network-request-table"),
+    ) {
+        if (calls.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    localizedStringResource(Res.string.no_requests, language),
+                    color = LocalViewerColors.current.secondaryText,
+                )
+            }
+        } else {
+            LazyColumn(Modifier.weight(1f)) {
+                items(calls, key = { it.callId }) { call ->
+                    RequestRow(
+                        call = call,
+                        selected = call.callId == selectedCallId,
+                        language = language,
+                        onClick = { onSelectCall(call.callId) },
+                    )
+                    HorizontalDivider(color = LocalViewerColors.current.border)
                 }
             }
         }
     }
 }
 
-@Composable private fun Summary(label: String, value: String, modifier: Modifier) {
-    Card(modifier) {
-        Column(Modifier.padding(6.dp)) {
-            Text(label, style = MaterialTheme.typography.labelMedium)
-            Text(value, style = MaterialTheme.typography.titleMedium)
+@Composable
+private fun RequestRow(
+    call: HttpCall,
+    selected: Boolean,
+    language: UiLanguage,
+    onClick: () -> Unit,
+) {
+    val row = call.toPresentationRow()
+    val colors = LocalViewerColors.current
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(if (selected) colors.selectedRow else colors.panel)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 8.dp, vertical = 7.dp)
+                .testTag("network-request-row-${call.callId}")
+                .semantics {
+                    contentDescription =
+                        listOf(
+                            row.method,
+                            row.redactedUrl,
+                            row.statusCode?.toString() ?: "—",
+                            formatDurationNs(row.durationNs),
+                            formatBytes(row.transferredBytes),
+                            row.protocol ?: "—",
+                            row.outcome.displayName(language),
+                            row.source.displayName(language),
+                        ).joinToString(" · ")
+                },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TableCell(row.method, REQUEST_COLUMN_WEIGHTS[0], emphasized = true)
+        TableCell(row.redactedUrl, REQUEST_COLUMN_WEIGHTS[1])
+        TableCell(row.statusCode?.toString() ?: "—", REQUEST_COLUMN_WEIGHTS[2], statusCode = row.statusCode)
+        TableCell(formatDurationNs(row.durationNs), REQUEST_COLUMN_WEIGHTS[3])
+        TableCell(formatBytes(row.transferredBytes), REQUEST_COLUMN_WEIGHTS[4])
+        TableCell(row.protocol ?: "—", REQUEST_COLUMN_WEIGHTS[5])
+        TableCell(
+            row.outcome.displayName(language),
+            REQUEST_COLUMN_WEIGHTS[6],
+            textColor = if (row.outcome == CallOutcome.FAILED) colors.error else null,
+        )
+        TableCell(row.source.displayName(language), REQUEST_COLUMN_WEIGHTS[7])
+    }
+}
+
+@Composable
+private fun RowScope.TableCell(
+    value: String,
+    weight: Float,
+    emphasized: Boolean = false,
+    statusCode: Int? = null,
+    textColor: Color? = null,
+) {
+    val colors = LocalViewerColors.current
+    Text(
+        value,
+        modifier = Modifier.weight(weight).padding(end = 6.dp),
+        color =
+            textColor ?: when {
+                statusCode != null && statusCode >= 400 -> colors.error
+                statusCode != null && statusCode in 200..399 -> colors.success
+                else -> colors.rowText
+            },
+        fontSize = ViewerTypography.secondary.fontSize,
+        lineHeight = ViewerTypography.secondary.lineHeight,
+        fontWeight = if (emphasized) FontWeight.SemiBold else FontWeight.Normal,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+@Composable
+private fun RequestDetail(
+    call: HttpCall?,
+    language: UiLanguage,
+    modifier: Modifier,
+) {
+    StudioPanel(modifier.testTag("network-request-detail")) {
+        StudioPanelHeader(
+            title = localizedStringResource(Res.string.request_details, language),
+            subtitle = call?.redactedUrl,
+        )
+        if (call == null) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    localizedStringResource(Res.string.select_a_call_to_inspect_phase_evidence, language),
+                    color = LocalViewerColors.current.secondaryText,
+                )
+            }
+        } else {
+            val row = call.toPresentationRow()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(call.method, fontWeight = FontWeight.SemiBold, color = LocalViewerColors.current.primaryText)
+                StudioStatusChip(row.outcome.displayName(language), row.outcome.toTone())
+                Spacer(Modifier.weight(1f))
+                Text(
+                    localizedStringResource(
+                        Res.string.response_request_bytes,
+                        language,
+                        formatBytes(call.totalResponseBytes),
+                        formatBytes(call.totalRequestBytes),
+                    ),
+                    color = LocalViewerColors.current.secondaryText,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+            Text(
+                localizedStringResource(Res.string.timing_confidence_legend, language),
+                color = LocalViewerColors.current.secondaryText,
+                style = MaterialTheme.typography.labelSmall,
+            )
+            HorizontalDivider(color = LocalViewerColors.current.border)
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                itemsIndexed(call.exchanges) { index, exchange ->
+                    ExchangeDetail(exchange, index, language)
+                }
+            }
         }
     }
 }
 
-@Composable private fun CallCard(call: HttpCall, selected: Boolean, language: UiLanguage, onClick: () -> Unit) {
-    Card(onClick = onClick, colors = CardDefaults.cardColors(containerColor = if (selected)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(6.dp)) {
-            Text(localizedStringResource(Res.string.text_fb68e1ae, language, call.method, call.outcome.displayName(language)))
-            Text(call.redactedUrl, maxLines = 1, style = MaterialTheme.typography.bodySmall)
-            Text(call.durationNs?.div(1_000_000.0)?.let { "%.2f ms".format(it) } ?: localizedStringResource(Res.string.incomplete, language))
+@Composable
+private fun ExchangeDetail(exchange: HttpExchange, index: Int, language: UiLanguage) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = LocalViewerColors.current.sectionBackground),
+    ) {
+        Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    localizedStringResource(Res.string.detail_exchange, language, index + 1),
+                    modifier = Modifier.weight(1f),
+                    color = LocalViewerColors.current.primaryText,
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(exchange.statusCode?.toString() ?: "—", style = MaterialTheme.typography.labelSmall)
+                Text(exchange.protocol ?: "—", style = MaterialTheme.typography.labelSmall)
+                Text(exchange.connectionUse.displayName(language), style = MaterialTheme.typography.labelSmall)
+            }
+            exchange.tlsHandshake?.let { handshake ->
+                Text(
+                    localizedStringResource(
+                        Res.string.tls_handshake,
+                        language,
+                        handshake.tlsVersion ?: "—",
+                        handshake.cipherSuite ?: "—",
+                    ),
+                    color = LocalViewerColors.current.secondaryText,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+            Text(
+                localizedStringResource(Res.string.phases, language),
+                color = LocalViewerColors.current.secondaryText,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            DETAIL_PHASES.forEach { kind ->
+                val phase = exchange.phases.firstOrNull { it.kind == kind }
+                PhaseRow(kind, phase, language)
+            }
+            HeaderEvidence(
+                title = localizedStringResource(Res.string.request_headers_evidence, language),
+                headers = exchange.requestHeaders,
+                emptyLabel = localizedStringResource(Res.string.headers_not_captured, language),
+                testTag = "network-request-headers",
+            )
+            BodyEvidence(
+                title = localizedStringResource(Res.string.request_body_evidence, language),
+                language = language,
+                testTag = "network-request-body",
+            )
+            HeaderEvidence(
+                title = localizedStringResource(Res.string.response_headers_evidence, language),
+                headers = exchange.responseHeaders,
+                emptyLabel = localizedStringResource(Res.string.headers_not_captured, language),
+                testTag = "network-response-headers",
+            )
+            BodyEvidence(
+                title = localizedStringResource(Res.string.response_body_evidence, language),
+                language = language,
+                testTag = "network-response-body",
+            )
+            exchange.failure?.let { failure ->
+                Text(
+                    listOfNotNull(failure.type, failure.message).joinToString(": "),
+                    color = LocalViewerColors.current.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
     }
 }
+
+@Composable
+private fun HeaderEvidence(
+    title: String,
+    headers: Map<String, String>,
+    emptyLabel: String,
+    testTag: String,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(LocalViewerColors.current.detailRowDeep, RoundedCornerShape(4.dp))
+                .padding(7.dp)
+                .testTag(testTag),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            title,
+            color = LocalViewerColors.current.secondaryText,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        if (headers.isEmpty()) {
+            Text(emptyLabel, color = LocalViewerColors.current.mutedText, style = MaterialTheme.typography.labelSmall)
+        } else {
+            headers.toSortedMap(String.CASE_INSENSITIVE_ORDER).forEach { (name, redactedValue) ->
+                Text(
+                    "$name: $redactedValue",
+                    color = LocalViewerColors.current.rowText,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BodyEvidence(title: String, language: UiLanguage, testTag: String) {
+    val unavailable = localizedStringResource(Res.string.body_not_captured, language)
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(LocalViewerColors.current.detailRowDeep, RoundedCornerShape(4.dp))
+                .padding(7.dp)
+                .testTag(testTag)
+                .semantics { contentDescription = "$title · $unavailable" },
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            title,
+            color = LocalViewerColors.current.secondaryText,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            unavailable,
+            color = LocalViewerColors.current.mutedText,
+            style = MaterialTheme.typography.labelSmall,
+        )
+    }
+}
+
+@Composable
+private fun PhaseRow(kind: NetworkPhaseKind, phase: NetworkPhase?, language: UiLanguage) {
+    val confidence = phase?.confidence
+    val estimated = confidence == NetworkConfidence.INFERRED || confidence == NetworkConfidence.APPROXIMATED
+    val colors = LocalViewerColors.current
+    val phaseDescription =
+        if (phase == null) {
+            localizedStringResource(Res.string.not_observed, language)
+        } else {
+            "${formatDurationNs(phase.durationNs)} · ${phase.confidence.displayName(language)}"
+        }
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(4.dp))
+                .background(if (estimated) colors.warning.copy(alpha = 0.10f) else colors.detailRowDeep)
+                .estimatedEvidenceBorder(estimated, colors.warning)
+                .padding(horizontal = 7.dp, vertical = 5.dp)
+                .testTag("network-phase-${kind.name.lowercase()}")
+                .semantics {
+                    contentDescription = "${kind.displayName(language)} · $phaseDescription"
+                },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            kind.displayName(language),
+            modifier = Modifier.weight(1f),
+            color = colors.rowText,
+            fontSize = ViewerTypography.secondary.fontSize,
+            lineHeight = ViewerTypography.secondary.lineHeight,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            phase?.durationNs?.let(::formatDurationNs)
+                ?: localizedStringResource(
+                    if (phase == null) Res.string.not_observed else Res.string.unavailable,
+                    language,
+                ),
+            modifier = Modifier.width(74.dp),
+            color = if (phase == null) colors.mutedText else colors.primaryText,
+            fontSize = ViewerTypography.label.fontSize,
+            lineHeight = ViewerTypography.label.lineHeight,
+            maxLines = 1,
+        )
+        if (confidence == null) {
+            StudioEvidenceBadge(StudioEvidence.UNAVAILABLE, language)
+        } else {
+            StudioEvidenceBadge(confidence.toStudioEvidence(), language)
+        }
+    }
+}
+
+@Composable
+private fun MessageStrip(message: String, tone: StudioStatusTone) {
+    StudioPanel(Modifier.fillMaxWidth()) {
+        StudioStatusChip(message, tone)
+    }
+}
+
+@Composable
+private fun requestTableColumns(language: UiLanguage): List<StudioTableColumn> =
+    listOf(
+        Res.string.request_list_method,
+        Res.string.request_list_url,
+        Res.string.request_list_status,
+        Res.string.request_list_duration,
+        Res.string.request_list_bytes,
+        Res.string.request_list_protocol,
+        Res.string.request_list_outcome,
+        Res.string.request_list_source,
+    ).mapIndexed { index, resource ->
+        StudioTableColumn(localizedStringResource(resource, language), REQUEST_COLUMN_WEIGHTS[index])
+    }
+
+private fun Modifier.estimatedEvidenceBorder(enabled: Boolean, color: Color): Modifier =
+    if (!enabled) {
+        this
+    } else {
+        drawWithContent {
+            drawContent()
+            drawRoundRect(
+                color = color,
+                cornerRadius = CornerRadius(4.dp.toPx()),
+                style =
+                    Stroke(
+                        width = 1.dp.toPx(),
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(7.dp.toPx(), 4.dp.toPx())),
+                    ),
+            )
+        }
+    }
 
 private fun InstrumentationMode.displayName(language: UiLanguage): String =
     localizedStringResource(
@@ -181,6 +673,16 @@ private fun NetworkConfidence.displayName(language: UiLanguage): String =
         language,
     )
 
+private fun NetworkConfidence.toStudioEvidence(): StudioEvidence =
+    when (this) {
+        NetworkConfidence.EXACT -> StudioEvidence.EXACT
+        NetworkConfidence.DERIVED -> StudioEvidence.DERIVED
+        NetworkConfidence.INFERRED -> StudioEvidence.INFERRED
+        NetworkConfidence.APPROXIMATED -> StudioEvidence.ESTIMATED
+        NetworkConfidence.PARTIAL -> StudioEvidence.PARTIAL
+        NetworkConfidence.UNKNOWN -> StudioEvidence.UNKNOWN
+    }
+
 private fun CallOutcome.displayName(language: UiLanguage): String =
     localizedStringResource(
         when (this) {
@@ -192,6 +694,14 @@ private fun CallOutcome.displayName(language: UiLanguage): String =
         language,
     )
 
+private fun CallOutcome.toTone(): StudioStatusTone =
+    when (this) {
+        CallOutcome.COMPLETED -> StudioStatusTone.SUCCESS
+        CallOutcome.FAILED -> StudioStatusTone.ERROR
+        CallOutcome.CANCELLED -> StudioStatusTone.WARNING
+        CallOutcome.INCOMPLETE -> StudioStatusTone.NEUTRAL
+    }
+
 private fun EvidenceCompleteness.displayName(language: UiLanguage): String =
     localizedStringResource(
         when (this) {
@@ -202,12 +712,29 @@ private fun EvidenceCompleteness.displayName(language: UiLanguage): String =
         language,
     )
 
+private fun EvidenceCompleteness.toStudioEvidence(): StudioEvidence =
+    when (this) {
+        EvidenceCompleteness.COMPLETE -> StudioEvidence.COMPLETE
+        EvidenceCompleteness.PARTIAL -> StudioEvidence.PARTIAL
+        EvidenceCompleteness.UNKNOWN -> StudioEvidence.UNKNOWN
+    }
+
 private fun ConnectionUse.displayName(language: UiLanguage): String =
     localizedStringResource(
         when (this) {
             ConnectionUse.NEW -> Res.string.connection_new
             ConnectionUse.REUSED -> Res.string.connection_reused
             ConnectionUse.UNKNOWN -> Res.string.connection_unknown
+        },
+        language,
+    )
+
+private fun NetworkEvidenceSource.displayName(language: UiLanguage): String =
+    localizedStringResource(
+        when (this) {
+            NetworkEvidenceSource.OKHTTP_EVENT_LISTENER -> Res.string.source_okhttp
+            NetworkEvidenceSource.HAR_IMPORT -> Res.string.source_har
+            NetworkEvidenceSource.RAW_EVENT_BUNDLE -> Res.string.source_raw
         },
         language,
     )
@@ -229,4 +756,20 @@ private fun NetworkPhaseKind.displayName(language: UiLanguage): String =
             NetworkPhaseKind.TOTAL -> Res.string.phase_total
         },
         language,
+    )
+
+private val REQUEST_COLUMN_WEIGHTS = listOf(0.65f, 2.35f, 0.58f, 0.78f, 0.72f, 0.68f, 0.82f, 0.95f)
+
+private val DETAIL_PHASES =
+    listOf(
+        NetworkPhaseKind.DISPATCHER_QUEUE,
+        NetworkPhaseKind.DNS,
+        NetworkPhaseKind.CONNECT,
+        NetworkPhaseKind.TLS,
+        NetworkPhaseKind.REQUEST_HEADERS,
+        NetworkPhaseKind.REQUEST_BODY,
+        NetworkPhaseKind.SERVER_WAIT,
+        NetworkPhaseKind.RESPONSE_HEADERS,
+        NetworkPhaseKind.RESPONSE_BODY,
+        NetworkPhaseKind.CONNECTION_HELD,
     )

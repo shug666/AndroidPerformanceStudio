@@ -19,8 +19,7 @@ enum class AppDestination {
     MEMORY_PROFILER,
     FRAME_PROFILER,
     STARTUP_PROFILER,
-    BATTERY_PROFILER,
-    NETWORK_PROFILER,
+    BATTERY_NETWORK,
     GPU_INSPECTOR,
     BENCHMARK_REGRESSION,
     METHOD_RECORDING,
@@ -61,8 +60,7 @@ internal val com.androidperformancestudio.desktop.AppDestination.titleResource: 
             AppDestination.MEMORY_PROFILER -> Res.string.memory_profiler
             AppDestination.FRAME_PROFILER -> Res.string.frame_profiler
             AppDestination.STARTUP_PROFILER -> Res.string.startup_profiler
-            AppDestination.BATTERY_PROFILER -> Res.string.battery_profiler
-            AppDestination.NETWORK_PROFILER -> Res.string.network_profiler
+            AppDestination.BATTERY_NETWORK -> Res.string.battery_network
             AppDestination.GPU_INSPECTOR -> Res.string.gpu_inspector
             AppDestination.BENCHMARK_REGRESSION -> Res.string.benchmark_regression
             AppDestination.METHOD_RECORDING -> Res.string.method_recording
@@ -177,7 +175,7 @@ internal fun AppDestination.hasNativeFeatureMenu(): Boolean =
         AppDestination.MEMORY_PROFILER,
         AppDestination.FRAME_PROFILER,
         AppDestination.STARTUP_PROFILER,
-        AppDestination.BATTERY_PROFILER,
+        AppDestination.BATTERY_NETWORK,
         AppDestination.METHOD_RECORDING,
         -> true
         else -> false

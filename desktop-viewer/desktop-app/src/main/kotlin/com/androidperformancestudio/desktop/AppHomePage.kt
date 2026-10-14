@@ -125,8 +125,7 @@ internal fun AppHomePage(
     onOpenMemoryProfiler: () -> Unit,
     onOpenFrameProfiler: () -> Unit,
     onOpenStartupProfiler: () -> Unit,
-    onOpenBatteryProfiler: () -> Unit,
-    onOpenNetworkProfiler: () -> Unit,
+    onOpenBatteryNetwork: () -> Unit,
     onOpenGpuInspector: () -> Unit,
     onOpenBenchmarkRegression: () -> Unit,
     onOpenRecentArtifact: (StudioRecentItem) -> Unit,
@@ -219,24 +218,14 @@ internal fun AppHomePage(
                 onClick = onOpenStartupProfiler,
             ),
             HomeFeatureEntry(
-                destination = AppDestination.BATTERY_PROFILER,
-                title = localizedStringResource(Res.string.battery_profiler, language),
+                destination = AppDestination.BATTERY_NETWORK,
+                title = localizedStringResource(Res.string.battery_network, language),
                 description =
                     localizedStringResource(
-                        Res.string.batterystats_analysis_with_wakelock_alarm_and_network_usage_stats,
+                        Res.string.battery_network_description,
                         language,
                     ),
-                onClick = onOpenBatteryProfiler,
-            ),
-            HomeFeatureEntry(
-                destination = AppDestination.NETWORK_PROFILER,
-                title = localizedStringResource(Res.string.network_profiler, language),
-                description =
-                    localizedStringResource(
-                        Res.string.http_https_traffic_capture_and_request_timeline_analysis,
-                        language,
-                    ),
-                onClick = onOpenNetworkProfiler,
+                onClick = onOpenBatteryNetwork,
             ),
             HomeFeatureEntry(
                 destination = AppDestination.GPU_INSPECTOR,

@@ -5,6 +5,7 @@ import com.androidperformancestudio.network.presentation.generated.resources.htt
 import com.androidperformancestudio.network.presentation.generated.resources.incomplete
 import com.androidperformancestudio.network.presentation.generated.resources.phase_detail
 import com.androidperformancestudio.network.presentation.generated.resources.request_details
+import com.androidperformancestudio.network.presentation.generated.resources.request_list_url
 import com.androidperformancestudio.network.presentation.generated.resources.reused_unknown
 import com.androidperformancestudio.network.presentation.generated.resources.unavailable
 import com.androidperformancestudio.ui.UiLanguage
@@ -28,11 +29,11 @@ class NetworkProfilerLocalizationTest {
         assertFalse(source.contains("stringResource("))
         assertTrue(source.contains("Res.string.calls, language"))
         assertTrue(source.contains("Res.string.request_details, language"))
-        assertTrue(source.contains("Res.string.incomplete, language"))
+        assertTrue(source.contains("Res.string.request_list_url"))
         assertTrue(source.contains("coverage.instrumentationMode.displayName(language)"))
-        assertTrue(source.contains("state.result.session.completeness.status.displayName(language)"))
-        assertTrue(source.contains("call.outcome.displayName(language)"))
-        assertTrue(source.contains("phase.kind.displayName(language)"))
+        assertTrue(source.contains("completeness.status.toStudioEvidence()"))
+        assertTrue(source.contains("row.outcome.displayName(language)"))
+        assertTrue(source.contains("kind.displayName(language)"))
         assertTrue(source.contains("phase.confidence.displayName(language)"))
     }
 
@@ -41,6 +42,10 @@ class NetworkProfilerLocalizationTest {
         assertEquals(
             "请求详情",
             localizedStringResource(Res.string.request_details, UiLanguage.SIMPLIFIED_CHINESE),
+        )
+        assertEquals(
+            "脱敏 URL",
+            localizedStringResource(Res.string.request_list_url, UiLanguage.SIMPLIFIED_CHINESE),
         )
         assertEquals(
             "HTTP 200 · h2 · 连接 conn-1 · 复用",

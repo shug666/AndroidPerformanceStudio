@@ -159,7 +159,9 @@ private fun ResultsPane(
             MetricCard(localizedStringResource(Res.string.median_wakelock, language), analysis.wakelockDurationMs, "ms", language)
             MetricCard(localizedStringResource(Res.string.median_wakeup_alarms, language), analysis.wakeupAlarmCount, "", language)
             MetricCard(localizedStringResource(Res.string.median_network, language), analysis.networkBytes, "B", language)
-            MetricCard(localizedStringResource(Res.string.modeled_energy, language), analysis.energyMah, "mAh", language)
+            if (analysis.energyMah.count > 0) {
+                MetricCard(localizedStringResource(Res.string.modeled_energy, language), analysis.energyMah, "mAh", language)
+            }
             MetricCard(localizedStringResource(Res.string.peak_temperature, language), analysis.peakTemperatureCelsius, "°C", language)
             MetricCard(localizedStringResource(Res.string.thermal_status, language), analysis.thermalStatus, "", language)
         }
