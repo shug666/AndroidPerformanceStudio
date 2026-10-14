@@ -21,6 +21,7 @@
     <string name="open_perfetto_trace">打开 Perfetto 轨迹</string>
     <string name="export_trace">导出轨迹</string>
     <string name="failed_to_export_trace">轨迹导出失败</string>
+    <string name="export_config_dialog">导出 TraceConfig</string>
     <string name="refresh">刷新</string>
     <string name="device_status">设备</string>
     <string name="device_connected">%1$s 已连接</string>
