@@ -10,6 +10,9 @@
     <string name="target_package">Target package</string>
     <string name="duration_seconds">Duration (seconds)</string>
     <string name="buffer_mb">Buffer (MB)</string>
+    <string name="fill_policy">Buffer fill policy</string>
+    <string name="fill_policy_ring_buffer">Ring (keep latest)</string>
+    <string name="fill_policy_discard">Discard (keep earliest)</string>
     <string name="additional_categories_events">Additional categories / events</string>
     <string name="custom_traceconfig_text_protobuf">Custom TraceConfig (text protobuf)</string>
     <string name="start_capture">Start Capture</string>

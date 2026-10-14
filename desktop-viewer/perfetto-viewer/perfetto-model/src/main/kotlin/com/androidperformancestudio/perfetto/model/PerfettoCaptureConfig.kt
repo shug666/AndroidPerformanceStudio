@@ -5,6 +5,20 @@ import java.nio.file.Path
 import java.time.Instant
 
 /**
+ * In-memory buffer fill policy for a Perfetto capture.
+ *
+ * - [RING_BUFFER]: ring buffer; when full, the oldest trace data is overwritten
+ *   (keeps the most recent data). Perfetto default; suits "keep latest activity".
+ * - [DISCARD]: stops accepting data once full (keeps the earliest data); suits
+ *   "short complete snapshot" but risks tail truncation if the buffer is too
+ *   small for the event density.
+ */
+enum class PerfettoBufferPolicy {
+    RING_BUFFER,
+    DISCARD,
+}
+
+/**
  * Preset trace configuration templates, mirroring Simpleperf's [SamplingTemplate].
  */
 enum class PerfettoTraceTemplate(
@@ -70,6 +84,7 @@ enum class PerfettoProbe(
     HIGH_FREQUENCY_MEMORY(PerfettoProbeGroup.MEMORY, "High-frequency memory events", requiredDataSource = "linux.ftrace"),
     LOW_MEMORY_KILLER(PerfettoProbeGroup.MEMORY, "Low memory killer", requiredDataSource = "linux.ftrace"),
     PROCESS_STATS(PerfettoProbeGroup.MEMORY, "Process stats", requiredDataSource = "linux.process_stats"),
+    PROCESS_MEMORY_POLL(PerfettoProbeGroup.MEMORY, "Process memory polling", requiredDataSource = "linux.process_stats"),
 
     POWER_RAILS(PerfettoProbeGroup.POWER, "Battery drain & power rails", requiredDataSource = "android.power"),
     BOARD_VOLTAGES(PerfettoProbeGroup.POWER, "Board voltages & frequencies", requiredDataSource = "linux.ftrace"),
@@ -119,11 +134,13 @@ fun PerfettoTraceTemplate.defaultProbes(): Set<PerfettoProbe> =
                 PerfettoProbe.KERNEL_MEMINFO,
                 PerfettoProbe.VMSTAT,
                 PerfettoProbe.PROCESS_STATS,
+                PerfettoProbe.PROCESS_MEMORY_POLL,
                 PerfettoProbe.FILESYSTEM_IO,
                 PerfettoProbe.PAGE_FAULTS,
                 PerfettoProbe.ART_RUNTIME,
                 PerfettoProbe.THERMAL,
                 PerfettoProbe.ATRACE,
+                PerfettoProbe.ANDROID_LOG,
                 PerfettoProbe.FRAME_TIMELINE,
             )
         PerfettoTraceTemplate.APP_PERFORMANCE ->
@@ -155,6 +172,7 @@ fun PerfettoTraceTemplate.defaultProbes(): Set<PerfettoProbe> =
                 PerfettoProbe.HIGH_FREQUENCY_MEMORY,
                 PerfettoProbe.LOW_MEMORY_KILLER,
                 PerfettoProbe.PROCESS_STATS,
+                PerfettoProbe.PROCESS_MEMORY_POLL,
                 PerfettoProbe.PAGE_FAULTS,
                 PerfettoProbe.ART_RUNTIME,
                 PerfettoProbe.ATRACE,
@@ -191,6 +209,8 @@ data class PerfettoCaptureConfig(
     val additionalCategories: List<String> = emptyList(),
     val customConfigText: String? = null,
     val enabledProbes: Set<PerfettoProbe>? = null,
+    val bufferPolicy: PerfettoBufferPolicy = PerfettoBufferPolicy.RING_BUFFER,
+    val androidSdk: Int = 0,
 ) {
     init {
         require(durationSeconds in 1..600) { "durationSeconds must be in [1, 600], was $durationSeconds" }

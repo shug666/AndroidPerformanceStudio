@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.perfetto.model.PerfettoCaptureConfig
 import com.androidperformancestudio.perfetto.model.PerfettoCaptureState
+import com.androidperformancestudio.perfetto.model.PerfettoBufferPolicy
 import com.androidperformancestudio.perfetto.model.PerfettoDeviceCapabilities
 import com.androidperformancestudio.perfetto.model.PerfettoProbe
 import com.androidperformancestudio.perfetto.model.PerfettoProbeGroup
@@ -54,6 +55,8 @@ import com.androidperformancestudio.perfetto_presentation.generated.resources.cu
 import com.androidperformancestudio.perfetto_presentation.generated.resources.custom_description
 import com.androidperformancestudio.perfetto_presentation.generated.resources.custom_traceconfig_text_protobuf
 import com.androidperformancestudio.perfetto_presentation.generated.resources.data_sources
+import com.androidperformancestudio.perfetto_presentation.generated.resources.fill_policy
+import com.androidperformancestudio.perfetto_presentation.generated.resources.fill_policy_discard
 import com.androidperformancestudio.perfetto_presentation.generated.resources.duration_seconds
 import com.androidperformancestudio.perfetto_presentation.generated.resources.failed
 import com.androidperformancestudio.perfetto_presentation.generated.resources.graphics_pipeline
@@ -99,6 +102,7 @@ fun PerfettoCapturePage(
     var additionalCategories by remember { mutableStateOf("") }
     var customConfigText by remember { mutableStateOf("") }
     var enabledProbes by remember { mutableStateOf(selectedTemplate.defaultProbes()) }
+    var bufferPolicy by remember { mutableStateOf(PerfettoBufferPolicy.RING_BUFFER) }
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val currentConfigurationWidth =
@@ -152,6 +156,8 @@ fun PerfettoCapturePage(
                 onDurationSecondsChange = { durationSeconds = it },
                 bufferSizeKb = bufferSizeKb,
                 onBufferSizeKbChange = { bufferSizeKb = it },
+                bufferPolicy = bufferPolicy,
+                onBufferPolicyChange = { bufferPolicy = it },
                 additionalCategories = additionalCategories,
                 onAdditionalCategoriesChange = { additionalCategories = it },
                 customConfigText = customConfigText,
@@ -410,6 +416,8 @@ private fun PerfettoConfigurationPanel(
     onDurationSecondsChange: (Int) -> Unit,
     bufferSizeKb: Int,
     onBufferSizeKbChange: (Int) -> Unit,
+    bufferPolicy: PerfettoBufferPolicy,
+    onBufferPolicyChange: (PerfettoBufferPolicy) -> Unit,
     additionalCategories: String,
     onAdditionalCategoriesChange: (String) -> Unit,
     customConfigText: String,
@@ -474,6 +482,29 @@ private fun PerfettoConfigurationPanel(
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            CompactFieldLabel(localizedStringResource(Res.string.fill_policy, language))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    checked = bufferPolicy == PerfettoBufferPolicy.DISCARD,
+                    onCheckedChange = {
+                        onBufferPolicyChange(
+                            if (it) PerfettoBufferPolicy.DISCARD else PerfettoBufferPolicy.RING_BUFFER,
+                        )
+                    },
+                    modifier = Modifier.size(22.dp),
+                )
+                Text(
+                    text = localizedStringResource(Res.string.fill_policy_discard, language),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = ViewerTypography.label.fontSize,
+                    lineHeight = ViewerTypography.label.lineHeight,
+                    modifier = Modifier.padding(start = 5.dp),
+                )
+            }
+
             CompactFieldLabel(localizedStringResource(Res.string.additional_categories_events, language))
             PerfettoCompactTextField(
                 value = additionalCategories,
@@ -508,6 +539,8 @@ private fun PerfettoConfigurationPanel(
                                     targetPackage = targetPackage,
                                     durationSeconds = durationSeconds,
                                     bufferSizeKb = bufferSizeKb,
+                                    bufferPolicy = bufferPolicy,
+                                    androidSdk = deviceCapabilities?.androidSdk ?: 0,
                                     additionalCategories = additionalCategories,
                                     customConfigText = customConfigText,
                                     enabledProbes =
@@ -593,6 +626,8 @@ private fun createCaptureConfig(
     targetPackage: String,
     durationSeconds: Int,
     bufferSizeKb: Int,
+    bufferPolicy: PerfettoBufferPolicy,
+    androidSdk: Int,
     additionalCategories: String,
     customConfigText: String,
     enabledProbes: Set<PerfettoProbe>,
@@ -602,6 +637,8 @@ private fun createCaptureConfig(
         targetPackage = targetPackage.ifBlank { null },
         durationSeconds = durationSeconds,
         bufferSizeKb = bufferSizeKb,
+        bufferPolicy = bufferPolicy,
+        androidSdk = androidSdk,
         additionalCategories =
             additionalCategories
                 .split(',', '\n')

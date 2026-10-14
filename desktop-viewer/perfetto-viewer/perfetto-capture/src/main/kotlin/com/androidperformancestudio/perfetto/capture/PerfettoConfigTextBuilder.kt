@@ -29,15 +29,21 @@ object PerfettoConfigTextBuilder {
             buildSet {
                 config.targetPackage?.takeIf(String::isNotBlank)?.let(::add)
                 if (PerfettoProbe.LOW_MEMORY_KILLER in probes) add("lmkd")
+                if (config.targetPackage.isNullOrBlank() &&
+                    PerfettoProbe.ATRACE in probes &&
+                    config.template == PerfettoTraceTemplate.SYSTEM_OVERVIEW
+                ) {
+                    add("*")
+                }
             }
 
         val dataSources =
             buildList {
                 if (ftraceEvents.isNotEmpty() || atraceCategories.isNotEmpty() || atraceApps.isNotEmpty()) {
-                    add(ftrace(ftraceEvents, atraceCategories, atraceApps, PerfettoProbe.ADVANCED_FTRACE in probes))
+                    add(ftrace(ftraceEvents, atraceCategories, atraceApps, config.androidSdk))
                 }
                 if (probes.any { it in SYS_STATS_PROBES }) add(systemStats(probes))
-                if (probes.any { it in PROCESS_STATS_PROBES }) add(processStats(PerfettoProbe.PROCESS_STATS in probes))
+                if (probes.any { it in PROCESS_STATS_PROBES }) add(processStats(PerfettoProbe.PROCESS_MEMORY_POLL in probes))
                 addDirectSources(probes, config.targetPackage)
                 add(PerfettoDataSource("android.packages_list"))
             }
@@ -46,7 +52,7 @@ object PerfettoConfigTextBuilder {
                 durationMillis = config.durationSeconds * 1_000L,
                 bufferSizeKb = config.bufferSizeKb,
                 dataSources = dataSources,
-                flushPeriodMillis = 5_000,
+                fillPolicy = config.bufferPolicy.name,
             ),
         )
     }
@@ -98,7 +104,7 @@ object PerfettoConfigTextBuilder {
         events: List<String>,
         atraceCategories: List<String>,
         atraceApps: Set<String>,
-        advanced: Boolean,
+        androidSdk: Int,
     ): PerfettoDataSource =
         PerfettoDataSource(
             "linux.ftrace",
@@ -107,9 +113,13 @@ object PerfettoConfigTextBuilder {
                 events.forEach { appendLine("  ftrace_events: \"${escapeProtoString(it)}\"") }
                 atraceCategories.forEach { appendLine("  atrace_categories: \"${escapeProtoString(it)}\"") }
                 atraceApps.forEach { appendLine("  atrace_apps: \"${escapeProtoString(it)}\"") }
-                if (advanced) {
-                    appendLine("  symbolize_ksyms: true")
-                    appendLine("  disable_generic_events: false")
+                // symbolize_ksyms is a long-standing field (safe on all versions); emit unconditionally.
+                appendLine("  symbolize_ksyms: true")
+                // disable_generic_events was introduced in Android T (13). Emitting it on a pre-T
+                // device's perfetto binary causes a hard parse failure under strict --txt, so gate
+                // on androidSdk >= 33. When unknown (0), omit to stay safe.
+                if (androidSdk >= ANDROID_T_SDK) {
+                    appendLine("  disable_generic_events: true")
                 }
                 appendLine("}")
             },
@@ -132,7 +142,12 @@ object PerfettoConfigTextBuilder {
             "linux.sys_stats",
             buildString {
                 appendLine("sys_stats_config {")
-                if (PerfettoProbe.CPU_USAGE in probes) appendLine("  stat_period_ms: 1000")
+                if (PerfettoProbe.CPU_USAGE in probes) {
+                    appendLine("  stat_period_ms: 1000")
+                    appendLine("  stat_counters: STAT_CPU_TIMES")
+                }
+                // STAT_FORK_COUNT is reported whenever the sys_stats source is present.
+                appendLine("  stat_counters: STAT_FORK_COUNT")
                 if (PerfettoProbe.CPU_FREQUENCY in probes) appendLine("  cpufreq_period_ms: 250")
                 if (PerfettoProbe.KERNEL_MEMINFO in probes) appendLine("  meminfo_period_ms: 1000")
                 if (PerfettoProbe.VMSTAT in probes) appendLine("  vmstat_period_ms: 1000")
@@ -193,7 +208,14 @@ object PerfettoConfigTextBuilder {
                     "task/task_rename",
                 )
             PerfettoProbe.CPU_FREQUENCY ->
-                listOf("power/cpu_frequency", "power/cpu_idle", "power/suspend_resume")
+                listOf(
+                    "power/cpu_frequency",
+                    "power/cpu_idle",
+                    "power/suspend_resume",
+                    "power/*",
+                    "power/psci_domain_idle_enter",
+                    "power/psci_domain_idle_exit",
+                )
             PerfettoProbe.SYSCALLS -> listOf("raw_syscalls/sys_enter", "raw_syscalls/sys_exit")
             PerfettoProbe.FILESYSTEM_IO ->
                 listOf(
@@ -253,7 +275,33 @@ object PerfettoConfigTextBuilder {
 
     private fun atraceCategories(template: PerfettoTraceTemplate): List<String> =
         when (template) {
-            PerfettoTraceTemplate.SYSTEM_OVERVIEW -> listOf("am", "binder_driver", "dalvik", "database", "gfx", "view", "wm", "power")
+            PerfettoTraceTemplate.SYSTEM_OVERVIEW ->
+                listOf(
+                    "aidl",
+                    "am",
+                    "binder_driver",
+                    "camera",
+                    "dalvik",
+                    "disk",
+                    "freq",
+                    "gfx",
+                    "hal",
+                    "idle",
+                    "input",
+                    "memory",
+                    "memreclaim",
+                    "network",
+                    "power",
+                    "res",
+                    "sched",
+                    "ss",
+                    "sync",
+                    "thermal",
+                    "view",
+                    "webview",
+                    "wm",
+                    "workq",
+                )
             PerfettoTraceTemplate.APP_PERFORMANCE -> listOf("am", "binder_driver", "dalvik", "database", "gfx", "view", "wm")
             PerfettoTraceTemplate.GFX_PIPELINE -> listOf("gfx", "view", "wm")
             PerfettoTraceTemplate.INPUT_LATENCY -> listOf("input", "view", "wm")
@@ -265,5 +313,9 @@ object PerfettoConfigTextBuilder {
 
     private val SYS_STATS_PROBES =
         setOf(PerfettoProbe.CPU_USAGE, PerfettoProbe.CPU_FREQUENCY, PerfettoProbe.KERNEL_MEMINFO, PerfettoProbe.VMSTAT)
-    private val PROCESS_STATS_PROBES = setOf(PerfettoProbe.PROCESS_STATS, PerfettoProbe.PROCESS_THREAD_ASSOCIATION)
+    private val PROCESS_STATS_PROBES =
+        setOf(PerfettoProbe.PROCESS_STATS, PerfettoProbe.PROCESS_MEMORY_POLL, PerfettoProbe.PROCESS_THREAD_ASSOCIATION)
+
+    /** Android T (13) SDK level; `disable_generic_events` requires this. */
+    private const val ANDROID_T_SDK = 33
 }
