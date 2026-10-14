@@ -21,6 +21,7 @@
     <string name="open_perfetto_trace">Open Perfetto Trace</string>
     <string name="export_trace">Export Trace</string>
     <string name="failed_to_export_trace">Failed to export trace</string>
+    <string name="export_config_dialog">Export TraceConfig</string>
     <string name="refresh">Refresh</string>
     <string name="device_status">Device</string>
     <string name="device_connected">%1$s connected</string>

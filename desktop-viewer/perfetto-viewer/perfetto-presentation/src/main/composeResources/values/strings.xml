@@ -18,6 +18,8 @@
     <string name="start_capture">Start Capture</string>
     <string name="stop">Stop</string>
     <string name="open_in_perfetto_ui">Open in Perfetto UI</string>
+    <string name="export_config">Export config</string>
+    <string name="export_config_dialog">Export TraceConfig</string>
     <string name="ready">Ready</string>
     <string name="preparing_capture">Preparing capture…</string>
     <string name="recording_since">Recording since %1$s</string>

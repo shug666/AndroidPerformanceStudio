@@ -73,6 +73,7 @@ import com.androidperformancestudio.perfetto_presentation.generated.resources.in
 import com.androidperformancestudio.perfetto_presentation.generated.resources.memory_profile
 import com.androidperformancestudio.perfetto_presentation.generated.resources.memory_profile_description
 import com.androidperformancestudio.perfetto_presentation.generated.resources.open_in_perfetto_ui
+import com.androidperformancestudio.perfetto_presentation.generated.resources.export_config
 import com.androidperformancestudio.perfetto_presentation.generated.resources.paste_a_valid_perfetto_traceconfig
 import com.androidperformancestudio.perfetto_presentation.generated.resources.preparing_capture
 import com.androidperformancestudio.perfetto_presentation.generated.resources.pulling_trace_from_device
@@ -98,6 +99,7 @@ fun PerfettoCapturePage(
     onStartCapture: (PerfettoCaptureConfig, String) -> Unit,
     onStopCapture: () -> Unit,
     onOpenTrace: (Path) -> Unit,
+    onExportConfig: (PerfettoCaptureConfig) -> Unit = {},
     selectedDeviceSerial: String? = null,
     deviceCapabilities: PerfettoDeviceCapabilities? = null,
     modifier: Modifier = Modifier,
@@ -186,6 +188,7 @@ fun PerfettoCapturePage(
                 onStartCapture = onStartCapture,
                 onStopCapture = onStopCapture,
                 onOpenTrace = onOpenTrace,
+                onExportConfig = onExportConfig,
                 modifier = Modifier.width(configurationWidth).fillMaxHeight(),
                 language = language,
             )
@@ -625,6 +628,7 @@ private fun PerfettoConfigurationPanel(
     onStartCapture: (PerfettoCaptureConfig, String) -> Unit,
     onStopCapture: () -> Unit,
     onOpenTrace: (Path) -> Unit,
+    onExportConfig: (PerfettoCaptureConfig) -> Unit,
     modifier: Modifier = Modifier,
     language: UiLanguage,
 ) {
@@ -765,6 +769,31 @@ private fun PerfettoConfigurationPanel(
                         onClick = { onOpenTrace(captureState.traceFile) },
                     )
                 }
+                PerfettoCompactButton(
+                    text = localizedStringResource(Res.string.export_config, language),
+                    onClick = {
+                        onExportConfig(
+                            createCaptureConfig(
+                                selectedTemplate = selectedTemplate,
+                                targetPackage = targetPackage,
+                                durationSeconds = durationSeconds,
+                                bufferSizeKb = bufferSizeKb,
+                                bufferPolicy = bufferPolicy,
+                                androidSdk = deviceCapabilities?.androidSdk ?: 0,
+                                pollIntervals = pollIntervals,
+                                atraceCategories = atraceCategories,
+                                additionalCategories = additionalCategories,
+                                customConfigText = customConfigText,
+                                enabledProbes =
+                                    enabledProbes.filterTo(mutableSetOf()) { probe ->
+                                        deviceCapabilities?.unsupportedReason(probe) == null &&
+                                            (!probe.requiresTargetPackage || targetPackage.isNotBlank())
+                                    },
+                            ),
+                        )
+                    },
+                    selected = false,
+                )
             }
 
             CaptureStatus(captureState, language)

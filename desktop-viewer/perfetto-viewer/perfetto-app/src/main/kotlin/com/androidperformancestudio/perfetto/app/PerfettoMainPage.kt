@@ -46,6 +46,7 @@ import com.androidperformancestudio.perfetto.analysis.DiagnosticResult
 import com.androidperformancestudio.perfetto.analysis.PerfettoDiagnostics
 import com.androidperformancestudio.perfetto.capture.PerfettoCapabilityDetector
 import com.androidperformancestudio.perfetto.capture.PerfettoCaptureSession
+import com.androidperformancestudio.perfetto.capture.PerfettoConfigTextBuilder
 import com.androidperformancestudio.perfetto.export.TraceExporter
 import com.androidperformancestudio.perfetto.model.PerfettoArtifactFactory
 import com.androidperformancestudio.perfetto.model.PerfettoCaptureConfig
@@ -133,6 +134,7 @@ import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_wakeup_latency_title
 import com.androidperformancestudio.perfetto_app.generated.resources.export
 import com.androidperformancestudio.perfetto_app.generated.resources.export_trace
+import com.androidperformancestudio.perfetto_app.generated.resources.export_config_dialog
 import com.androidperformancestudio.perfetto_app.generated.resources.failed_to_export_trace
 import com.androidperformancestudio.perfetto_app.generated.resources.mb_n
 import com.androidperformancestudio.perfetto_app.generated.resources.no_online_device
@@ -200,6 +202,29 @@ internal fun exportRawTraceFile(
             ),
         )
     }
+
+/** Builds the textproto for [config] and writes it to [destination]. */
+internal fun exportConfigText(
+    config: PerfettoCaptureConfig,
+    destination: Path,
+): StudioResult<Path> =
+    try {
+        Files.writeString(destination, PerfettoConfigTextBuilder.build(config))
+        StudioResult.Success(destination)
+    } catch (exception: IOException) {
+        StudioResult.Failure(
+            StudioError(
+                category = ErrorCategory.IO,
+                code = "CONFIG_EXPORT_FAILED",
+                message = exception.message ?: "Failed to export config",
+                cause = exception,
+            ),
+        )
+    }
+
+/** Default export filename derived from the template, e.g. `system-overview-config.txtpb`. */
+internal fun defaultConfigFileName(config: PerfettoCaptureConfig): String =
+    config.template.name.lowercase().replace('_', '-') + "-config.txtpb"
 
 @Composable
 @Suppress("ktlint:standard:function-naming")
@@ -283,6 +308,25 @@ fun FrameWindowScope.PerfettoMainPage(
                             localizedStringResource(Res.string.failed_to_export_trace, language)
                         }
                 }
+            }
+        }
+    }
+
+    val exportConfig: (PerfettoCaptureConfig) -> Unit = { config ->
+        coroutineScope.launch(Dispatchers.IO) {
+            val saveFile =
+                chooseSaveFile(
+                    null,
+                    localizedStringResource(Res.string.export_config_dialog, language),
+                    defaultConfigFileName(config),
+                ) ?: return@launch
+            when (val exported = exportConfigText(config, saveFile.toPath())) {
+                is StudioResult.Success -> diagnosticError = null
+                is StudioResult.Failure ->
+                    diagnosticError =
+                        exported.error.message.ifBlank {
+                            localizedStringResource(Res.string.failed_to_export_trace, language)
+                        }
             }
         }
     }
@@ -476,6 +520,7 @@ fun FrameWindowScope.PerfettoMainPage(
                         onOpenTrace = { traceFile ->
                             openTrace(traceFile, sessions.firstOrNull { it.traceFile == traceFile }?.artifact, null)
                         },
+                        onExportConfig = exportConfig,
                         modifier = Modifier.weight(1f),
                     )
                     VerticalDivider(
