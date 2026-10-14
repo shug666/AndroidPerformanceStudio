@@ -5,7 +5,7 @@
     <string name="data_sources">DATA SOURCES</string>
     <string name="capability_query_failed">Capability query failed; only Android version checks are active: %1$s</string>
     <string name="system_wide_for_example_com_example_app">System-wide (for example com.example.app)</string>
-    <string name="comma_separated_atrace_categories_or_ftrace_events">Comma-separated atrace categories or ftrace events</string>
+    <string name="comma_separated_atrace_categories_or_ftrace_events">Comma-separated ftrace events (e.g. sched/sched_switch)</string>
     <string name="paste_a_valid_perfetto_traceconfig">Paste a valid Perfetto TraceConfig</string>
     <string name="target_package">Target package</string>
     <string name="duration_seconds">Duration (seconds)</string>

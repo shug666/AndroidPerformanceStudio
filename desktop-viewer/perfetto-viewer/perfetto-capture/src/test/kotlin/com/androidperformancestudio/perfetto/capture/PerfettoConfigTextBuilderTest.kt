@@ -274,4 +274,77 @@ class PerfettoConfigTextBuilderTest {
         assertFalse(text.contains("atrace_categories: \"idle\""))
         assertFalse(text.contains("atrace_categories: \"memreclaim\""))
     }
+
+    @Test
+    fun `configured poll interval overrides the default`() {
+        val text =
+            PerfettoConfigTextBuilder.build(
+                PerfettoCaptureConfig(
+                    template = PerfettoTraceTemplate.SYSTEM_OVERVIEW,
+                    androidSdk = 33,
+                    pollIntervals = mapOf(PerfettoProbe.CPU_FREQUENCY to 500),
+                ),
+            )
+        assertTrue(text.contains("cpufreq_period_ms: 500"))
+        // Unconfigured probes keep their defaults.
+        assertTrue(text.contains("stat_period_ms: 1000"))
+    }
+
+    @Test
+    fun `unconfigured poll intervals fall back to defaults`() {
+        val text =
+            PerfettoConfigTextBuilder.build(
+                PerfettoCaptureConfig(template = PerfettoTraceTemplate.SYSTEM_OVERVIEW, androidSdk = 33),
+            )
+        assertTrue(text.contains("stat_period_ms: 1000"))
+        assertTrue(text.contains("cpufreq_period_ms: 250"))
+        assertTrue(text.contains("meminfo_period_ms: 1000"))
+        assertTrue(text.contains("vmstat_period_ms: 1000"))
+    }
+
+    @Test
+    fun `configured atrace categories override the template preset`() {
+        val text =
+            PerfettoConfigTextBuilder.build(
+                PerfettoCaptureConfig(
+                    template = PerfettoTraceTemplate.SYSTEM_OVERVIEW,
+                    androidSdk = 33,
+                    atraceCategories = setOf("am", "gfx", "view"),
+                ),
+            )
+        assertTrue(text.contains("atrace_categories: \"am\""))
+        assertTrue(text.contains("atrace_categories: \"gfx\""))
+        assertTrue(text.contains("atrace_categories: \"view\""))
+        // Preset categories not in the override must be absent.
+        assertFalse(text.contains("atrace_categories: \"camera\""))
+        assertFalse(text.contains("atrace_categories: \"sched\""))
+    }
+
+    @Test
+    fun `unconfigured atrace categories fall back to template preset`() {
+        val text =
+            PerfettoConfigTextBuilder.build(
+                PerfettoCaptureConfig(template = PerfettoTraceTemplate.SYSTEM_OVERVIEW, androidSdk = 33),
+            )
+        // System Overview preset (24 default-selected categories) is present.
+        assertTrue(text.contains("atrace_categories: \"am\""))
+        assertTrue(text.contains("atrace_categories: \"workq\""))
+    }
+
+    @Test
+    fun `additional categories without slash do not contribute to atrace categories`() {
+        val text =
+            PerfettoConfigTextBuilder.build(
+                PerfettoCaptureConfig(
+                    template = PerfettoTraceTemplate.SYSTEM_OVERVIEW,
+                    androidSdk = 33,
+                    additionalCategories = listOf("sched/sched_process_exit", "audio"),
+                ),
+            )
+        // ftrace event with slash is added.
+        assertTrue(text.contains("ftrace_events: \"sched/sched_process_exit\""))
+        // atrace category without slash is NOT added (atrace is now via the multi-select).
+        // "audio" is not in the System Overview preset, so it must be absent.
+        assertFalse(text.contains("atrace_categories: \"audio\""))
+    }
 }

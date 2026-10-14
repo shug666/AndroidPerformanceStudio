@@ -17,14 +17,14 @@ object PerfettoConfigTextBuilder {
 
         val probes = config.enabledProbes ?: config.template.defaultProbes()
         val extraFtraceEvents = config.additionalCategories.filter { '/' in it }
-        val extraAtraceCategories = config.additionalCategories.filterNot { '/' in it }
         val ftraceEvents =
             (probes.flatMap(::ftraceEvents) + extraFtraceEvents).distinct()
-        val atraceCategories =
-            (
-                (if (PerfettoProbe.ATRACE in probes) atraceCategories(config.template) else emptyList()) +
-                    extraAtraceCategories
-            ).distinct()
+        val atraceCategories: List<String> =
+            if (PerfettoProbe.ATRACE in probes) {
+                config.atraceCategories?.toList() ?: atraceCategories(config.template)
+            } else {
+                emptyList()
+            }
         val atraceApps =
             buildSet {
                 config.targetPackage?.takeIf(String::isNotBlank)?.let(::add)
@@ -42,7 +42,7 @@ object PerfettoConfigTextBuilder {
                 if (ftraceEvents.isNotEmpty() || atraceCategories.isNotEmpty() || atraceApps.isNotEmpty()) {
                     add(ftrace(ftraceEvents, atraceCategories, atraceApps, config.androidSdk))
                 }
-                if (probes.any { it in SYS_STATS_PROBES }) add(systemStats(probes))
+                if (probes.any { it in SYS_STATS_PROBES }) add(systemStats(probes, config.pollIntervals))
                 if (probes.any { it in PROCESS_STATS_PROBES }) add(processStats(PerfettoProbe.PROCESS_MEMORY_POLL in probes))
                 addDirectSources(probes, config.targetPackage)
                 add(PerfettoDataSource("android.packages_list"))
@@ -137,23 +137,31 @@ object PerfettoConfigTextBuilder {
             },
         )
 
-    private fun systemStats(probes: Set<PerfettoProbe>): PerfettoDataSource =
-        PerfettoDataSource(
+    private fun systemStats(
+        probes: Set<PerfettoProbe>,
+        pollIntervals: Map<PerfettoProbe, Int>?,
+    ): PerfettoDataSource {
+        fun interval(probe: PerfettoProbe): Int =
+            (pollIntervals?.get(probe) ?: PerfettoCaptureConfig.DEFAULT_POLL_INTERVALS[probe])
+                ?.coerceAtLeast(PerfettoCaptureConfig.MIN_POLL_INTERVAL_MS + 1)
+                ?: PerfettoCaptureConfig.DEFAULT_POLL_INTERVALS.getValue(probe)
+        return PerfettoDataSource(
             "linux.sys_stats",
             buildString {
                 appendLine("sys_stats_config {")
                 if (PerfettoProbe.CPU_USAGE in probes) {
-                    appendLine("  stat_period_ms: 1000")
+                    appendLine("  stat_period_ms: ${interval(PerfettoProbe.CPU_USAGE)}")
                     appendLine("  stat_counters: STAT_CPU_TIMES")
                 }
                 // STAT_FORK_COUNT is reported whenever the sys_stats source is present.
                 appendLine("  stat_counters: STAT_FORK_COUNT")
-                if (PerfettoProbe.CPU_FREQUENCY in probes) appendLine("  cpufreq_period_ms: 250")
-                if (PerfettoProbe.KERNEL_MEMINFO in probes) appendLine("  meminfo_period_ms: 1000")
-                if (PerfettoProbe.VMSTAT in probes) appendLine("  vmstat_period_ms: 1000")
+                if (PerfettoProbe.CPU_FREQUENCY in probes) appendLine("  cpufreq_period_ms: ${interval(PerfettoProbe.CPU_FREQUENCY)}")
+                if (PerfettoProbe.KERNEL_MEMINFO in probes) appendLine("  meminfo_period_ms: ${interval(PerfettoProbe.KERNEL_MEMINFO)}")
+                if (PerfettoProbe.VMSTAT in probes) appendLine("  vmstat_period_ms: ${interval(PerfettoProbe.VMSTAT)}")
                 appendLine("}")
             },
         )
+    }
 
     private fun heapProfile(targetPackage: String): PerfettoDataSource =
         PerfettoDataSource(

@@ -49,6 +49,64 @@ enum class PerfettoProbeGroup(
     ADVANCED("Advanced"),
 }
 
+/**
+ * Atrace categories offered for selection, matching the official perfetto UI
+ * `ATRACE_CATEGORIES` list. [id] is the value emitted to `ftrace_config.atrace_categories`;
+ * [displayName] is the friendly label; [defaultSelected] marks the categories the official
+ * UI selects by default (and which form the System Overview template preset).
+ */
+enum class PerfettoAtraceCategory(
+    val id: String,
+    val displayName: String,
+    val defaultSelected: Boolean,
+) {
+    ADB("adb", "ADB", defaultSelected = false),
+    AIDL("aidl", "AIDL calls", defaultSelected = true),
+    AM("am", "Activity Manager", defaultSelected = true),
+    AUDIO("audio", "Audio", defaultSelected = false),
+    BINDER_DRIVER("binder_driver", "Binder Kernel driver", defaultSelected = true),
+    BINDER_LOCK("binder_lock", "Binder global lock trace", defaultSelected = false),
+    BIONIC("bionic", "Bionic C Library", defaultSelected = false),
+    CAMERA("camera", "Camera", defaultSelected = true),
+    DALVIK("dalvik", "Dalvik VM", defaultSelected = true),
+    DATABASE("database", "Database", defaultSelected = false),
+    DISK("disk", "Disk I/O", defaultSelected = true),
+    FREQ("freq", "CPU Frequency", defaultSelected = true),
+    GFX("gfx", "Graphics", defaultSelected = true),
+    HAL("hal", "Hardware Modules", defaultSelected = true),
+    IDLE("idle", "CPU Idle", defaultSelected = true),
+    INPUT("input", "Input", defaultSelected = true),
+    MEMORY("memory", "Memory", defaultSelected = true),
+    MEMRECLAIM("memreclaim", "Kernel Memory Reclaim", defaultSelected = true),
+    NETWORK("network", "Network", defaultSelected = true),
+    NNAPI("nnapi", "NNAPI", defaultSelected = false),
+    PM("pm", "Package Manager", defaultSelected = false),
+    POWER("power", "Power Management", defaultSelected = true),
+    RES("res", "Resource Loading", defaultSelected = true),
+    RRO("rro", "Runtime Resource Overlay", defaultSelected = false),
+    RS("rs", "RenderScript", defaultSelected = false),
+    SCHED("sched", "CPU Scheduling", defaultSelected = true),
+    SM("sm", "Sync Manager", defaultSelected = false),
+    SS("ss", "System Server", defaultSelected = true),
+    SYNC("sync", "Synchronization", defaultSelected = true),
+    THERMAL("thermal", "Thermal event", defaultSelected = true),
+    VIBRATOR("vibrator", "Vibrator", defaultSelected = false),
+    VIDEO("video", "Video", defaultSelected = false),
+    VIEW("view", "View System", defaultSelected = true),
+    WEBVIEW("webview", "WebView", defaultSelected = true),
+    WM("wm", "Window Manager", defaultSelected = true),
+    WORKQ("workq", "Kernel Workqueues", defaultSelected = true),
+    ;
+
+    companion object {
+        /** All category ids, in the official order. */
+        val allIds: List<String> = entries.map(PerfettoAtraceCategory::id)
+
+        /** The default-selected category ids (the System Overview preset). */
+        val defaultIds: List<String> = entries.filter(PerfettoAtraceCategory::defaultSelected).map(PerfettoAtraceCategory::id)
+    }
+}
+
 /** Android-relevant probes exposed by Perfetto's record page. */
 enum class PerfettoProbe(
     val group: PerfettoProbeGroup,
@@ -211,10 +269,29 @@ data class PerfettoCaptureConfig(
     val enabledProbes: Set<PerfettoProbe>? = null,
     val bufferPolicy: PerfettoBufferPolicy = PerfettoBufferPolicy.RING_BUFFER,
     val androidSdk: Int = 0,
+    val pollIntervals: Map<PerfettoProbe, Int>? = null,
+    val atraceCategories: Set<String>? = null,
 ) {
     init {
         require(durationSeconds in 1..600) { "durationSeconds must be in [1, 600], was $durationSeconds" }
         require(bufferSizeKb in 1024..1048576) { "bufferSizeKb must be in [1024, 1048576], was $bufferSizeKb" }
+        pollIntervals?.values?.forEach {
+            require(it > MIN_POLL_INTERVAL_MS) { "poll interval must be > $MIN_POLL_INTERVAL_MS ms, was $it" }
+        }
+    }
+
+    companion object {
+        /** sys_stats poll intervals must be greater than this (proto constraint). */
+        const val MIN_POLL_INTERVAL_MS: Int = 10
+
+        /** Default poll intervals per sys-stats probe, used when [pollIntervals] is null/absent. */
+        val DEFAULT_POLL_INTERVALS: Map<PerfettoProbe, Int> =
+            mapOf(
+                PerfettoProbe.CPU_USAGE to 1000,
+                PerfettoProbe.CPU_FREQUENCY to 250,
+                PerfettoProbe.KERNEL_MEMINFO to 1000,
+                PerfettoProbe.VMSTAT to 1000,
+            )
     }
 }
 

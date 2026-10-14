@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.perfetto.model.PerfettoCaptureConfig
 import com.androidperformancestudio.perfetto.model.PerfettoCaptureState
 import com.androidperformancestudio.perfetto.model.PerfettoBufferPolicy
+import com.androidperformancestudio.perfetto.model.PerfettoAtraceCategory
 import com.androidperformancestudio.perfetto.model.PerfettoDeviceCapabilities
 import com.androidperformancestudio.perfetto.model.PerfettoProbe
 import com.androidperformancestudio.perfetto.model.PerfettoProbeGroup
@@ -103,6 +104,8 @@ fun PerfettoCapturePage(
     var customConfigText by remember { mutableStateOf("") }
     var enabledProbes by remember { mutableStateOf(selectedTemplate.defaultProbes()) }
     var bufferPolicy by remember { mutableStateOf(PerfettoBufferPolicy.RING_BUFFER) }
+    var pollIntervals by remember { mutableStateOf(PerfettoCaptureConfig.DEFAULT_POLL_INTERVALS) }
+    var atraceCategories by remember { mutableStateOf(atracePreset(selectedTemplate)) }
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val currentConfigurationWidth =
@@ -123,6 +126,8 @@ fun PerfettoCapturePage(
                 onSelectTemplate = {
                     selectedTemplate = it
                     enabledProbes = it.defaultProbes()
+                    pollIntervals = PerfettoCaptureConfig.DEFAULT_POLL_INTERVALS
+                    atraceCategories = atracePreset(it)
                 },
                 modifier = Modifier.width(BASE_TEMPLATE_PANEL_WIDTH + addedPanelWidth).fillMaxHeight(),
                 language = language,
@@ -137,6 +142,12 @@ fun PerfettoCapturePage(
                 onProbeChange = { probe, enabled ->
                     enabledProbes = if (enabled) enabledProbes + probe else enabledProbes - probe
                 },
+                pollIntervals = pollIntervals,
+                onPollIntervalChange = { probe, ms ->
+                    pollIntervals = pollIntervals + (probe to ms.coerceAtLeast(PerfettoCaptureConfig.MIN_POLL_INTERVAL_MS + 1))
+                },
+                atraceCategories = atraceCategories,
+                onAtraceCategoriesChange = { atraceCategories = it },
                 targetPackage = targetPackage,
                 capabilities = deviceCapabilities,
                 modifier = Modifier.width(BASE_DATA_SOURCES_PANEL_WIDTH + addedPanelWidth).fillMaxHeight(),
@@ -158,6 +169,8 @@ fun PerfettoCapturePage(
                 onBufferSizeKbChange = { bufferSizeKb = it },
                 bufferPolicy = bufferPolicy,
                 onBufferPolicyChange = { bufferPolicy = it },
+                pollIntervals = pollIntervals,
+                atraceCategories = atraceCategories,
                 additionalCategories = additionalCategories,
                 onAdditionalCategoriesChange = { additionalCategories = it },
                 customConfigText = customConfigText,
@@ -180,6 +193,10 @@ private fun PerfettoDataSourcesPanel(
     selectedTemplate: PerfettoTraceTemplate,
     enabledProbes: Set<PerfettoProbe>,
     onProbeChange: (PerfettoProbe, Boolean) -> Unit,
+    pollIntervals: Map<PerfettoProbe, Int>,
+    onPollIntervalChange: (PerfettoProbe, Int) -> Unit,
+    atraceCategories: Set<String>,
+    onAtraceCategoriesChange: (Set<String>) -> Unit,
     targetPackage: String,
     capabilities: PerfettoDeviceCapabilities?,
     modifier: Modifier = Modifier,
@@ -210,6 +227,10 @@ private fun PerfettoDataSourcesPanel(
                         targetPackage = targetPackage,
                         capabilities = capabilities,
                         onProbeChange = onProbeChange,
+                        pollIntervals = pollIntervals,
+                        onPollIntervalChange = onPollIntervalChange,
+                        atraceCategories = atraceCategories,
+                        onAtraceCategoriesChange = onAtraceCategoriesChange,
                     )
                 }
             }
@@ -226,6 +247,10 @@ private fun PerfettoDataSourceGroupCard(
     targetPackage: String,
     capabilities: PerfettoDeviceCapabilities?,
     onProbeChange: (PerfettoProbe, Boolean) -> Unit,
+    pollIntervals: Map<PerfettoProbe, Int>,
+    onPollIntervalChange: (PerfettoProbe, Int) -> Unit,
+    atraceCategories: Set<String>,
+    onAtraceCategoriesChange: (Set<String>) -> Unit,
 ) {
     val shape = RoundedCornerShape(4.dp)
     Column(
@@ -262,6 +287,10 @@ private fun PerfettoDataSourceGroupCard(
                         checked = probe in enabledProbes && reason == null,
                         reason = reason,
                         onProbeChange = onProbeChange,
+                        pollIntervals = pollIntervals,
+                        onPollIntervalChange = onPollIntervalChange,
+                        atraceCategories = atraceCategories,
+                        onAtraceCategoriesChange = onAtraceCategoriesChange,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -280,36 +309,110 @@ private fun PerfettoProbeOption(
     checked: Boolean,
     reason: String?,
     onProbeChange: (PerfettoProbe, Boolean) -> Unit,
+    pollIntervals: Map<PerfettoProbe, Int>,
+    onPollIntervalChange: (PerfettoProbe, Int) -> Unit,
+    atraceCategories: Set<String>,
+    onAtraceCategoriesChange: (Set<String>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    Column(modifier = modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(
+                checked = checked,
+                onCheckedChange = { onProbeChange(probe, it) },
+                enabled = reason == null,
+                modifier = Modifier.size(22.dp),
+            )
+            Column(modifier = Modifier.weight(1f).padding(start = 5.dp)) {
+                Text(
+                    text = probe.displayName,
+                    color =
+                        if (reason == null) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    fontSize = ViewerTypography.label.fontSize,
+                    lineHeight = ViewerTypography.label.lineHeight,
+                )
+                reason?.let {
+                    Text(
+                        text = it,
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = ViewerTypography.micro.fontSize,
+                        lineHeight = ViewerTypography.micro.lineHeight,
+                    )
+                }
+            }
+        }
+        if (checked && reason == null && probe in PerfettoCaptureConfig.DEFAULT_POLL_INTERVALS) {
+            PollIntervalField(
+                probe = probe,
+                valueMs = pollIntervals[probe] ?: PerfettoCaptureConfig.DEFAULT_POLL_INTERVALS.getValue(probe),
+                onValueChange = { onPollIntervalChange(probe, it) },
+            )
+        }
+        if (checked && reason == null && probe == PerfettoProbe.ATRACE) {
+            AtraceCategorySelector(
+                selected = atraceCategories,
+                onChange = onAtraceCategoriesChange,
+            )
+        }
+    }
+}
+
+@Composable
+@Suppress("ktlint:standard:function-naming")
+private fun PollIntervalField(
+    probe: PerfettoProbe,
+    valueMs: Int,
+    onValueChange: (Int) -> Unit,
+) {
     Row(
-        modifier = modifier,
+        modifier = Modifier.fillMaxWidth().padding(start = 27.dp, top = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(
-            checked = checked,
-            onCheckedChange = { onProbeChange(probe, it) },
-            enabled = reason == null,
-            modifier = Modifier.size(22.dp),
+        Text(
+            text = "Poll (ms):",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = ViewerTypography.micro.fontSize,
+            lineHeight = ViewerTypography.micro.lineHeight,
         )
-        Column(modifier = Modifier.weight(1f).padding(start = 5.dp)) {
-            Text(
-                text = probe.displayName,
-                color =
-                    if (reason == null) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
+        PerfettoCompactTextField(
+            value = valueMs.toString(),
+            onValueChange = {
+                it.toIntOrNull()?.let { ms -> onValueChange(ms) }
+            },
+            modifier = Modifier.fillMaxWidth().padding(start = 6.dp),
+        )
+    }
+}
+
+@Composable
+@Suppress("ktlint:standard:function-naming")
+private fun AtraceCategorySelector(
+    selected: Set<String>,
+    onChange: (Set<String>) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(start = 27.dp, top = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp),
+    ) {
+        PerfettoAtraceCategory.entries.forEach { category ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = category.id in selected,
+                    onCheckedChange = { enabled ->
+                        onChange(if (enabled) selected + category.id else selected - category.id)
                     },
-                fontSize = ViewerTypography.label.fontSize,
-                lineHeight = ViewerTypography.label.lineHeight,
-            )
-            reason?.let {
+                    modifier = Modifier.size(18.dp),
+                )
                 Text(
-                    text = it,
-                    color = MaterialTheme.colorScheme.error,
+                    text = category.displayName,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontSize = ViewerTypography.micro.fontSize,
                     lineHeight = ViewerTypography.micro.lineHeight,
+                    modifier = Modifier.padding(start = 4.dp),
                 )
             }
         }
@@ -418,6 +521,8 @@ private fun PerfettoConfigurationPanel(
     onBufferSizeKbChange: (Int) -> Unit,
     bufferPolicy: PerfettoBufferPolicy,
     onBufferPolicyChange: (PerfettoBufferPolicy) -> Unit,
+    pollIntervals: Map<PerfettoProbe, Int>,
+    atraceCategories: Set<String>,
     additionalCategories: String,
     onAdditionalCategoriesChange: (String) -> Unit,
     customConfigText: String,
@@ -541,6 +646,8 @@ private fun PerfettoConfigurationPanel(
                                     bufferSizeKb = bufferSizeKb,
                                     bufferPolicy = bufferPolicy,
                                     androidSdk = deviceCapabilities?.androidSdk ?: 0,
+                                    pollIntervals = pollIntervals,
+                                    atraceCategories = atraceCategories,
                                     additionalCategories = additionalCategories,
                                     customConfigText = customConfigText,
                                     enabledProbes =
@@ -628,6 +735,8 @@ private fun createCaptureConfig(
     bufferSizeKb: Int,
     bufferPolicy: PerfettoBufferPolicy,
     androidSdk: Int,
+    pollIntervals: Map<PerfettoProbe, Int>,
+    atraceCategories: Set<String>,
     additionalCategories: String,
     customConfigText: String,
     enabledProbes: Set<PerfettoProbe>,
@@ -639,6 +748,8 @@ private fun createCaptureConfig(
         bufferSizeKb = bufferSizeKb,
         bufferPolicy = bufferPolicy,
         androidSdk = androidSdk,
+        pollIntervals = pollIntervals,
+        atraceCategories = atraceCategories,
         additionalCategories =
             additionalCategories
                 .split(',', '\n')
@@ -650,6 +761,17 @@ private fun createCaptureConfig(
             },
         enabledProbes = enabledProbes,
     )
+
+/** The atrace category preset to pre-select when switching to [template]. */
+private fun atracePreset(template: PerfettoTraceTemplate): Set<String> =
+    when (template) {
+        PerfettoTraceTemplate.SYSTEM_OVERVIEW -> PerfettoAtraceCategory.defaultIds.toSet()
+        PerfettoTraceTemplate.APP_PERFORMANCE -> setOf("am", "binder_driver", "dalvik", "database", "gfx", "view", "wm")
+        PerfettoTraceTemplate.GFX_PIPELINE -> setOf("gfx", "view", "wm")
+        PerfettoTraceTemplate.INPUT_LATENCY -> setOf("input", "view", "wm")
+        PerfettoTraceTemplate.MEMORY_PROFILE -> setOf("am", "dalvik")
+        PerfettoTraceTemplate.CUSTOM -> emptySet()
+    }
 
 private fun isCaptureStartAllowed(
     state: PerfettoCaptureState,
