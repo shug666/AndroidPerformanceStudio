@@ -6,8 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -390,37 +388,43 @@ private fun PollIntervalField(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 @Suppress("ktlint:standard:function-naming")
 private fun AtraceCategorySelector(
     selected: Set<String>,
     onChange: (Set<String>) -> Unit,
 ) {
-    FlowRow(
+    val columns = 3
+    Column(
         modifier = Modifier.fillMaxWidth().padding(start = 27.dp, top = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
-        PerfettoAtraceCategory.entries.forEach { category ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(end = 4.dp),
-            ) {
-                Checkbox(
-                    checked = category.id in selected,
-                    onCheckedChange = { enabled ->
-                        onChange(if (enabled) selected + category.id else selected - category.id)
-                    },
-                    modifier = Modifier.size(18.dp),
-                )
-                Text(
-                    text = category.displayName,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = ViewerTypography.micro.fontSize,
-                    lineHeight = ViewerTypography.micro.lineHeight,
-                    modifier = Modifier.padding(start = 4.dp),
-                )
+        PerfettoAtraceCategory.entries.chunked(columns).forEach { rowCategories ->
+            Row(modifier = Modifier.fillMaxWidth()) {
+                rowCategories.forEach { category ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Checkbox(
+                            checked = category.id in selected,
+                            onCheckedChange = { enabled ->
+                                onChange(if (enabled) selected + category.id else selected - category.id)
+                            },
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            text = category.displayName,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = ViewerTypography.micro.fontSize,
+                            lineHeight = ViewerTypography.micro.lineHeight,
+                            modifier = Modifier.padding(start = 4.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                repeat(columns - rowCategories.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
