@@ -110,6 +110,42 @@ class PerfettoCapturePageRenderTest {
         }
     }
 
+    @Test
+    fun `atrace category dialog renders all categories when open`() {
+        SwingUtilities.invokeAndWait {
+            ImageComposeScene(700, 600) {
+                ViewerTheme(darkTheme = false) {
+                    androidx.compose.material3.Surface {
+                        AtraceCategoryDialog(
+                            initial = com.androidperformancestudio.perfetto.model.PerfettoAtraceCategory.defaultIds.toSet(),
+                            onConfirm = {},
+                            onDismiss = {},
+                        )
+                    }
+                }
+            }.use { scene ->
+                repeat(3) { scene.render().close() }
+                val nodes = scene.semanticsOwners.flatMap { it.unmergedRootSemanticsNode.descendants() }
+                val labels =
+                    com.androidperformancestudio.perfetto.model.PerfettoAtraceCategory.entries
+                        .map { it.displayName }
+                val rendered = labels.mapNotNull { l -> nodes.firstOrNull { it.text == l } }
+                assertEquals(labels.size, rendered.size, "all atrace categories must render in the dialog")
+                assertTrue(nodes.any { it.text == "Atrace categories" })
+                assertTrue(nodes.any { it.text == "OK" })
+                assertTrue(nodes.any { it.text == "Cancel" })
+                assertTrue(nodes.any { it.text == "All" })
+
+                val path = Path.of("build/reports/trace-layout/atrace-dialog.png")
+                Files.createDirectories(path.parent)
+                scene.render().use { image ->
+                    val encoded = checkNotNull(image.encodeToData())
+                    encoded.use { Files.write(path, it.bytes) }
+                }
+            }
+        }
+    }
+
     private fun SemanticsNode.descendants(): List<SemanticsNode> = listOf(this) + children.flatMap { it.descendants() }
 
     private val SemanticsNode.text: String?

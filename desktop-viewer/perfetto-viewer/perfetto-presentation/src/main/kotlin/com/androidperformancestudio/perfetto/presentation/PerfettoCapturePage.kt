@@ -4,12 +4,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,6 +27,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
@@ -34,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -431,46 +436,80 @@ private fun PollIntervalDialog(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 @Suppress("ktlint:standard:function-naming")
-private fun AtraceCategoryDialog(
+internal fun AtraceCategoryDialog(
     initial: Set<String>,
     onConfirm: (Set<String>) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var selected by remember { mutableStateOf(initial) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Atrace categories") },
-        text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    PerfettoAtraceCategory.entries.forEach { category ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(end = 4.dp),
+    val all = PerfettoAtraceCategory.entries
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(8.dp), tonalElevation = 6.dp) {
+            Column(modifier = Modifier.width(520.dp).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Atrace categories",
+                        fontSize = ViewerTypography.secondary.fontSize,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = "${selected.size}/${all.size}",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = ViewerTypography.label.fontSize,
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    PerfettoCompactButton(text = "All", onClick = { selected = all.map { it.id }.toSet() })
+                    PerfettoCompactButton(text = "None", onClick = { selected = emptySet() }, selected = false)
+                    PerfettoCompactButton(
+                        text = "Default",
+                        onClick = { selected = PerfettoAtraceCategory.defaultIds.toSet() },
+                        selected = false,
+                    )
+                }
+                Box(modifier = Modifier.heightIn(max = 360.dp)) {
+                    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
                         ) {
-                            Checkbox(
-                                checked = category.id in selected,
-                                onCheckedChange = { enabled ->
-                                    selected = if (enabled) selected + category.id else selected - category.id
-                                },
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Text(
-                                text = category.displayName,
-                                fontSize = ViewerTypography.label.fontSize,
-                                modifier = Modifier.padding(start = 4.dp),
-                            )
+                            all.forEach { category ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.widthIn(min = 140.dp).padding(end = 6.dp),
+                                ) {
+                                    Checkbox(
+                                        checked = category.id in selected,
+                                        onCheckedChange = { enabled ->
+                                            selected = if (enabled) selected + category.id else selected - category.id
+                                        },
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Text(
+                                        text = category.displayName,
+                                        fontSize = ViewerTypography.label.fontSize,
+                                        modifier = Modifier.padding(start = 4.dp),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
                         }
                     }
                 }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    PerfettoCompactButton(text = "Cancel", onClick = onDismiss, selected = false)
+                    Spacer(Modifier.width(8.dp))
+                    PerfettoCompactButton(text = "OK", onClick = { onConfirm(selected) })
+                }
             }
-        },
-        confirmButton = { PerfettoCompactButton(text = "OK", onClick = { onConfirm(selected) }) },
-        dismissButton = { PerfettoCompactButton(text = "Cancel", onClick = onDismiss, selected = false) },
-    )
+        }
+    }
 }
 
 @Composable
