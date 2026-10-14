@@ -2,6 +2,59 @@
 
 This is a continuation checkpoint for the [phased implementation plan](README.md), not an assertion that the full commercial UI is finished.
 
+## 2026-10-14: Startup Profiler reference workspace — no date row
+
+### Implemented
+
+- Replaced the vertically stacked results-only presentation with the page 07 reference structure:
+  compact mountain hero, Cold/Warm/Hot request tabs, scenario configuration, four colored metrics,
+  multi-run waterfall, selectable run table and a 300dp evidence rail. No calendar/date card or row
+  is rendered. Below 1100dp workspace width the rail stacks after the main content; both stay scrollable.
+- All scenario controls use the existing controller: device/component selection, measured runs,
+  compilation/Profile source, start/stop, advanced compilation warmups (preserving every old 0–10
+  choice), timeout, Perfetto capture and practical comparison threshold. Native File menu, import/
+  CSV/JSON actions, compilation confirmation, cancellation, progress and selectable status remain.
+- Metrics are platform TTID, platform TTFD, Agent First Frame and TTID P95; P90, TotalTime, MAD,
+  sample/missing counts, evidence confidence and low-tail-resolution warnings remain visible.
+  Completely missing metrics display zero available samples without changing the inherited analyzer.
+- Waterfalls use only matching same-source milestone endpoints and verified phase durations. Gaps
+  remain gaps; platform TotalTime labels are independent measurements, not additive phase totals.
+  First five runs are previewed and an out-of-preview selected run replaces the last preview row.
+  Phase and platform-only rows both select runs; full run/phase evidence remains available in the rail.
+- Baseline Profile success requires verified speed-profile compilation, explicitly declared Baseline
+  Profile Plugin provenance, a recorded artifact and no preparation failure. Generic speed-profile
+  requests, Macrobenchmark sources and missing evidence do not receive a Baseline-ready badge.
+  Trace navigation retains local file validation plus correlation bounds, failures and limitations.
+- Startup-only dark surfaces derive from shared theme/accent roles; light mode and other profiler
+  palettes are unchanged. The app selector remains searchable after moving into presentation; its
+  desktop source-contract test now points to the new control file.
+
+### Fresh validation and evidence
+
+- Eight Startup suites pass: presentation **27**, app **15**, analysis **8**, parser **3**, capture
+  **4**, export **4**, storage **2**, protocol **2**: **65 tests**, zero failures/errors/skips.
+  Three workspace regressions and four app-wiring regressions first failed against the old layout.
+- Startup presentation/app `ktlintCheck`, changed-file Detekt, desktop Kotlin compilation and macOS
+  `createDistributable` pass. Packaged Startup app/presentation JAR entries match their built entries.
+- Full-module Detekt is not green: **13 existing presentation findings** and **1 existing app
+  LongMethod**. All five implicated source/test files match HEAD byte-for-byte and were left untouched.
+- Full desktop tests are **171 passing / 1 failing**. The remaining failure is the independently
+  modified Network screen's theme source assertion (`ProfilerThemeSupportTest` requires a literal
+  `MaterialTheme.colorScheme`). Startup's moved searchable-selector contract passes. Earlier Network
+  compile errors were cleared by that separate work; no Network/Frame/GPU sources were edited here.
+- Automated screenshots: 1336×904 dark/Chinese reference workspace, 1280×720 dark/Chinese workspace,
+  and 1336×904 light/English workspace. Compared against the reference crop and generated a diagnostic
+  raw pixel-diff; this is not pixel-equivalence acceptance. Reference illustration, icon treatment,
+  density and unavailable sample recommendations still differ intentionally or remain visual gaps.
+- Durable local evidence (ignored, not product assets):
+  `.omx/artifacts/startup-profiler-ui/evidence-20261014/`. Screenshot comparison:
+  `/tmp/aps-startup-20261014-comparison.png`; final integration log:
+  `/tmp/aps-startup-final-integration2-20261014.log`.
+- Native desktop interaction acceptance could not run: System Events reports `UI elements enabled =
+  false`. The app image was built, not installed/launched or substituted for a running application.
+  No fresh real-device startup experiment or compilation-state mutation was performed. No commit or
+  push; this records bounded implementation and local evidence, not whole-app/release completion.
+
 ## 2026-10-14: In-app Macrobenchmark orchestration
 
 ### Implemented

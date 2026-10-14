@@ -30,11 +30,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,20 +45,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.androidperformancestudio.startup.analysis.StartupAnalysisResult
 import com.androidperformancestudio.startup.analysis.StartupComparison
 import com.androidperformancestudio.startup.model.EvidenceConfidence
 import com.androidperformancestudio.startup.model.StartupMilestoneKind
 import com.androidperformancestudio.startup.model.StartupPerfettoSlice
 import com.androidperformancestudio.startup.model.StartupPhase
 import com.androidperformancestudio.startup.model.StartupRun
-import com.androidperformancestudio.startup.model.StartupStatistics
 import com.androidperformancestudio.startup.model.StartupType
 import com.androidperformancestudio.startup.presentation.generated.resources.Res
 import com.androidperformancestudio.startup.presentation.generated.resources.activity_created
@@ -67,6 +67,8 @@ import com.androidperformancestudio.startup.presentation.generated.resources.age
 import com.androidperformancestudio.startup.presentation.generated.resources.agent_first_frame
 import com.androidperformancestudio.startup.presentation.generated.resources.agent_ready
 import com.androidperformancestudio.startup.presentation.generated.resources.baseline_comparison
+import com.androidperformancestudio.startup.presentation.generated.resources.baseline_comparison_empty
+import com.androidperformancestudio.startup.presentation.generated.resources.baseline_comparison_title
 import com.androidperformancestudio.startup.presentation.generated.resources.choose_a_device_and_app_to_run_repeatable_cold_warm
 import com.androidperformancestudio.startup.presentation.generated.resources.cold
 import com.androidperformancestudio.startup.presentation.generated.resources.compilation_details
@@ -77,6 +79,8 @@ import com.androidperformancestudio.startup.presentation.generated.resources.dis
 import com.androidperformancestudio.startup.presentation.generated.resources.environment_evidence
 import com.androidperformancestudio.startup.presentation.generated.resources.estimated
 import com.androidperformancestudio.startup.presentation.generated.resources.exact
+import com.androidperformancestudio.startup.presentation.generated.resources.export_csv
+import com.androidperformancestudio.startup.presentation.generated.resources.export_json
 import com.androidperformancestudio.startup.presentation.generated.resources.fallback
 import com.androidperformancestudio.startup.presentation.generated.resources.first_draw_callback
 import com.androidperformancestudio.startup.presentation.generated.resources.first_frame
@@ -84,15 +88,10 @@ import com.androidperformancestudio.startup.presentation.generated.resources.ful
 import com.androidperformancestudio.startup.presentation.generated.resources.fully_drawn
 import com.androidperformancestudio.startup.presentation.generated.resources.fully_drawn_time
 import com.androidperformancestudio.startup.presentation.generated.resources.hot
+import com.androidperformancestudio.startup.presentation.generated.resources.import_report
 import com.androidperformancestudio.startup.presentation.generated.resources.inferred
 import com.androidperformancestudio.startup.presentation.generated.resources.initializer_enter
-import com.androidperformancestudio.startup.presentation.generated.resources.insufficient
-import com.androidperformancestudio.startup.presentation.generated.resources.low_tail_resolution
-import com.androidperformancestudio.startup.presentation.generated.resources.mad
 import com.androidperformancestudio.startup.presentation.generated.resources.measured_runs
-import com.androidperformancestudio.startup.presentation.generated.resources.median_first_frame
-import com.androidperformancestudio.startup.presentation.generated.resources.median_fully_drawn
-import com.androidperformancestudio.startup.presentation.generated.resources.median_totaltime
 import com.androidperformancestudio.startup.presentation.generated.resources.metric_evidence
 import com.androidperformancestudio.startup.presentation.generated.resources.milestones
 import com.androidperformancestudio.startup.presentation.generated.resources.no
@@ -100,12 +99,13 @@ import com.androidperformancestudio.startup.presentation.generated.resources.no_
 import com.androidperformancestudio.startup.presentation.generated.resources.not_correlated
 import com.androidperformancestudio.startup.presentation.generated.resources.observed
 import com.androidperformancestudio.startup.presentation.generated.resources.open_trace
-import com.androidperformancestudio.startup.presentation.generated.resources.p90_n
-import com.androidperformancestudio.startup.presentation.generated.resources.p95_n
+import com.androidperformancestudio.startup.presentation.generated.resources.optimization_empty
+import com.androidperformancestudio.startup.presentation.generated.resources.optimization_evidence
 import com.androidperformancestudio.startup.presentation.generated.resources.phase_activity_create
 import com.androidperformancestudio.startup.presentation.generated.resources.phase_activity_to_resumed
 import com.androidperformancestudio.startup.presentation.generated.resources.phase_agent_initialization
 import com.androidperformancestudio.startup.presentation.generated.resources.phase_comparison
+import com.androidperformancestudio.startup.presentation.generated.resources.phase_details
 import com.androidperformancestudio.startup.presentation.generated.resources.phase_first_frame_to_fully_drawn
 import com.androidperformancestudio.startup.presentation.generated.resources.phase_process_bootstrap
 import com.androidperformancestudio.startup.presentation.generated.resources.phase_range
@@ -113,17 +113,14 @@ import com.androidperformancestudio.startup.presentation.generated.resources.pha
 import com.androidperformancestudio.startup.presentation.generated.resources.platform_durations_independent
 import com.androidperformancestudio.startup.presentation.generated.resources.platform_timeline
 import com.androidperformancestudio.startup.presentation.generated.resources.process_start
+import com.androidperformancestudio.startup.presentation.generated.resources.progress_runs
 import com.androidperformancestudio.startup.presentation.generated.resources.raw_am_start_w_evidence
+import com.androidperformancestudio.startup.presentation.generated.resources.related_actions
 import com.androidperformancestudio.startup.presentation.generated.resources.report_fully_drawn_hint
 import com.androidperformancestudio.startup.presentation.generated.resources.requested
 import com.androidperformancestudio.startup.presentation.generated.resources.run
 import com.androidperformancestudio.startup.presentation.generated.resources.run_detail
-import com.androidperformancestudio.startup.presentation.generated.resources.stability
-import com.androidperformancestudio.startup.presentation.generated.resources.stable
-import com.androidperformancestudio.startup.presentation.generated.resources.startup_profiler
 import com.androidperformancestudio.startup.presentation.generated.resources.startup_waterfall
-import com.androidperformancestudio.startup.presentation.generated.resources.text
-import com.androidperformancestudio.startup.presentation.generated.resources.text_45f5c8ce
 import com.androidperformancestudio.startup.presentation.generated.resources.text_aeb7e472
 import com.androidperformancestudio.startup.presentation.generated.resources.this_time
 import com.androidperformancestudio.startup.presentation.generated.resources.total
@@ -142,23 +139,21 @@ import com.androidperformancestudio.startup.presentation.generated.resources.tra
 import com.androidperformancestudio.startup.presentation.generated.resources.trace_slice_detail
 import com.androidperformancestudio.startup.presentation.generated.resources.unavailable
 import com.androidperformancestudio.startup.presentation.generated.resources.unknown
-import com.androidperformancestudio.startup.presentation.generated.resources.unstable
-import com.androidperformancestudio.startup.presentation.generated.resources.variable
 import com.androidperformancestudio.startup.presentation.generated.resources.wait_time
 import com.androidperformancestudio.startup.presentation.generated.resources.warm
-import com.androidperformancestudio.startup.presentation.generated.resources.warnings
 import com.androidperformancestudio.startup.presentation.generated.resources.waterfall_clock_domain
 import com.androidperformancestudio.startup.presentation.generated.resources.waterfall_interval
 import com.androidperformancestudio.startup.presentation.generated.resources.waterfall_no_intervals
 import com.androidperformancestudio.startup.presentation.generated.resources.waterfall_unplotted_phases
 import com.androidperformancestudio.startup.presentation.generated.resources.yes
 import com.androidperformancestudio.ui.LocalViewerColors
+import com.androidperformancestudio.ui.ProfilerCompactButton
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.studio.StudioDataTable
-import com.androidperformancestudio.ui.studio.StudioMetricCard
 import com.androidperformancestudio.ui.studio.StudioPanel
+import com.androidperformancestudio.ui.studio.StudioPanelHeader
 import com.androidperformancestudio.ui.studio.StudioTableColumn
 import com.androidperformancestudio.ui.studio.StudioTokens
 import java.util.Locale
@@ -170,68 +165,72 @@ public fun StartupProfilerScreen(
     language: UiLanguage,
     modifier: Modifier = Modifier,
 ) {
-    val analysis = state.analysis
-    when {
-        state.errorMessage != null && analysis == null -> MessagePane(state.errorMessage, MaterialTheme.colorScheme.error, modifier)
-        analysis == null -> EmptyPane(state, language, modifier)
-        else -> ResultsPane(state, analysis, actions, language, modifier)
-    }
-}
-
-@Composable
-private fun EmptyPane(
-    state: StartupProfilerState,
-    language: UiLanguage,
-    modifier: Modifier,
-) {
-    Column(
-        modifier = modifier.fillMaxSize().padding(32.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            localizedStringResource(Res.string.startup_profiler, language),
-            style = MaterialTheme.typography.headlineMedium,
-        )
-        Text(
-            localizedStringResource(
-                Res.string.choose_a_device_and_app_to_run_repeatable_cold_warm,
-                language,
-            ),
-        )
-        state.operationMessage?.let { Text(it) }
-        if (state.isRunning && state.totalRuns > 0) {
-            Text(localizedStringResource(Res.string.text, language, state.completedRuns, state.totalRuns))
-        }
-        state.warnings.forEach { Text(it, color = MaterialTheme.colorScheme.tertiary) }
-    }
-}
-
-@Composable
-private fun ResultsPane(
-    state: StartupProfilerState,
-    analysis: StartupAnalysisResult,
-    actions: StartupProfilerActions,
-    language: UiLanguage,
-    modifier: Modifier,
-) {
-    val selected = analysis.runs.firstOrNull { it.id == state.selectedRunId } ?: analysis.runs.first()
-    Column(
-        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 6.dp, horizontal = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            MetricCard(localizedStringResource(Res.string.median_totaltime, language), analysis.totalTime, language)
-            MetricCard(localizedStringResource(Res.string.median_first_frame, language), analysis.firstFrame, language)
-            MetricCard(localizedStringResource(Res.string.median_fully_drawn, language), analysis.fullyDrawn, language)
-            StabilityCard(analysis, language)
-        }
-        StudioPanel(modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                StartupWaterfallChart(selected, language)
-                PlatformDurationBars(selected, language)
+    val originalColors = LocalViewerColors.current
+    val workspaceColors = remember(originalColors) { originalColors.startupWorkspaceColors() }
+    CompositionLocalProvider(LocalViewerColors provides workspaceColors) {
+        val selected = state.analysis?.runs?.let { runs -> runs.firstOrNull { it.id == state.selectedRunId } ?: runs.firstOrNull() }
+        val colors = LocalViewerColors.current
+        BoxWithConstraints(modifier.fillMaxSize().background(colors.workspace).padding(8.dp)) {
+            if (maxWidth >= 1100.dp) {
+                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(
+                        Modifier.weight(1f).testTag("startup-main").verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        StartupMainWorkspace(state, selected, actions, language)
+                    }
+                    Column(
+                        Modifier.width(300.dp).testTag("startup-evidence-rail").verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        StartupEvidenceRail(state, selected, actions, language)
+                    }
+                }
+            } else {
+                Column(
+                    Modifier.fillMaxSize().testTag("startup-stacked-workspace").verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Column(Modifier.fillMaxWidth().testTag("startup-main"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        StartupMainWorkspace(state, selected, actions, language)
+                    }
+                    Column(Modifier.fillMaxWidth().testTag("startup-evidence-rail"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        StartupEvidenceRail(state, selected, actions, language)
+                    }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun StartupMainWorkspace(
+    state: StartupProfilerState,
+    selected: StartupRun?,
+    actions: StartupProfilerActions,
+    language: UiLanguage,
+) {
+    StartupWorkspaceHero(language)
+    StartupTypeTabs(state, actions, language)
+    StartupScenarioControls(state, actions, language)
+    state.operationMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+    state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+    if (state.isRunning && state.totalRuns > 0) {
+        Text(localizedStringResource(Res.string.progress_runs, language, state.completedRuns, state.totalRuns))
+        LinearProgressIndicator(
+            progress = { (state.completedRuns.toFloat() / state.totalRuns).coerceIn(0f, 1f) },
+            modifier = Modifier.fillMaxWidth().testTag("startup-progress"),
+        )
+    }
+    StartupMetricOverview(state.analysis, language)
+    val analysis = state.analysis
+    if (analysis == null || selected == null) {
+        StudioPanel(Modifier.fillMaxWidth()) {
+            StudioPanelHeader(localizedStringResource(Res.string.startup_waterfall, language))
+            Text(localizedStringResource(Res.string.choose_a_device_and_app_to_run_repeatable_cold_warm, language))
+        }
+    } else {
+        StartupRunsWaterfall(analysis.runs, selected, actions, language)
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val tableWidth = maxOf(maxWidth, RUN_TABLE_MIN_WIDTH)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
@@ -244,69 +243,72 @@ private fun ResultsPane(
                 }
             }
         }
-        HorizontalDivider()
-        RunDetail(selected, actions, language)
-        state.comparison?.let { comparison -> BaselineComparison(comparison, language) }
-        if (analysis.warnings.isNotEmpty()) {
+    }
+    state.comparison?.let { comparison -> BaselineComparison(comparison, language) }
+        ?: StudioPanel(Modifier.fillMaxWidth()) {
+            Text(localizedStringResource(Res.string.baseline_comparison_title, language), fontWeight = FontWeight.SemiBold)
+            Text(localizedStringResource(Res.string.baseline_comparison_empty, language), style = MaterialTheme.typography.bodySmall)
+        }
+}
+
+@Composable
+private fun StartupEvidenceRail(
+    state: StartupProfilerState,
+    selected: StartupRun?,
+    actions: StartupProfilerActions,
+    language: UiLanguage,
+) {
+    StartupProfileSummary(selected, language)
+    StudioPanel(Modifier.fillMaxWidth()) {
+        StudioPanelHeader(localizedStringResource(Res.string.optimization_evidence, language))
+        val findings =
+            (state.warnings + state.analysis?.warnings.orEmpty() + selected?.warnings.orEmpty() + selected?.diagnostics.orEmpty())
+                .distinct()
+        if (selected != null && selected.platform.fullyDrawnTimeMs == null) {
             Text(
-                localizedStringResource(Res.string.warnings, language),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
+                localizedStringResource(Res.string.report_fully_drawn_hint, language),
+                color = LocalViewerColors.current.warning,
+                style = MaterialTheme.typography.bodySmall,
             )
-            analysis.warnings.forEach {
-                Text(
-                    localizedStringResource(Res.string.text_45f5c8ce, language, it),
-                    color = MaterialTheme.colorScheme.tertiary,
-                )
+        }
+        if (findings.isEmpty()) {
+            Text(localizedStringResource(Res.string.optimization_empty, language), style = MaterialTheme.typography.bodySmall)
+        }
+        findings.forEach { Text("• $it", color = LocalViewerColors.current.warning, style = MaterialTheme.typography.bodySmall) }
+    }
+    StudioPanel(Modifier.fillMaxWidth()) {
+        StudioPanelHeader(localizedStringResource(Res.string.related_actions, language))
+        ProfilerCompactButton(
+            localizedStringResource(Res.string.import_report, language),
+            enabled = !state.isRunning,
+            onClick = actions.onImport,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ProfilerCompactButton(
+                localizedStringResource(Res.string.export_csv, language),
+                enabled =
+                    state.analysis != null && !state.isRunning,
+                onClick = actions.onExportCsv,
+            )
+            ProfilerCompactButton(
+                localizedStringResource(Res.string.export_json, language),
+                enabled =
+                    state.analysis != null && !state.isRunning,
+                onClick = actions.onExportJson,
+            )
+        }
+    }
+    selected?.let { run ->
+        StudioPanel(Modifier.fillMaxWidth().testTag("startup-run-detail")) {
+            CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.bodySmall) {
+                RunDetail(run, actions, language)
+                ExpandableEvidence(localizedStringResource(Res.string.phase_details, language), run.id) {
+                    StartupWaterfallChart(run, language)
+                    PlatformDurationBars(run, language)
+                }
             }
         }
-        state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     }
-}
-
-@Composable
-private fun MetricCard(
-    title: String,
-    statistics: StartupStatistics,
-    language: UiLanguage,
-) {
-    StudioMetricCard(
-        label = title,
-        value = statistics.medianMs.formatMs(),
-        modifier = Modifier.width(172.dp),
-        supportingText = statistics.metricSupportingText(language),
-    )
-}
-
-internal fun StartupStatistics.metricSupportingText(language: UiLanguage): String =
-    listOfNotNull(
-        localizedStringResource(Res.string.p90_n, language, p90Ms.formatMs(), count),
-        localizedStringResource(Res.string.p95_n, language, p95Ms.formatMs(), count),
-        localizedStringResource(Res.string.low_tail_resolution, language)
-            .takeIf { p90LowResolution || p95LowResolution },
-    ).joinToString("\n")
-
-@Composable
-private fun StabilityCard(
-    analysis: StartupAnalysisResult,
-    language: UiLanguage,
-) {
-    val median = analysis.totalTime.medianMs
-    val deviation = analysis.totalTime.medianAbsoluteDeviationMs
-    val ratio = if (median != null && median > 0 && deviation != null) deviation / median else null
-    val label =
-        when {
-            ratio == null -> localizedStringResource(Res.string.insufficient, language)
-            ratio <= 0.05 -> localizedStringResource(Res.string.stable, language)
-            ratio <= 0.15 -> localizedStringResource(Res.string.variable, language)
-            else -> localizedStringResource(Res.string.unstable, language)
-        }
-    StudioMetricCard(
-        label = localizedStringResource(Res.string.stability, language),
-        value = label,
-        modifier = Modifier.width(156.dp),
-        supportingText = localizedStringResource(Res.string.mad, language, deviation.formatMs()),
-    )
 }
 
 @Composable
@@ -369,9 +371,10 @@ private fun RunRow(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .testTag("startup-table-${run.id}")
                 .background(background)
                 .selectable(selected = selected, onClick = { onSelect(run.id) }, role = Role.RadioButton)
-                .padding(horizontal = StudioTokens.compactContentPadding, vertical = 6.dp),
+                .padding(horizontal = StudioTokens.compactContentPadding, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TableCell(run.iteration.toString(), RUN_COLUMN_WEIGHT, emphasized = selected)
@@ -413,7 +416,6 @@ private fun RunDetail(
     actions: StartupProfilerActions,
     language: UiLanguage,
 ) {
-    var traceOpenFailed by remember(run.id) { mutableStateOf(false) }
     Text(
         localizedStringResource(
             Res.string.run_detail,
@@ -454,12 +456,14 @@ private fun RunDetail(
         ),
     )
     if (run.platform.fullyDrawnTimeMs == null) Text(localizedStringResource(Res.string.report_fully_drawn_hint, language))
-    Text(localizedStringResource(Res.string.compilation_details, language), fontWeight = FontWeight.SemiBold)
-    val compilationEvidence = run.compilationEvidence
-    if (compilationEvidence == null) {
-        Text(localizedStringResource(Res.string.unavailable, language))
-    } else {
-        compilationEvidence.detailRows(language).forEach { row -> Text("${row.label}: ${row.value}") }
+    ExpandableEvidence(localizedStringResource(Res.string.compilation_details, language), run.id) {
+        Text(localizedStringResource(Res.string.compilation_details, language), fontWeight = FontWeight.SemiBold)
+        val compilationEvidence = run.compilationEvidence
+        if (compilationEvidence == null) {
+            Text(localizedStringResource(Res.string.unavailable, language))
+        } else {
+            compilationEvidence.detailRows(language).forEach { row -> Text("${row.label}: ${row.value}") }
+        }
     }
     run.environmentEvidence?.let { evidence ->
         Text(
@@ -476,94 +480,105 @@ private fun RunDetail(
             ),
         )
     }
-    run.traceEvidence?.let { evidence ->
+    RunTraceEvidence(run, actions, language)
+    if (run.diagnostics.isNotEmpty()) {
+        Text(localizedStringResource(Res.string.diagnostics, language, run.diagnostics.joinToString()))
+    }
+    ExpandableEvidence(localizedStringResource(Res.string.raw_am_start_w_evidence, language), run.id) {
+        if (run.milestones.isNotEmpty()) {
+            Text(localizedStringResource(Res.string.milestones, language), fontWeight = FontWeight.SemiBold)
+            run.milestones.forEach { milestone ->
+                Text(
+                    localizedStringResource(
+                        Res.string.text_aeb7e472,
+                        language,
+                        milestone.kind.localizedLabel(language),
+                        milestone.confidence.localizedLabel(language),
+                        milestone.activityName.orEmpty(),
+                    ),
+                )
+            }
+        }
+        Text(localizedStringResource(Res.string.raw_am_start_w_evidence, language), fontWeight = FontWeight.SemiBold)
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .background(
+                    MaterialTheme.colorScheme.surfaceVariant,
+                    RoundedCornerShape(4.dp),
+                ).padding(vertical = 6.dp, horizontal = 8.dp),
+        ) {
+            Text(run.rawEvidence.amStartOutput, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun RunTraceEvidence(
+    run: StartupRun,
+    actions: StartupProfilerActions,
+    language: UiLanguage,
+) {
+    val evidence = run.traceEvidence ?: return
+    var traceOpenFailed by remember(run.id) { mutableStateOf(false) }
+    Text(
+        localizedStringResource(
+            Res.string.trace_evidence,
+            language,
+            evidence.file ?: localizedStringResource(Res.string.unavailable, language),
+            localizedStringResource(if (evidence.captured) Res.string.yes else Res.string.no, language),
+            localizedStringResource(if (evidence.truncated) Res.string.yes else Res.string.no, language),
+        ),
+    )
+    evidence.failureReason?.let { reason -> Text(localizedStringResource(Res.string.trace_failure_reason, language, reason)) }
+    evidence.artifact?.let { artifact ->
         Text(
-            localizedStringResource(
-                Res.string.trace_evidence,
-                language,
-                evidence.file ?: localizedStringResource(Res.string.unavailable, language),
-                localizedStringResource(if (evidence.captured) Res.string.yes else Res.string.no, language),
-                localizedStringResource(if (evidence.truncated) Res.string.yes else Res.string.no, language),
-            ),
+            "Artifact: ${artifact.completeness.name.lowercase()} · ${artifact.availableCapabilities.size} capabilities",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        evidence.failureReason?.let { reason -> Text(localizedStringResource(Res.string.trace_failure_reason, language, reason)) }
-        evidence.artifact?.let { artifact ->
+    }
+    val traceFile = evidence.file
+    if (evidence.captured && !traceFile.isNullOrBlank()) {
+        actions.onOpenTrace?.let { openTrace ->
+            OutlinedButton(modifier = Modifier.testTag("startup-open-trace"), onClick = { traceOpenFailed = !openTrace(traceFile) }) {
+                Text(localizedStringResource(Res.string.open_trace, language))
+            }
+            if (traceOpenFailed) {
+                Text(localizedStringResource(Res.string.trace_open_failed, language), color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+    evidence.rootCause?.let { rootCause ->
+        Text(
+            localizedStringResource(Res.string.trace_correlation, language) + ": " +
+                localizedStringResource(
+                    if (rootCause.correlated) Res.string.correlated else Res.string.not_correlated,
+                    language,
+                ),
+        )
+        Text(
+            localizedStringResource(Res.string.correlation_error_bound, language) + ": " +
+                (rootCause.correlationErrorBoundNs?.let { "±$it ns" } ?: localizedStringResource(Res.string.unavailable, language)),
+        )
+        TraceSliceGroup(localizedStringResource(Res.string.trace_scheduling_slices, language), rootCause.schedulingSlices, language)
+        TraceSliceGroup(localizedStringResource(Res.string.trace_binder_slices, language), rootCause.binderSlices, language)
+        TraceSliceGroup(localizedStringResource(Res.string.trace_main_thread_slices, language), rootCause.mainThreadSlices, language)
+        TraceSliceGroup(localizedStringResource(Res.string.trace_frame_slices, language), rootCause.frameSlices, language)
+        if (rootCause.limitations.isNotEmpty()) {
+            Text(localizedStringResource(Res.string.trace_limitations, language), fontWeight = FontWeight.SemiBold)
+            rootCause.limitations.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
+        }
+        rootCause.phaseAttributions.forEach { phase ->
             Text(
-                "Artifact: ${artifact.completeness.name.lowercase()} · ${artifact.availableCapabilities.size} capabilities",
+                "${phase.phaseName}: GC ${phase.gcNs / 1_000_000.0} ms · " +
+                    "JIT ${phase.jitNs / 1_000_000.0} ms · " +
+                    "class load ${phase.classLoadingNs / 1_000_000.0} ms · " +
+                    "verify/init ${phase.classVerificationNs / 1_000_000.0} ms",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        val traceFile = evidence.file
-        if (evidence.captured && !traceFile.isNullOrBlank()) {
-            actions.onOpenTrace?.let { openTrace ->
-                OutlinedButton(onClick = { traceOpenFailed = !openTrace(traceFile) }) {
-                    Text(localizedStringResource(Res.string.open_trace, language))
-                }
-                if (traceOpenFailed) {
-                    Text(localizedStringResource(Res.string.trace_open_failed, language), color = MaterialTheme.colorScheme.error)
-                }
-            }
-        }
-        evidence.rootCause?.let { rootCause ->
-            Text(
-                localizedStringResource(Res.string.trace_correlation, language) + ": " +
-                    localizedStringResource(
-                        if (rootCause.correlated) Res.string.correlated else Res.string.not_correlated,
-                        language,
-                    ),
-            )
-            Text(
-                localizedStringResource(Res.string.correlation_error_bound, language) + ": " +
-                    (rootCause.correlationErrorBoundNs?.let { "±$it ns" } ?: localizedStringResource(Res.string.unavailable, language)),
-            )
-            TraceSliceGroup(localizedStringResource(Res.string.trace_scheduling_slices, language), rootCause.schedulingSlices, language)
-            TraceSliceGroup(localizedStringResource(Res.string.trace_binder_slices, language), rootCause.binderSlices, language)
-            TraceSliceGroup(localizedStringResource(Res.string.trace_main_thread_slices, language), rootCause.mainThreadSlices, language)
-            TraceSliceGroup(localizedStringResource(Res.string.trace_frame_slices, language), rootCause.frameSlices, language)
-            if (rootCause.limitations.isNotEmpty()) {
-                Text(localizedStringResource(Res.string.trace_limitations, language), fontWeight = FontWeight.SemiBold)
-                rootCause.limitations.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
-            }
-            rootCause.phaseAttributions.forEach { phase ->
-                Text(
-                    "${phase.phaseName}: GC ${phase.gcNs / 1_000_000.0} ms · " +
-                        "JIT ${phase.jitNs / 1_000_000.0} ms · " +
-                        "class load ${phase.classLoadingNs / 1_000_000.0} ms · " +
-                        "verify/init ${phase.classVerificationNs / 1_000_000.0} ms",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-    if (run.diagnostics.isNotEmpty()) {
-        Text(localizedStringResource(Res.string.diagnostics, language, run.diagnostics.joinToString()))
-    }
-    if (run.milestones.isNotEmpty()) {
-        Text(localizedStringResource(Res.string.milestones, language), fontWeight = FontWeight.SemiBold)
-        run.milestones.forEach { milestone ->
-            Text(
-                localizedStringResource(
-                    Res.string.text_aeb7e472,
-                    language,
-                    milestone.kind.localizedLabel(language),
-                    milestone.confidence.localizedLabel(language),
-                    milestone.activityName.orEmpty(),
-                ),
-            )
-        }
-    }
-    Text(localizedStringResource(Res.string.raw_am_start_w_evidence, language), fontWeight = FontWeight.SemiBold)
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .background(
-                MaterialTheme.colorScheme.surfaceVariant,
-                RoundedCornerShape(4.dp),
-            ).padding(vertical = 6.dp, horizontal = 8.dp),
-    ) {
-        Text(run.rawEvidence.amStartOutput, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -722,16 +737,7 @@ private fun ConfidenceBadge(
     Text(confidence.localizedLabel(language), color = color, style = MaterialTheme.typography.labelSmall)
 }
 
-@Composable
-private fun MessagePane(
-    message: String,
-    color: Color,
-    modifier: Modifier,
-) {
-    Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(message, color = color) }
-}
-
-private fun Number?.formatMs(): String = this?.let { String.format(Locale.US, "%.1f ms", toDouble()) } ?: "—"
+internal fun Number?.formatMs(): String = this?.let { String.format(Locale.US, "%.1f ms", toDouble()) } ?: "—"
 
 private val RUN_TABLE_MIN_WIDTH = 760.dp
 private const val RUN_COLUMN_WEIGHT = 0.7f
@@ -740,7 +746,7 @@ private const val TIME_COLUMN_WEIGHT = 1f
 private const val FULLY_DRAWN_COLUMN_WEIGHT = 1.1f
 private const val AGENT_COLUMN_WEIGHT = 0.8f
 
-private fun StartupType.localizedLabel(language: UiLanguage): String =
+internal fun StartupType.localizedLabel(language: UiLanguage): String =
     localizedStringResource(
         when (this) {
             StartupType.COLD -> Res.string.cold
@@ -779,7 +785,7 @@ private fun StartupMilestoneKind.localizedLabel(language: UiLanguage): String =
         language,
     )
 
-private fun StartupPhase.localizedName(language: UiLanguage): String =
+internal fun StartupPhase.localizedName(language: UiLanguage): String =
     localizedStringResource(
         when (start to end) {
             StartupMilestoneKind.PROCESS_START to StartupMilestoneKind.INITIALIZER_ENTER ->
