@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.heightIn
@@ -433,7 +431,6 @@ private fun PollIntervalDialog(
     )
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 @Suppress("ktlint:standard:function-naming")
 internal fun AtraceCategoryDialog(
@@ -469,33 +466,35 @@ internal fun AtraceCategoryDialog(
                     )
                 }
                 Box(modifier = Modifier.heightIn(max = 360.dp).padding(vertical = 4.dp)) {
-                    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            all.forEach { category ->
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.widthIn(min = 160.dp).padding(end = 8.dp),
-                                ) {
-                                    Checkbox(
-                                        checked = category.id in selected,
-                                        onCheckedChange = { enabled ->
-                                            selected = if (enabled) selected + category.id else selected - category.id
-                                        },
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                    Text(
-                                        text = category.displayName,
-                                        fontSize = ViewerTypography.label.fontSize,
-                                        lineHeight = ViewerTypography.label.lineHeight,
-                                        modifier = Modifier.padding(start = 8.dp),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
+                    Column(
+                        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        all.chunked(ATRACE_DIALOG_COLUMNS).forEach { rowCategories ->
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                rowCategories.forEach { category ->
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f),
+                                    ) {
+                                        Checkbox(
+                                            checked = category.id in selected,
+                                            onCheckedChange = { enabled ->
+                                                selected = if (enabled) selected + category.id else selected - category.id
+                                            },
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                        Text(
+                                            text = category.displayName,
+                                            fontSize = ViewerTypography.label.fontSize,
+                                            lineHeight = ViewerTypography.label.lineHeight,
+                                            modifier = Modifier.padding(start = 8.dp),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
                                 }
+                                repeat(ATRACE_DIALOG_COLUMNS - rowCategories.size) { Spacer(Modifier.weight(1f)) }
                             }
                         }
                     }
@@ -821,6 +820,7 @@ private fun CaptureStatus(
 private val BASE_TEMPLATE_PANEL_WIDTH = 180.dp
 private val BASE_DATA_SOURCES_PANEL_WIDTH = 280.dp
 private val PANEL_DIVIDER_WIDTH = 1.dp
+private const val ATRACE_DIALOG_COLUMNS = 3
 
 private fun createCaptureConfig(
     selectedTemplate: PerfettoTraceTemplate,
