@@ -36,8 +36,18 @@ Trace Analyzer 的 probe 卡片是布尔开关,无子参数。官网 record 页�
 ### D4. additionalCategories 收窄为 ftrace 事件追加
 现有 `additionalCategories` 同时收 atrace 类别(无 `/`)和 ftrace 事件(有 `/`)。新增 atrace 多选后,atrace 追加由多选承担,文本框仅保留 ftrace 事件(有 `/`)。builder 的 `extraAtraceCategories` 分支移除,只留 `extraFtraceEvents`。
 
-### D5. UI 子参数放 probe 卡片下(对齐官网)
-`PerfettoProbeOption` 从单 checkbox 扩展:勾选后,若该 probe 有 poll interval 则显示输入框,若为 ATRACE 则显示类别 checkbox 列表。`onProbeChange` 扩展为能传参数(如 `onPollIntervalChange(probe, Int)`、`onAtraceCategoriesChange(Set<String>)`),或传一个 `probeParams` 结构。
+### D5. UI 子参数放对话框编辑(非 inline,经 UI 迭代修正)
+原方案 D5 把子参数 inline 展开在 probe 卡片下。实现后 UI 迭代发现 inline 展开撑长数据源面板、atrace 37 类别 inline 排版难看,经三轮修正定为**对话框**方案:
+
+1. probe 卡片只保留 checkbox + 齿轮按钮(`⚙`,仅有子参数且勾选时显示),不 inline 展开。
+2. 点齿轮弹 `Dialog`(自定义 `Surface`,非 `AlertDialog`):
+   - **poll interval 对话框**:标题=probe 名、数值输入(`>10ms` 校验提示)、OK/Cancel。
+   - **atrace 对话框**:固定宽 520dp、内容区限高 360dp 可滚动;标题加粗 + 选中计数 `N/37`;All/None/Default 快捷按钮;类别**固定 3 列网格**(`chunked(3)` + 每项 `weight(1f)` 等宽 + 末行 `Spacer` 补齐),列间距 12dp、行间距 8dp、checkbox 20dp、checkbox↔文字 8dp、单行省略。
+3. 对话框内编辑本地 state,OK 提交回写;Cancel 丢弃。默认关闭,数据源面板保持紧凑。
+
+- 备选(否决):inline 展开——撑长面板、atrace 类别排版难看(单列/FlowRow 参差/固定列宽仍挤)。
+- 备选(否决):FlowRow 自动换行——列宽不一参差;固定 3 列网格更整齐。
+- `onProbeChange` 扩展为 `onPollIntervalChange(probe, Int)` + `onAtraceCategoriesChange(Set<String>)` 独立回调(Open Questions 已定:用独立回调而非 probeParams 结构)。
 
 ### D6. atrace 类别全集:固定,对齐官网(撤销动态方案)
 原曾考虑动态查设备,但改为与官网 UI 完全一致:用固定全集。官网源码 `ui/src/plugins/dev.perfetto.RecordTraceV2/pages/android.ts` 的 `ATRACE_CATEGORIES` 定义 **37 项**固定列表,每项含 `title`(友好名)与 `isDefault`:
@@ -55,10 +65,11 @@ Trace Analyzer 的 probe 卡片是布尔开关,无子参数。官网 record 页�
 - [poll interval <10ms] → UI 校验 + builder 兜底 coerce 至 10。
 - [atrace 类别覆盖预设后,切回模板需重置] → D3 切模板时重置类别=模板预设。
 - [内核态类别隐式拉 ftrace 事件] → 与既有 D3 泄露同性质,非本次引入;提示用户。
-- [`PerfettoProbeOption` 扩展增加布局测试负担] → 复用现有 layout 测试风格,新增子参数渲染断言。
+- [`PerfettoProbeOption` 扩展增加布局测试负担] → render test 已覆盖:对话框关闭时类别不 inline 渲染、齿轮按钮存在、对话框打开时 37 类别全渲染 + OK/Cancel/All 按钮 + 截图。
 - [interval 改 sys_stats 数据源级,4 probe 共用一源] → D2 字段天然分属,无冲突;勾多个 probe 产一个 sys_stats 块含多个 period 字段。
+- [对话框内类别排版紧凑/丑] → 已迭代:对话框化 + 固定 3 列网格 + 调大间距(见 D5)。
 
 ## Open Questions
 
-- `onProbeChange` 扩展方式:新增独立回调(`onPollIntervalChange`/`onAtraceCategoriesChange`)vs 一个 `probeParams` 结构回调——实现时定。
-- atrace 类别 UI 是否显示官网 `title` 友好名(am→"Activity Manager")而非裸 token——倾向显示友好名,需 strings 或直接用官网 title 映射。
+- atrace 类别 UI 是否显示官网 `title` 友好名(am→"Activity Manager")而非裸 token——已实现显示 `displayName`(`PerfettoAtraceCategory.displayName`,即官网 title 映射),已解决。
+- `ATRACE_DIALOG_COLUMNS` 列数(当前 3)是否需按对话框宽度/类别名长度调优——当前 3 列 + 520dp 宽效果可接受,后续可调。

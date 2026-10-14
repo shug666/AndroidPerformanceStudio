@@ -33,8 +33,24 @@ The `ATRACE` probe SHALL expose a fixed set of atrace categories for selection, 
 - **THEN** the atrace category selection MUST reset to the new template's preset
 
 #### Scenario: selectable categories match the official fixed set
-- **WHEN** the ATRACE probe category multi-select is shown
+- **WHEN** the ATRACE probe category dialog is open
 - **THEN** it MUST offer the 37 official atrace categories (not a device-specific subset)
+
+### Requirement: Probe sub-parameters are edited in a dialog, not inline
+
+Probes with sub-parameters (poll interval; atrace categories) SHALL expose them via a config button on the probe card that opens a dialog, rather than expanding inline in the data sources panel. The atrace category dialog SHALL lay categories out in a fixed 3-column grid (equal-width columns) with All/None/Default quick actions and a selection count. The dialog applies changes on confirm and discards on cancel; when closed the data sources panel stays compact.
+
+#### Scenario: config button opens dialog only for probes with sub-parameters
+- **WHEN** a probe with sub-parameters (e.g. ATRACE, CPU_USAGE) is enabled
+- **THEN** a config button SHALL appear on its probe card, and no sub-parameter content SHALL render inline while the dialog is closed
+
+#### Scenario: atrace dialog categories are laid out in three columns
+- **WHEN** the atrace category dialog is open
+- **THEN** the category rows MUST each contain at most 3 items with equal-width columns aligned by x position
+
+#### Scenario: atrace dialog provides bulk actions
+- **WHEN** the atrace category dialog is open
+- **THEN** All, None, and Default quick actions SHALL be available alongside the per-category checkboxes
 
 ### Requirement: additional categories input is limited to ftrace events
 
