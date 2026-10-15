@@ -55,13 +55,11 @@ class PerfettoCardSourceTest {
     }
 
     @Test
-    fun `controls banner and workspace primitives retain their own layouts`() {
+    fun `controls and workspace primitives retain their own layouts`() {
         val controls = source("PerfettoMacOsUi.kt")
         assertFalse(controls.contains("StudioCard("))
         assertTrue(controls.contains("BasicTextField("))
-        val banner = functionSource(source("TraceAnalyzerWorkspace.kt"), "TraceWorkspaceBanner")
-        assertFalse(banner.contains("StudioCard("))
-        assertTrue(banner.contains("StudioWorkspaceHeader("))
+        assertFalse(source("TraceAnalyzerWorkspace.kt").contains("StudioWorkspaceHeader("))
         val template = functionSource(source("PerfettoCapturePage.kt"), "PerfettoTemplateOption")
         assertTrue(template.contains(".clickable(onClick = onClick)"))
         assertTrue(template.contains(".padding(horizontal = 8.dp, vertical = 7.dp)"))

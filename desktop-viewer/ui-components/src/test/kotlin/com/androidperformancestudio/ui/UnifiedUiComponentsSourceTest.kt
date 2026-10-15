@@ -7,7 +7,6 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class UnifiedUiComponentsSourceTest {
@@ -56,16 +55,17 @@ class UnifiedUiComponentsSourceTest {
     }
 
     @Test
-    fun `shared theme preserves macOS chrome and adopts Startup dark workspace surfaces`() {
+    fun `shared theme uses the sidebar background for chrome and workspace surfaces`() {
         val light = viewerColors(darkTheme = false)
         val dark = viewerColors(darkTheme = true)
 
-        assertEquals(Color(0xFFECECEC), light.workspace)
+        assertEquals(Color(0xFFFAFAFB), light.workspace)
         assertEquals(Color(0xFFFAFAFB), light.toolbar)
+        assertEquals(light.toolbar, light.workspace)
         assertEquals(Color(0xFFB8B8BD), light.strongBorder)
         assertEquals(Color(0xFF1E1E1E), dark.canvasBackground)
-        assertNotEquals(dark.canvasBackground, dark.workspace)
         assertEquals(Color(0xFF29292B), dark.toolbar)
+        assertEquals(dark.toolbar, dark.workspace)
         assertEquals(Color(0xFF636366), dark.strongBorder)
     }
 

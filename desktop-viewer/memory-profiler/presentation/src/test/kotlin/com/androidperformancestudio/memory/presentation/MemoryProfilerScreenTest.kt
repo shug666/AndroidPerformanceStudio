@@ -3,9 +3,7 @@
 package com.androidperformancestudio.memory.presentation
 
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -40,7 +38,7 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalTestApi::class)
 class MemoryProfilerScreenTest {
     @Test
-    fun `memory modes keep a single workspace heading and a border footer in both themes`() {
+    fun `memory modes keep a border footer without a top banner in both themes`() {
         listOf(UiLanguage.ENGLISH, UiLanguage.SIMPLIFIED_CHINESE).forEach { language ->
             listOf(false, true).forEach { darkTheme ->
                 MemoryProfilerViewMode.entries.forEach { viewMode ->
@@ -54,11 +52,8 @@ class MemoryProfilerScreenTest {
                                 )
                             }
                         }
-                        onAllNodesWithTag("memory-workspace-header").assertCountEquals(1)
-                        val header = onNodeWithTag("memory-workspace-header").fetchSemanticsNode().boundsInRoot
                         val footer = onNodeWithTag("memory-profiler-status-bar").fetchSemanticsNode().boundsInRoot
                         val root = onRoot().fetchSemanticsNode().boundsInRoot
-                        assertTrue(header.bottom < footer.top)
                         assertEquals(root.bottom, footer.bottom)
                     }
                 }

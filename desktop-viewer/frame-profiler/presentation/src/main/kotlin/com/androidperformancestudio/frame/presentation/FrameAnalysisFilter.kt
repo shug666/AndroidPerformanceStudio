@@ -8,16 +8,23 @@ import com.androidperformancestudio.frame.analysis.FrameDeadlineVerdict
 import com.androidperformancestudio.frame.analysis.FrameJankAnalyzer
 import com.androidperformancestudio.frame.model.FrameSample
 import com.androidperformancestudio.frame.model.FrameSource
+import com.androidperformancestudio.frame.model.JankType
 import com.androidperformancestudio.frame.presentation.generated.resources.Res
 import com.androidperformancestudio.frame.presentation.generated.resources.all_frames
+import com.androidperformancestudio.frame.presentation.generated.resources.budget
 import com.androidperformancestudio.frame.presentation.generated.resources.deadline_miss_signal
 import com.androidperformancestudio.frame.presentation.generated.resources.deadline_misses
+import com.androidperformancestudio.frame.presentation.generated.resources.duration
 import com.androidperformancestudio.frame.presentation.generated.resources.frame_source_frame_metrics
 import com.androidperformancestudio.frame.presentation.generated.resources.frame_source_gfxinfo
 import com.androidperformancestudio.frame.presentation.generated.resources.frame_source_jank_stats
 import com.androidperformancestudio.frame.presentation.generated.resources.frame_source_perfetto
 import com.androidperformancestudio.frame.presentation.generated.resources.jank_only
 import com.androidperformancestudio.frame.presentation.generated.resources.jank_stats
+import com.androidperformancestudio.frame.presentation.generated.resources.jank_stats_reasons
+import com.androidperformancestudio.frame.presentation.generated.resources.jank_types
+import com.androidperformancestudio.frame.presentation.generated.resources.missed_vsync
+import com.androidperformancestudio.frame.presentation.generated.resources.over_budget_by
 import com.androidperformancestudio.frame.presentation.generated.resources.platform_jank
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.localizedStringResource
@@ -80,6 +87,57 @@ internal fun AnalyzedFrame.problemSignal(language: UiLanguage): String =
             add(localizedStringResource(Res.string.jank_stats, language))
         }
     }.joinToString(" · ").ifEmpty { "—" }
+
+internal fun AnalyzedFrame.problemEvidence(language: UiLanguage): String =
+    buildList {
+        add(problemSignal(language))
+        sample.resolvedDurationNs()?.let {
+            add("${localizedStringResource(Res.string.duration, language)}: ${it.formatMillis()}")
+        }
+        sample.knownExpectedDurationNs()?.let { budget ->
+            add("${localizedStringResource(Res.string.budget, language)}: ${budget.formatMillis()}")
+            val duration = sample.resolvedDurationNs()
+            if (duration != null && duration > budget) {
+                val overBudget = duration - budget
+                add(
+                    localizedStringResource(
+                        Res.string.over_budget_by,
+                        language,
+                        overBudget.formatMillis(),
+                    ),
+                )
+            }
+        }
+        missedVsyncCount?.takeIf { it > 0 }?.let {
+            add("${localizedStringResource(Res.string.missed_vsync, language)}: $it")
+        }
+        if (platformJankTypes.isNotEmpty()) {
+            add(
+                "${localizedStringResource(Res.string.jank_types, language)}: " +
+                    platformJankTypes.joinToString { it.displayName(language) },
+            )
+        }
+        if (sample.jankStatsReasons.isNotEmpty()) {
+            add(
+                "${localizedStringResource(Res.string.jank_stats_reasons, language)}: " +
+                    sample.jankStatsReasons.joinToString(),
+            )
+        }
+    }.joinToString(" · ")
+
+private fun JankType.displayName(language: UiLanguage): String =
+    when (this) {
+        JankType.PLATFORM_REPORTED -> if (language == UiLanguage.SIMPLIFIED_CHINESE) "平台报告" else "Platform reported"
+        JankType.DEADLINE_MISSED -> if (language == UiLanguage.SIMPLIFIED_CHINESE) "超出帧预算" else "Deadline missed"
+        JankType.SLOW_INPUT -> if (language == UiLanguage.SIMPLIFIED_CHINESE) "输入耗时" else "Slow input"
+        JankType.SLOW_ANIMATION -> if (language == UiLanguage.SIMPLIFIED_CHINESE) "动画耗时" else "Slow animation"
+        JankType.SLOW_LAYOUT -> if (language == UiLanguage.SIMPLIFIED_CHINESE) "布局耗时" else "Slow layout"
+        JankType.SLOW_DRAW -> if (language == UiLanguage.SIMPLIFIED_CHINESE) "绘制耗时" else "Slow draw"
+        JankType.SLOW_SYNC -> if (language == UiLanguage.SIMPLIFIED_CHINESE) "同步耗时" else "Slow sync"
+        JankType.SLOW_COMMAND -> if (language == UiLanguage.SIMPLIFIED_CHINESE) "命令耗时" else "Slow command"
+        JankType.SLOW_SWAP -> if (language == UiLanguage.SIMPLIFIED_CHINESE) "交换缓冲耗时" else "Slow swap"
+        JankType.UNKNOWN -> if (language == UiLanguage.SIMPLIFIED_CHINESE) "未知类型" else "Unknown type"
+    }
 
 internal fun FrameSource.displayName(language: UiLanguage): String =
     localizedStringResource(

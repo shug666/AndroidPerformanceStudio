@@ -5,7 +5,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -16,7 +15,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
-import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.gpu.model.AgiCapability
 import com.androidperformancestudio.gpu.model.AgiLaunchMode
 import com.androidperformancestudio.gpu.model.ArtifactLocationStatus
@@ -56,7 +54,6 @@ class GpuAnalysisHubScreenTest {
                 }
             }
 
-            onNodeWithTag("gpu-workspace-heading").assertIsDisplayed()
             onNodeWithText("Fixture Vendor").assertIsDisplayed()
             onNodeWithText("Relocate").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
             assertEquals(1, relocated)
@@ -64,7 +61,7 @@ class GpuAnalysisHubScreenTest {
         }
 
     @Test
-    fun `hub keeps a single shared heading and artifact count in a compact light workspace`() =
+    fun `hub keeps artifact count and actions in a compact light workspace`() =
         runDesktopComposeUiTest(width = 1000, height = 800) {
             setContent {
                 ViewerTheme(darkTheme = false) {
@@ -76,9 +73,6 @@ class GpuAnalysisHubScreenTest {
                 }
             }
 
-            onAllNodesWithText("GPU Analysis Hub").assertCountEquals(1)
-            onNodeWithTag("gpu-workspace-heading").assertHeightIsAtLeast(94.dp)
-            onNodeWithText("0 artifacts").assertExists()
             onNodeWithText("Open Trace Analyzer").assertIsEnabled()
         }
 

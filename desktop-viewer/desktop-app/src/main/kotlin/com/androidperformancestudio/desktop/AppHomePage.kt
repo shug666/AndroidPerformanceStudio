@@ -65,7 +65,6 @@ import com.androidperformancestudio.ui.studio.StudioStatusChip
 import com.androidperformancestudio.ui.studio.StudioStatusTone
 import com.androidperformancestudio.ui.studio.StudioTableColumn
 import com.androidperformancestudio.ui.studio.StudioTokens
-import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 import com.androidperformancestudio.ui_components.generated.resources.Res as UiComponentsRes
 import com.androidperformancestudio.ui_components.generated.resources.ic_action_import
 import com.androidperformancestudio.ui_components.generated.resources.ic_action_play
@@ -293,9 +292,6 @@ internal fun AppHomePage(
                     .padding(StudioTokens.compactContentPadding),
             verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
         ) {
-            StudioWorkspaceHeader(
-                title = localizedStringResource(Res.string.android_performance_studio, language),
-            )
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 if (maxWidth.value >= HOME_TWO_COLUMN_MIN_WIDTH_DP) {
                     Row(

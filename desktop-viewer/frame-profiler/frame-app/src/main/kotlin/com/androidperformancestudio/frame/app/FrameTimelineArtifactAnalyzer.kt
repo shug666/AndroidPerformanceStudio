@@ -16,6 +16,7 @@ import com.androidperformancestudio.contracts.DeviceIdentityPseudonymizer
 import com.androidperformancestudio.contracts.DeviceTargetIdentity
 import com.androidperformancestudio.contracts.ProcessIdentity
 import com.androidperformancestudio.frame.analysis.FrameTimelineResult
+import com.androidperformancestudio.frame.analysis.FrameTimelineRow
 import com.androidperformancestudio.frame.analysis.FrameTimelineTraceAdapter
 import com.androidperformancestudio.model.StudioResult
 import com.androidperformancestudio.platform.perfetto.TraceAnalysisContexts
@@ -41,6 +42,49 @@ internal fun interface FrameTimelineArtifactAnalyzer {
         file: Path,
         artifact: CaptureArtifact,
     ): FrameTimelineProcessingResult
+}
+
+internal sealed interface FrameTimelineRowsResolution {
+    data class Rows(
+        val value: List<FrameTimelineRow>,
+    ) : FrameTimelineRowsResolution
+
+    data class Failure(
+        val reason: String,
+    ) : FrameTimelineRowsResolution
+}
+
+internal suspend fun resolveFrameTimelineRows(
+    processId: Int?,
+    query: suspend (Int?) -> StudioResult<List<FrameTimelineRow>>,
+): FrameTimelineRowsResolution {
+    when (val selected = query(processId)) {
+        is StudioResult.Failure -> return FrameTimelineRowsResolution.Failure("${selected.error.code}: ${selected.error.message}")
+        is StudioResult.Success -> if (selected.value.isNotEmpty()) return FrameTimelineRowsResolution.Rows(selected.value)
+    }
+
+    if (processId == null) {
+        return FrameTimelineRowsResolution.Failure("The trace contains no FrameTimeline rows.")
+    }
+
+    return when (val unfiltered = query(null)) {
+        is StudioResult.Success ->
+            if (unfiltered.value.isEmpty()) {
+                FrameTimelineRowsResolution.Failure(
+                    "The trace contains no FrameTimeline rows. Keep the selected app active and rendering during capture, then retry.",
+                )
+            } else {
+                FrameTimelineRowsResolution.Failure(
+                    "The trace contains ${unfiltered.value.size} FrameTimeline rows, but none match selected process PID $processId. " +
+                        "The process may have restarted or produced no frames during the capture. Keep it active and retry.",
+                )
+            }
+        is StudioResult.Failure ->
+            FrameTimelineRowsResolution.Failure(
+                "No FrameTimeline rows matched selected process PID $processId, and the trace-wide check failed: " +
+                    "${unfiltered.error.code}: ${unfiltered.error.message}",
+            )
+    }
 }
 
 internal class PerfettoFrameTimelineArtifactAnalyzer(
@@ -69,13 +113,14 @@ internal class PerfettoFrameTimelineArtifactAnalyzer(
                     )
             }
         return try {
-            when (val queried = context.query(adapter.timelineQuery(artifact.process?.pid))) {
-                is StudioResult.Success ->
-                    FrameTimelineProcessingResult.Success(adapter.map(queried.value), tool)
-                is StudioResult.Failure ->
-                    FrameTimelineProcessingResult.Failure(
-                        "${queried.error.code}: ${queried.error.message}",
-                    )
+            val processId = artifact.process?.pid
+            val rows =
+                resolveFrameTimelineRows(processId) { queryProcessId ->
+                    context.query(adapter.timelineQuery(queryProcessId))
+                }
+            when (rows) {
+                is FrameTimelineRowsResolution.Rows -> FrameTimelineProcessingResult.Success(adapter.map(rows.value), tool)
+                is FrameTimelineRowsResolution.Failure -> FrameTimelineProcessingResult.Failure(rows.reason)
             }
         } finally {
             context.close()

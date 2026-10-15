@@ -51,10 +51,9 @@ class DesktopCardSurfaceTest {
     }
 
     @Test
-    fun `home uses the common workspace heading instead of a decorative card`() {
+    fun `home omits the decorative workspace banner`() {
         val source = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/AppHomePage.kt"))
-        assertEquals(1, Regex("StudioWorkspaceHeader\\(").findAll(source).count())
-        assertTrue(source.contains("Res.string.android_performance_studio, language"))
+        assertFalse(source.contains("StudioWorkspaceHeader("))
         assertFalse(source.contains("HomeHero("))
         assertFalse(source.contains("Brush.horizontalGradient("))
     }

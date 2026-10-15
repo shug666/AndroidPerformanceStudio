@@ -1,4 +1,4 @@
-# 8. 页面 03：CPU Profiler
+# 页面 03：CPU Profiler
 
 ![CPU Profiler 设计参考](images/03-cpu-profiler.png)
 

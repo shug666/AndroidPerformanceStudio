@@ -205,6 +205,7 @@ internal class FrameProfilerController(
                     snapshot.copy(
                         importedFileName = null,
                         analysis = null,
+                        observedRefreshRatesHz = capture.metadata.observedRefreshRatesHz,
                         selectedFrameId = null,
                         perfettoTraceFile = null,
                         isCapturing = true,
@@ -243,6 +244,8 @@ internal class FrameProfilerController(
                             frameCount = onlineFrames.size,
                         ),
                     warnings = (mutableState.value.warnings + batch.warnings).distinct(),
+                    observedRefreshRatesHz =
+                        (mutableState.value.observedRefreshRatesHz + batch.frames.mapNotNull(FrameSample::refreshRateHz)).toSet(),
                 )
         } catch (exception: CancellationException) {
             throw exception
@@ -388,6 +391,7 @@ internal class FrameProfilerController(
                 mutableState.value =
                     mutableState.value.copy(
                         analysis = analysis,
+                        observedRefreshRatesHz = session.observedRefreshRatesHz,
                         selectedFrameId =
                             analysis.frames
                                 .firstOrNull()
@@ -440,6 +444,7 @@ internal class FrameProfilerController(
                 mutableState.value.copy(
                     importedFileName = file.fileName.toString(),
                     analysis = loaded.analysis,
+                    observedRefreshRatesHz = loaded.session.observedRefreshRatesHz,
                     selectedFrameId =
                         loaded.analysis.frames
                             .firstOrNull()
@@ -507,6 +512,7 @@ internal class FrameProfilerController(
                 mutableState.value.copy(
                     importedFileName = file.fileName.toString(),
                     analysis = loaded.analysis,
+                    observedRefreshRatesHz = loaded.session.observedRefreshRatesHz,
                     selectedFrameId =
                         loaded.analysis.frames
                             .firstOrNull()
@@ -608,7 +614,7 @@ private fun frameTimelineSourceCapabilities() =
     )
 
 private fun FrameCaptureSession.withObservedFrames(frames: List<FrameSample>): FrameCaptureSession =
-    copy(observedRefreshRatesHz = frames.mapNotNull(FrameSample::refreshRateHz).toSet())
+    copy(observedRefreshRatesHz = observedRefreshRatesHz + frames.mapNotNull(FrameSample::refreshRateHz))
 
 private fun List<FrameSample>.offlineCapabilities() =
     com.androidperformancestudio.frame.model.FrameSourceCapabilities(

@@ -1,6 +1,7 @@
 package com.androidperformancestudio.frame.presentation
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -44,6 +45,10 @@ class FrameProfilerScreenFilterTest {
             onNodeWithTag("problem-frame-row-1", useUnmergedTree = true).assertDoesNotExist()
             onNodeWithTag("problem-frame-row-2", useUnmergedTree = true).assertExists()
             onNodeWithTag("problem-frame-row-3", useUnmergedTree = true).assertExists()
+            onNodeWithTag("problem-frame-signal-2", useUnmergedTree = true)
+                .assertContentDescriptionEquals(
+                    "Deadline Miss · Duration: 24.00 ms · Budget: 16.67 ms · Over budget by 7.33 ms · Missed VSync: 1",
+                )
 
             onNodeWithContentDescription("Filter").performClick()
             onNodeWithText("Jank Only").performClick()

@@ -3,19 +3,15 @@ package com.androidperformancestudio.presentation
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class CpuWorkspaceStyleTest {
     @Test
-    fun `capture and report share one localized workspace heading below the toolbar`() {
+    fun `capture and report omit the decorative workspace banner below the toolbar`() {
         val source = source("DeviceTargetPage.kt")
-        assertEquals(1, Regex("StudioWorkspaceHeader\\(").findAll(source).count())
-        assertTrue(source.contains("SimpleperfViewerRes.sp_cpu_profiler"))
-        assertTrue(source.contains(".testTag(\"cpu-workspace-header\")"))
-        assertTrue(source.indexOf("HeaderToolbar(") < source.indexOf("StudioWorkspaceHeader("))
-        assertTrue(source.indexOf("StudioWorkspaceHeader(") < source.indexOf("ReportWorkspace("))
+        assertFalse(source.contains("StudioWorkspaceHeader("))
+        assertTrue(source.indexOf("HeaderToolbar(") < source.indexOf("ReportWorkspace("))
         assertTrue(source.indexOf("ReportWorkspace(") < source.indexOf("WorkspaceFooter("))
         assertTrue(source.contains("StudioTokens.compactContentPadding"))
     }

@@ -9,19 +9,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
-import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTheme
 import kotlin.test.Test
@@ -31,7 +28,7 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalTestApi::class)
 class TraceAnalyzerWorkspaceTest {
     @Test
-    fun `wide workspace keeps sessions viewer and insights in separate columns`() =
+    fun `wide workspace keeps sessions viewer and insights in separate columns without a top banner`() =
         runDesktopComposeUiTest(width = 1280, height = 800) {
             setContent {
                 ViewerTheme(darkTheme = true) {
@@ -44,9 +41,6 @@ class TraceAnalyzerWorkspaceTest {
             }
 
             onNodeWithTag("trace-analyzer-wide").assertIsDisplayed()
-            onAllNodesWithTag("trace-analyzer-banner").assertCountEquals(1)
-            onNodeWithTag("trace-analyzer-banner").assertHeightIsAtLeast(94.dp)
-            onAllNodesWithTag("trace-analyzer-title").assertCountEquals(1)
             val sessions = onNodeWithTag("trace-sessions-panel").fetchSemanticsNode().boundsInRoot
             val viewer = onNodeWithTag("trace-viewer-panel").fetchSemanticsNode().boundsInRoot
             val insights = onNodeWithTag("trace-insights-panel").fetchSemanticsNode().boundsInRoot
@@ -98,7 +92,7 @@ class TraceAnalyzerWorkspaceTest {
         }
 
     @Test
-    fun `narrow workspace stacks real sections and hosts capture content`() =
+    fun `narrow workspace stacks real sections and hosts capture content without a top banner`() =
         runDesktopComposeUiTest(width = 900, height = 720) {
             setContent {
                 ViewerTheme(darkTheme = true) {
@@ -116,9 +110,6 @@ class TraceAnalyzerWorkspaceTest {
             }
 
             onNodeWithTag("trace-analyzer-narrow").assertIsDisplayed()
-            onAllNodesWithTag("trace-analyzer-banner").assertCountEquals(1)
-            onNodeWithTag("trace-analyzer-banner").assertHeightIsAtLeast(94.dp)
-            onAllNodesWithTag("trace-analyzer-title").assertCountEquals(1)
             onNodeWithTag("trace-capture-panel").performScrollTo().assertIsDisplayed()
             onNodeWithText("真实采集控件").assertIsDisplayed()
             onNodeWithTag("trace-insights-panel").performScrollTo().assertIsDisplayed()

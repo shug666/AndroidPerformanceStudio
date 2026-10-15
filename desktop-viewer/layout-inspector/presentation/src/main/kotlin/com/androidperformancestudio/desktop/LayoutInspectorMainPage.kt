@@ -3,7 +3,6 @@ package com.androidperformancestudio.desktop
 import com.androidperformancestudio.ui.ViewerDimensions
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.studio.StudioTokens
-import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.HorizontalScrollbar
@@ -1049,7 +1048,7 @@ fun FrameWindowScope.LayoutInspectorMainPage(
         val colors = LocalViewerColors.current
         val model = InspectorPresenter.present(state, uiLanguage)
         Surface(
-        color = colors.canvasBackground,
+        color = colors.workspace,
         modifier = Modifier
             .fillMaxSize()
             .focusRequester(appFocusRequester)
@@ -1179,10 +1178,6 @@ fun FrameWindowScope.LayoutInspectorMainPage(
                     onClick = { performAction(ViewerAction.TOGGLE_DETAILS) },
                 )
             }
-            StudioWorkspaceHeader(
-                title = localizedStringResource(Res.string.layout_inspector, uiLanguage),
-                modifier = Modifier.padding(StudioTokens.compactContentPadding).testTag("inspector-workspace-header"),
-            )
             correlationHint?.let { hint ->
                 CorrelationBanner(
                     hint = hint,

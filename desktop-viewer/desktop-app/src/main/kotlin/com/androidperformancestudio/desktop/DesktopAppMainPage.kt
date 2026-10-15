@@ -182,7 +182,7 @@ fun FrameWindowScope.DesktopAppMainPage(
     Column(modifier = Modifier.fillMaxSize()) {
         MacOsTitleBar(
             title = windowTitle?.value ?: APP_DISPLAY_NAME,
-            background = windowColors.canvasBackground,
+            background = windowColors.toolbar,
             // The title text inverts against its own strip so it stays legible in either theme.
             contentColor = windowColors.primaryText,
             dividerColor = windowColors.border,

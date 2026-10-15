@@ -35,11 +35,11 @@ class StartupStyleAdoptionTest {
         )
 
     @Test
-    fun `every desktop destination has a shared workspace heading owner`() {
+    fun `every desktop destination omits the decorative workspace banner`() {
         assertEquals(AppDestination.entries.toSet(), sources.keys)
         sources.forEach { (destination, file) ->
             val source = Files.readString(file)
-            assertEquals(1, Regex("StudioWorkspaceHeader\\(").findAll(source).count(), "$destination: $file")
+            assertFalse(source.contains("StudioWorkspaceHeader("), "$destination: $file")
             assertFalse(source.contains("startupWorkspaceColors("), "$destination must inherit the shared workspace palette")
             assertFalse(source.contains("ViewerTheme("), "$destination must inherit the desktop theme")
         }

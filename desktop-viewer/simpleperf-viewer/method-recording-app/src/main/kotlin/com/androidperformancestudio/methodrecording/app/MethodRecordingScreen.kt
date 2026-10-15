@@ -27,7 +27,6 @@ import com.androidperformancestudio.arttrace.MethodTopMethod
 import com.androidperformancestudio.methodrecording.app.generated.resources.Res
 import com.androidperformancestudio.methodrecording.app.generated.resources.calls
 import com.androidperformancestudio.methodrecording.app.generated.resources.function
-import com.androidperformancestudio.methodrecording.app.generated.resources.method_recording
 import com.androidperformancestudio.methodrecording.app.generated.resources.no_trace_loaded
 import com.androidperformancestudio.methodrecording.app.generated.resources.self_time
 import com.androidperformancestudio.methodrecording.app.generated.resources.total_time
@@ -49,7 +48,6 @@ import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.studio.StudioPanel
 import com.androidperformancestudio.ui.studio.StudioTokens
-import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 
 /** The method-recording workspace body: top-methods table plus the shared flame graph. */
 @Suppress("FunctionName", "LongMethod", "ktlint:standard:function-naming")
@@ -63,10 +61,6 @@ fun MethodRecordingScreen(
         modifier = modifier.fillMaxSize().padding(StudioTokens.compactContentPadding),
         verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
     ) {
-        StudioWorkspaceHeader(
-            title = localizedStringResource(Res.string.method_recording, language),
-            modifier = Modifier.testTag("method-recording-workspace-header"),
-        )
         state.error?.let { message ->
             Text(
                 text = message,

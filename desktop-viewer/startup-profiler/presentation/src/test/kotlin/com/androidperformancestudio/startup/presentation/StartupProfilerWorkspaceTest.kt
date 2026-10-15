@@ -45,7 +45,7 @@ class StartupProfilerWorkspaceTest {
         }
 
     @Test
-    fun `empty workspace keeps scenario controls and type tabs available`() =
+    fun `empty workspace keeps scenario controls and type tabs available without a top banner`() =
         runDesktopComposeUiTest(width = 1280, height = 720) {
             var requested: StartupType? = null
             setContent {
@@ -57,7 +57,6 @@ class StartupProfilerWorkspaceTest {
                     )
                 }
             }
-            onNodeWithTag("startup-hero").assertIsDisplayed()
             onNodeWithTag("startup-scenario").assertIsDisplayed()
             onNodeWithTag("startup-type-WARM").performClick()
             assertEquals(StartupType.WARM, requested)

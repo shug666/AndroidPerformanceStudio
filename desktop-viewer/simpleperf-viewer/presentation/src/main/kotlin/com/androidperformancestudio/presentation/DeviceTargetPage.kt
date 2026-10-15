@@ -58,7 +58,6 @@ import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.button.MacOSTextButton
 import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.studio.StudioTokens
-import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 
 @Composable
 @Suppress("FunctionName", "LongMethod", "ktlint:standard:function-naming")
@@ -129,10 +128,6 @@ internal fun DeviceTargetPage(
             HeaderSpacer()
             CapabilityPopupButton(state.selection, style)
         }
-        StudioWorkspaceHeader(
-            title = localizedStringResource(SimpleperfViewerRes.sp_cpu_profiler, currentSimpleperfLanguage()),
-            modifier = Modifier.padding(StudioTokens.compactContentPadding).testTag("cpu-workspace-header"),
-        )
         ReportWorkspace(
             state = reportState,
             actions = reportActions,

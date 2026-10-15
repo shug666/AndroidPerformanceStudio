@@ -26,7 +26,7 @@ class SourceWorkspaceLocalizationTest {
         assertTrue(englishNames.size >= 50)
         assertTrue(english.contains("<string name=\"home\">Home</string>"))
         assertTrue(chinese.contains("<string name=\"home\">首页</string>"))
-        assertTrue(source.contains("localizedStringResource(Res.string.source_workspaces, language)"))
+        assertFalse(source.contains("StudioWorkspaceHeader("))
         assertTrue(source.contains("workspace.phase.localizedLabel(language)"))
         assertTrue(source.contains("it.localizedResolutionReason(language)"))
         assertTrue(source.contains("SourceCodeViewer("))

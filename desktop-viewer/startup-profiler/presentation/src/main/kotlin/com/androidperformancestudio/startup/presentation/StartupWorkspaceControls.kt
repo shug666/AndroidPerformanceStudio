@@ -72,9 +72,6 @@ import com.androidperformancestudio.startup.presentation.generated.resources.pro
 import com.androidperformancestudio.startup.presentation.generated.resources.run_timeout
 import com.androidperformancestudio.startup.presentation.generated.resources.scenario_configuration
 import com.androidperformancestudio.startup.presentation.generated.resources.start_analysis
-import com.androidperformancestudio.startup.presentation.generated.resources.startup_workspace_quote
-import com.androidperformancestudio.startup.presentation.generated.resources.startup_workspace_subtitle
-import com.androidperformancestudio.startup.presentation.generated.resources.startup_workspace_title
 import com.androidperformancestudio.startup.presentation.generated.resources.stop_analysis
 import com.androidperformancestudio.startup.presentation.generated.resources.warm_start_description
 import com.androidperformancestudio.startup.presentation.generated.resources.warmup_runs
@@ -86,18 +83,6 @@ import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.studio.StudioPanel
 import com.androidperformancestudio.ui.studio.StudioTokens
-import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
-
-@Composable
-internal fun StartupWorkspaceHero(language: UiLanguage) {
-    StudioWorkspaceHeader(
-        title = localizedStringResource(Res.string.startup_workspace_title, language),
-        subtitle = localizedStringResource(Res.string.startup_workspace_subtitle, language),
-        supportingText = localizedStringResource(Res.string.startup_workspace_quote, language),
-        modifier = Modifier.testTag("startup-hero"),
-    )
-}
-
 @Composable
 internal fun StartupTypeTabs(
     state: StartupProfilerState,

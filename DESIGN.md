@@ -212,13 +212,13 @@ Evidence reviewed:
 - `desktop-viewer/docs/aps-commercial-ui-implementation/00-shared-foundation-and-delivery.md` and `07-startup-profiler.md`.
 
 Adoption contract:
-- Every active `AppDestination` has one `StudioWorkspaceHeader` owner; nested Battery/Network content remains header-free.
+- Active `AppDestination` content areas do not render a decorative top `StudioWorkspaceHeader`; existing toolbars, tabs, panels and navigation retain page context. Nested Battery/Network content remains banner-free.
 - `StudioPanel`, `StudioDataTable`, `StudioMetricCard` and `ProfilerMetricCard` use the compact Startup density by default. Explicit chart gutters, splitters, table rows and virtualization contracts remain feature-owned.
-- `ViewerTheme` owns the promoted Startup dark workspace/panel/border palette and Material surface roles exactly once. Feature screens do not install replacement themes or local palette transforms.
-- `StudioWorkspaceHeader` has a 94dp minimum at normal scale, grows for wrapped titles/subtitles and enlarged fonts, hides only nonessential supporting text below 600dp, and keeps title semantics/accessibility.
+- `ViewerTheme` keeps the global navigation rail, window strip and every page workspace on the same sidebar `toolbar` color in light and dark themes; panels, borders and Material surface roles remain centrally owned. Feature screens do not install replacement themes or local palette transforms.
+- The optional `StudioWorkspaceHeader` remains a shared control for scoped future surfaces, but is not rendered by active page roots.
 - Repeated cards use `StudioCard`; structural panes, tables, toolbars, canvas surfaces and Inspector hierarchy rows do not become decorative nested cards.
 - Existing capture, import, device, trace, source-resolution, selection, error, loading, unavailable and recovery behavior remains unchanged. No missing metric or evidence is fabricated.
-- Minimum validation includes 1280x720 and narrower stacked windows, English/Chinese, light/dark themes, fontScale 1.5 header overflow checks, shared color/inset tests, affected module tests, integration compilation and automated screenshots. Native packaged-app and real-device acceptance remain separate gates.
+- Minimum validation includes 1280x720 and narrower stacked windows, English/Chinese, light/dark themes, compact content overflow checks, shared color/inset tests, affected module tests, integration compilation and automated screenshots. Native packaged-app and real-device acceptance remain separate gates.
 
 Implementation plan and evidence are kept under `.omx/artifacts/startup-style-adoption/plan.md` and `.omx/artifacts/startup-style-adoption/evidence.md`.
 

@@ -66,7 +66,6 @@ import com.androidperformancestudio.ui.viewerOutlinedTextFieldColors
 import com.androidperformancestudio.ui.studio.StudioCard
 import com.androidperformancestudio.ui.studio.StudioPanel
 import com.androidperformancestudio.ui.studio.StudioTokens
-import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 import com.androidperformancestudio.ui.switch.MacOSSwitch
 import com.androidperformancestudio.ui.DropdownSelector
 import com.androidperformancestudio.ui_components.generated.resources.Res as UiComponentsRes
@@ -112,10 +111,9 @@ internal fun DesktopAppSettingsPage(
     ProvideViewerThemeContext(viewerThemeContext) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = LocalViewerColors.current.canvasBackground,
+            color = LocalViewerColors.current.workspace,
         ) {
             Column(Modifier.fillMaxSize()) {
-                SettingsPageHeader(language)
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline)
                 Row(Modifier.weight(1f)) {
                     SettingsSidebar(
@@ -205,14 +203,6 @@ private fun SettingsPageTitle(
         text = text,
         color = LocalViewerColors.current.accent,
         style = style,
-    )
-}
-
-@Composable
-private fun SettingsPageHeader(language: UiLanguage) {
-    StudioWorkspaceHeader(
-        title = localizedStringResource(Res.string.settings, language),
-        modifier = Modifier.padding(StudioTokens.compactContentPadding),
     )
 }
 

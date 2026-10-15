@@ -204,6 +204,34 @@ class CommercialAppShellTest {
     }
 
     @Test
+    fun `navigation labels have Chinese translations for every rail destination`() {
+        val chinese = Files.readString(Path.of("src/main/composeResources/values-zh/strings.xml"))
+        val expectedLabels =
+            mapOf(
+                "home" to "首页",
+                "layout_inspector" to "布局检查器",
+                "cpu_profiler" to "CPU 性能分析",
+                "trace_analyzer" to "系统跟踪分析",
+                "memory_profiler" to "内存分析",
+                "frame_profiler" to "帧率分析",
+                "startup_profiler" to "启动分析",
+                "battery_network" to "电量与网络",
+                "gpu_inspector" to "GPU 分析",
+                "benchmark_regression" to "基准回归",
+                "source_workspaces" to "源码工作区",
+                "method_recording" to "方法录制",
+                "settings" to "设置",
+            )
+
+        expectedLabels.forEach { (resourceName, label) ->
+            assertTrue(
+                chinese.contains("<string name=\"$resourceName\">$label</string>"),
+                "Missing Chinese navigation label for $resourceName",
+            )
+        }
+    }
+
+    @Test
     fun `workspace context is a read only shell projection`() {
         val context =
             WorkspaceContext(

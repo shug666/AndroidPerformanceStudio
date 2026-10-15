@@ -74,6 +74,7 @@
     <string name="no_problem_frames">No problem frames match this selection.</string>
     <string name="no_frames_match_filter">No frames match this selection.</string>
     <string name="deadline_miss_signal">Deadline Miss</string>
+    <string name="over_budget_by">Over budget by %1$s</string>
     <string name="frame_signal">Signal</string>
     <string name="frame_profiler_title">Frame Profiler</string>
     <string name="frame_profiler_subtitle">Frame timing, deadline misses, and reported jank evidence</string>

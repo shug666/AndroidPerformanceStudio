@@ -1,4 +1,4 @@
-# 16. 页面 11：Reports Center
+# 页面 11：Reports Center
 
 ![Reports Center 设计参考](images/reports-settings-v2-overview.png)
 

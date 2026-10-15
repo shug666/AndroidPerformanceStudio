@@ -182,7 +182,7 @@ internal fun CommercialAppShell(
                 .focusable(),
     ) {
         val collapsed = resolvedNavigationRailCollapsed(maxWidth.value.toInt(), navigationRailCollapsed)
-        Column(modifier = Modifier.fillMaxSize().background(colors.canvasBackground)) {
+        Column(modifier = Modifier.fillMaxSize().background(colors.toolbar)) {
             Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 StudioNavigationRail(
                     items = navigationItems,

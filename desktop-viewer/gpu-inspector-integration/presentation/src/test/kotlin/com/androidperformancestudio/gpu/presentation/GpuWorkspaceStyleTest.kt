@@ -12,12 +12,9 @@ class GpuWorkspaceStyleTest {
     private val artifacts = source("GpuAnalysisHubArtifacts.kt")
 
     @Test
-    fun `hub uses one localized shared workspace heading`() {
-        assertEquals(1, Regex("StudioWorkspaceHeader\\(").findAll(hub).count())
-        val heading = hub.substringAfter("private fun HubHeading(").substringBefore("private fun DeviceGraphicsSection(")
-        assertTrue(heading.contains("Res.string.gpu_analysis_hub, language"))
-        assertTrue(heading.contains("Res.string.tool_responsibility_hint, language"))
-        assertTrue(heading.contains("supportingText = localizedStringResource(Res.string.artifact_count, language, artifactCount)"))
+    fun `hub omits the decorative workspace banner`() {
+        assertFalse(hub.contains("StudioWorkspaceHeader("))
+        assertFalse(hub.contains("private fun HubHeading("))
     }
 
     @Test

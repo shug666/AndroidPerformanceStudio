@@ -82,7 +82,6 @@ import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.search.CompactSearchField
 import com.androidperformancestudio.ui.studio.StudioCard
 import com.androidperformancestudio.ui.studio.StudioTokens
-import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 import com.androidperformancestudio.ui.viewerOutlinedTextFieldColors
 import java.awt.Cursor
 import java.awt.Desktop
@@ -184,10 +183,6 @@ internal fun SourceWorkspacesPage(
                 )
             }
             HorizontalDivider()
-            StudioWorkspaceHeader(
-                title = localizedStringResource(Res.string.source_workspaces, language),
-                modifier = Modifier.padding(StudioTokens.compactContentPadding),
-            )
             pageError?.let { message ->
                 Text(
                     localizedStringResource(Res.string.source_operation_failed, language, message),

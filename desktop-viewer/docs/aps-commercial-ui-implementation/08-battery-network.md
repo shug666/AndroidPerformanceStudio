@@ -1,4 +1,4 @@
-# 13. 页面 08：Battery & Network
+# 页面 08：Battery & Network
 
 ![Battery & Network 设计参考](images/08-battery-network.png)
 

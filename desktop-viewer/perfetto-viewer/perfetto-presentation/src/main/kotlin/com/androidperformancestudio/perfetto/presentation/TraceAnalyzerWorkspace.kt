@@ -78,7 +78,6 @@ import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.studio.StudioCard
 import com.androidperformancestudio.ui.studio.StudioPanelHeader
 import com.androidperformancestudio.ui.studio.StudioTokens
-import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 
 private const val WIDE_WORKSPACE_BREAKPOINT_DP = 1100
 
@@ -256,7 +255,6 @@ private fun WideTraceWorkspace(
         modifier = Modifier.fillMaxSize().padding(StudioTokens.compactContentPadding).testTag("trace-analyzer-wide"),
         verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
     ) {
-        TraceWorkspaceBanner(language)
         TraceSummaryGrid(summaries, language, wide = true)
         Row(
             modifier = Modifier.fillMaxWidth().weight(1f),
@@ -306,7 +304,6 @@ private fun NarrowTraceWorkspace(
                 .testTag("trace-analyzer-narrow"),
         verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
     ) {
-        TraceWorkspaceBanner(language)
         TraceSummaryGrid(summaries, language, wide = false)
         TraceSessionsPanel(
             state = state,
@@ -330,18 +327,6 @@ private fun NarrowTraceWorkspace(
         )
         TraceWorkspaceStatus(state)
     }
-}
-
-@Composable
-@Suppress("ktlint:standard:function-naming")
-private fun TraceWorkspaceBanner(language: UiLanguage) {
-    StudioWorkspaceHeader(
-        title = localizedStringResource(Res.string.trace_workspace_title, language),
-        subtitle = localizedStringResource(Res.string.trace_workspace_subtitle, language),
-        supportingText = localizedStringResource(Res.string.trace_workspace_system_visibility, language),
-        modifier = Modifier.testTag("trace-analyzer-banner"),
-        titleModifier = Modifier.testTag("trace-analyzer-title"),
-    )
 }
 
 @Composable

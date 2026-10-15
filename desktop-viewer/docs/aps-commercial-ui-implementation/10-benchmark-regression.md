@@ -1,4 +1,4 @@
-# 15. 页面 10：Benchmark Regression
+# 页面 10：Benchmark Regression
 
 ![Benchmark Regression 设计参考](images/10-benchmark-reports.png)
 

@@ -14,22 +14,17 @@ class BenchmarkWorkspaceStyleTest {
         )
 
     @Test
-    fun `benchmark has one localized shared heading above its own toolbar and metrics`() {
-        assertEquals(1, Regex("StudioWorkspaceHeader\\(").findAll(source).count())
-        val heading = source.substringAfter("private fun TitleBlock(").substringBefore("private fun BenchmarkToolbar(")
-        assertTrue(heading.contains("Res.string.reports_title, language"))
-        assertTrue(heading.contains("Res.string.reports_subtitle, language"))
-        val workspace = source.substringAfter("public fun BenchmarkReportsScreen(").substringBefore("private fun TitleBlock(")
-        assertEquals(1, Regex("TitleBlock\\(language\\)").findAll(workspace).count())
-        assertTrue(workspace.indexOf("TitleBlock(language)") < workspace.indexOf("BenchmarkToolbar(state, language, actions)"))
+    fun `benchmark starts with its own toolbar and metrics without a decorative banner`() {
+        assertFalse(source.contains("StudioWorkspaceHeader("))
+        val workspace = source.substringAfter("public fun BenchmarkReportsScreen(")
+        assertTrue(workspace.indexOf("BenchmarkToolbar(state, language, actions)") >= 0)
     }
 
     @Test
     fun `benchmark uses compact shared spacing without replacing comparison trend or report layouts`() {
-        val workspace = source.substringAfter("public fun BenchmarkReportsScreen(").substringBefore("private fun TitleBlock(")
+        val workspace = source.substringAfter("public fun BenchmarkReportsScreen(")
         assertTrue(workspace.contains(".padding(StudioTokens.compactContentPadding)"))
         assertTrue(workspace.contains(".background(colors.workspace)"))
-        assertFalse(workspace.contains("StudioTokens.sectionGap"))
         assertTrue(workspace.contains("BenchmarkComparisonTable("))
         assertTrue(workspace.contains("BenchmarkTrendPanel("))
         assertTrue(workspace.contains("modifier = Modifier.height(210.dp)"))

@@ -1,4 +1,4 @@
-# 10. 页面 05：Memory Profiler
+# 页面 05：Memory Profiler
 
 ![Memory Profiler 设计参考](images/05-memory-profiler.png)
 

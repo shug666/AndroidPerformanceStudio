@@ -44,7 +44,6 @@ import com.androidperformancestudio.ui.studio.StudioPanelHeader
 import com.androidperformancestudio.ui.studio.StudioStatusChip
 import com.androidperformancestudio.ui.studio.StudioStatusTone
 import com.androidperformancestudio.ui.studio.StudioTokens
-import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 
 /** Callbacks the workspace supplies; every action maps to a real artifact or stored run. */
 public data class BenchmarkReportsActions(
@@ -75,8 +74,6 @@ public fun BenchmarkReportsScreen(
 ) {
     val colors = LocalViewerColors.current
     Column(modifier = modifier.fillMaxSize().background(colors.workspace).padding(StudioTokens.compactContentPadding)) {
-        TitleBlock(language)
-        Spacer(Modifier.height(StudioTokens.panelGap))
         BenchmarkToolbar(state, language, actions)
         Spacer(Modifier.height(StudioTokens.panelGap))
         BenchmarkSummaryRow(state, language)
@@ -114,14 +111,6 @@ public fun BenchmarkReportsScreen(
         }
         StatusLine(state, colors)
     }
-}
-
-@Composable
-private fun TitleBlock(language: UiLanguage) {
-    StudioWorkspaceHeader(
-        title = localizedStringResource(Res.string.reports_title, language),
-        subtitle = localizedStringResource(Res.string.reports_subtitle, language),
-    )
 }
 
 @Composable

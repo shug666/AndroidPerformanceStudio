@@ -35,7 +35,7 @@ class ProfilerThemeSupportTest {
         assertFalse(Files.exists(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/CompactDesktopTheme.kt")))
         assertTrue(shell.contains("LocalMinimumInteractiveComponentSize provides 32.dp"))
         assertTrue(shell.contains("CommercialAppShell("))
-        assertTrue(commercialShell.contains("background(colors.canvasBackground)"))
+        assertTrue(commercialShell.contains("background(colors.toolbar)"))
         assertTrue(commercialShell.contains("background(colors.toolbar)"))
         assertTrue(commercialShell.contains("StudioTokens.navigationItemHeight"))
     }

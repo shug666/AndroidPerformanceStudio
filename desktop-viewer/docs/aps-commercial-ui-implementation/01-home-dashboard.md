@@ -1,4 +1,4 @@
-# 6. 页面 01：Home Dashboard
+# 页面 01：Home Dashboard
 
 ![Home Dashboard 设计参考](images/01-home-dashboard.png)
 

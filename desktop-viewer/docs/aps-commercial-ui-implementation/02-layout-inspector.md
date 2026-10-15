@@ -1,4 +1,4 @@
-# 7. 页面 02：Layout Inspector
+# 页面 02：Layout Inspector
 
 ![Layout Inspector 设计参考](images/02-layout-inspector.png)
 

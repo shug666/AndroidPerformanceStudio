@@ -1,4 +1,4 @@
-# 9. 页面 04：Trace Analyzer
+# 页面 04：Trace Analyzer
 
 ![Trace Analyzer 设计参考](images/04-trace-analyzer.png)
 

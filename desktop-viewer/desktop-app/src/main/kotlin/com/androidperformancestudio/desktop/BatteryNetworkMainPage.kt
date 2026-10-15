@@ -47,7 +47,6 @@ import com.androidperformancestudio.ui.studio.StudioPanelHeader
 import com.androidperformancestudio.ui.studio.StudioStatusChip
 import com.androidperformancestudio.ui.studio.StudioStatusTone
 import com.androidperformancestudio.ui.studio.StudioTokens
-import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 
 internal enum class BatteryNetworkTab {
     BATTERY,
@@ -88,7 +87,7 @@ internal fun BatteryNetworkWorkspace(
     Column(
         modifier = Modifier.fillMaxSize().background(LocalViewerColors.current.workspace).testTag("battery-network-workspace"),
     ) {
-        BatteryNetworkWorkspaceHeader(
+        BatteryNetworkWorkspaceTabs(
             selectedTab = selectedTab,
             onSelectedTabChanged = { selectedTab = it },
             language = language,
@@ -120,7 +119,7 @@ internal fun BatteryNetworkWorkspace(
 }
 
 @Composable
-private fun BatteryNetworkWorkspaceHeader(
+private fun BatteryNetworkWorkspaceTabs(
     selectedTab: BatteryNetworkTab,
     onSelectedTabChanged: (BatteryNetworkTab) -> Unit,
     language: UiLanguage,
@@ -129,11 +128,6 @@ private fun BatteryNetworkWorkspaceHeader(
         modifier = Modifier.fillMaxWidth().padding(StudioTokens.compactContentPadding),
         verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
     ) {
-        StudioWorkspaceHeader(
-            title = localizedStringResource(Res.string.battery_network, language),
-            supportingText = localizedStringResource(Res.string.independent_analyzers, language),
-            titleModifier = Modifier.testTag("battery-network-title"),
-        )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End,

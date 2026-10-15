@@ -35,7 +35,6 @@ import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.studio.StudioPanel
 import com.androidperformancestudio.ui.studio.StudioPanelHeader
 import com.androidperformancestudio.ui.studio.StudioTokens
-import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 
 @Composable
 public fun GpuAnalysisHubScreen(
@@ -56,7 +55,6 @@ public fun GpuAnalysisHubScreen(
                     .padding(StudioTokens.compactContentPadding),
             verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
         ) {
-            HubHeading(state.artifacts.size, language)
             DeviceGraphicsSection(state, actions, language)
             AgiCapabilitySection(state.capability, language)
             state.message?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = ViewerTypography.secondary) }
@@ -70,16 +68,6 @@ public fun GpuAnalysisHubScreen(
             )
         }
     }
-}
-
-@Composable
-private fun HubHeading(artifactCount: Int, language: UiLanguage) {
-    StudioWorkspaceHeader(
-        title = localizedStringResource(Res.string.gpu_analysis_hub, language),
-        subtitle = localizedStringResource(Res.string.tool_responsibility_hint, language),
-        supportingText = localizedStringResource(Res.string.artifact_count, language, artifactCount),
-        modifier = Modifier.testTag("gpu-workspace-heading"),
-    )
 }
 
 @Composable

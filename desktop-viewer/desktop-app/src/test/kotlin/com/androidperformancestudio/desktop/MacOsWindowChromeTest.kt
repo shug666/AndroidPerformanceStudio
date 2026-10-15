@@ -46,7 +46,7 @@ class MacOsWindowChromeTest {
 
         assertTrue(page.contains("MacOsTitleBar("))
         assertTrue(page.contains("title = windowTitle?.value ?: APP_DISPLAY_NAME"))
-        assertTrue(page.contains("background = windowColors.canvasBackground"))
+        assertTrue(page.contains("background = windowColors.toolbar"))
         assertTrue(page.contains("contentColor = windowColors.primaryText"))
         assertTrue(page.contains("dividerColor = windowColors.border"))
         assertTrue(page.contains("viewerColors("))

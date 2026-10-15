@@ -3,7 +3,6 @@ package com.androidperformancestudio.methodrecording.app
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -36,13 +35,9 @@ class MethodRecordingWorkspaceSourceTest {
     }
 
     @Test
-    fun `trace content has one localized workspace heading before all content states`() {
+    fun `trace content omits the decorative workspace banner before all content states`() {
         val screen = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/methodrecording/app/MethodRecordingScreen.kt"))
-        assertEquals(1, Regex("StudioWorkspaceHeader\\(").findAll(screen).count())
-        assertTrue(screen.contains("title = localizedStringResource(Res.string.method_recording, language)"))
-        assertTrue(screen.contains(".testTag(\"method-recording-workspace-header\")"))
-        assertTrue(screen.indexOf("StudioWorkspaceHeader(") < screen.indexOf("state.error?.let"))
-        assertTrue(screen.indexOf("StudioWorkspaceHeader(") < screen.indexOf("if (analysis == null)"))
+        assertFalse(screen.contains("StudioWorkspaceHeader("))
         assertTrue(screen.contains("StudioTokens.compactContentPadding"))
         assertFalse(source.contains("StudioWorkspaceHeader("))
     }

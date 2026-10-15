@@ -206,7 +206,6 @@ private fun StartupMainWorkspace(
     actions: StartupProfilerActions,
     language: UiLanguage,
 ) {
-    StartupWorkspaceHero(language)
     StartupTypeTabs(state, actions, language)
     StartupScenarioControls(state, actions, language)
     StartupMetricOverview(state.analysis, language)

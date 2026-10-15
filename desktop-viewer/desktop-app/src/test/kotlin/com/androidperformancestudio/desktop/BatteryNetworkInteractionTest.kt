@@ -29,7 +29,7 @@ import javax.imageio.ImageIO
 @OptIn(ExperimentalTestApi::class)
 class BatteryNetworkInteractionTest {
     @Test
-    fun `compact composite keeps one heading and both child empty and error states`() =
+    fun `compact composite keeps tabs and both child empty and error states`() =
         runDesktopComposeUiTest(width = 720, height = 720) {
             setContent {
                 ViewerTheme(darkTheme = false) {
@@ -46,12 +46,9 @@ class BatteryNetworkInteractionTest {
                     )
                 }
             }
-            onAllNodesWithTag("battery-network-title").assertCountEquals(1)
-            onNodeWithTag("battery-network-title").assertIsDisplayed()
             onNodeWithText("Battery capture pending - fixture").assertIsDisplayed()
             onNodeWithText("Energy Evidence").assertIsDisplayed()
             onNodeWithText("Network", useUnmergedTree = true).performClick()
-            onAllNodesWithTag("battery-network-title").assertCountEquals(1)
             onNodeWithText("Network import failed - fixture").assertIsDisplayed()
             onNodeWithText("Battery", useUnmergedTree = true).performClick()
             onNodeWithText("Battery capture pending - fixture").assertIsDisplayed()

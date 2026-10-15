@@ -1,4 +1,4 @@
-# 14. 页面 09：GPU Analysis Hub
+# 页面 09：GPU Analysis Hub
 
 ![GPU Analysis Hub 设计参考](images/09-gpu-inspector.png)
 

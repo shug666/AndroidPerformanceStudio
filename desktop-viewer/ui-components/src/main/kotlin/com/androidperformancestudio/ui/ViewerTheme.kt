@@ -460,7 +460,7 @@ public fun viewerColors(
 ): ViewerColors = ViewerPalettes.forDark(darkTheme, accentColor).withWorkspaceStyle()
 
 private fun ViewerColors.withWorkspaceStyle(): ViewerColors {
-    if (!isDark) return this
+    if (!isDark) return copy(workspace = toolbar)
     val base =
         canvasBackground.copy(
             red = canvasBackground.red * 0.45f,
@@ -470,7 +470,7 @@ private fun ViewerColors.withWorkspaceStyle(): ViewerColors {
     val surface = accent.copy(alpha = 0.08f).compositeOver(base)
     return copy(
         panel = surface,
-        workspace = accent.copy(alpha = 0.035f).compositeOver(base),
+        workspace = toolbar,
         border = accent.copy(alpha = 0.22f).compositeOver(surface),
         sectionBackground = accent.copy(alpha = 0.06f).compositeOver(surface),
     )

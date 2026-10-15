@@ -1,6 +1,6 @@
 package com.androidperformancestudio.desktop
 
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
@@ -11,12 +11,9 @@ class InspectorWorkspaceStyleTest {
         Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/LayoutInspectorMainPage.kt"))
 
     @Test
-    fun `inspector uses one localized workspace header without changing pane sizing`() {
-        assertEquals(1, Regex("StudioWorkspaceHeader\\(").findAll(source).count())
-        assertTrue(source.contains("title = localizedStringResource(Res.string.layout_inspector, uiLanguage)"))
-        assertTrue(source.contains(".testTag(\"inspector-workspace-header\")"))
-        assertTrue(source.indexOf("HeaderToolbar(") < source.indexOf("StudioWorkspaceHeader("))
-        assertTrue(source.indexOf("StudioWorkspaceHeader(") < source.indexOf("correlationHint?.let"))
+    fun `inspector omits the decorative workspace banner without changing pane sizing`() {
+        assertFalse(source.contains("StudioWorkspaceHeader("))
+        assertTrue(source.indexOf("HeaderToolbar(") < source.indexOf("correlationHint?.let"))
         assertTrue(source.contains("StudioTokens.compactContentPadding"))
         assertTrue(source.contains("val availableHeightDp = maxHeight.value"))
         assertTrue(source.contains("val availableWidthDp = maxWidth.value"))

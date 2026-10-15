@@ -13,6 +13,8 @@
 package com.androidperformancestudio.frame.presentation
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,8 +35,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -61,6 +66,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,6 +76,7 @@ import com.androidperformancestudio.frame.analysis.DeadlineMissCluster
 import com.androidperformancestudio.frame.analysis.FrameAnalysisResult
 import com.androidperformancestudio.frame.analysis.FrameAttribution
 import com.androidperformancestudio.frame.analysis.FrameDeadlineVerdict
+import com.androidperformancestudio.frame.analysis.FrameSummary
 import com.androidperformancestudio.frame.analysis.JankSeverity
 import com.androidperformancestudio.frame.model.FrameSample
 import com.androidperformancestudio.frame.model.FrameSource
@@ -94,8 +101,6 @@ import com.androidperformancestudio.frame.presentation.generated.resources.frame
 import com.androidperformancestudio.frame.presentation.generated.resources.frame_attribution_entry
 import com.androidperformancestudio.frame.presentation.generated.resources.frame_detail
 import com.androidperformancestudio.frame.presentation.generated.resources.frame_filter
-import com.androidperformancestudio.frame.presentation.generated.resources.frame_profiler_subtitle
-import com.androidperformancestudio.frame.presentation.generated.resources.frame_profiler_title
 import com.androidperformancestudio.frame.presentation.generated.resources.frame_screenshot_unavailable
 import com.androidperformancestudio.frame.presentation.generated.resources.frame_signal
 import com.androidperformancestudio.frame.presentation.generated.resources.frame_timeline
@@ -160,7 +165,6 @@ import com.androidperformancestudio.ui.studio.StudioPanel
 import com.androidperformancestudio.ui.studio.StudioPanelHeader
 import com.androidperformancestudio.ui.studio.StudioTableColumn
 import com.androidperformancestudio.ui.studio.StudioTokens
-import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 
 @Composable
 public fun FrameProfilerScreen(
@@ -180,20 +184,15 @@ public fun FrameProfilerScreen(
                 .padding(StudioTokens.compactContentPadding),
             verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
         ) {
-            FrameWorkspaceHeading(state, language)
             Box(if (compactHeight) Modifier.fillMaxWidth() else Modifier.weight(1f).fillMaxWidth()) {
-                val analysis = state.analysis
-                if (analysis == null) {
-                    EmptyState(state = state, language = language, operationMessage = operationMessage)
-                } else {
-                    AnalysisContent(
-                        state = state,
-                        analysis = analysis,
-                        actions = actions,
-                        language = language,
-                        compactHeight = compactHeight,
-                    )
-                }
+                AnalysisContent(
+                    state = state,
+                    analysis = state.analysis ?: EMPTY_FRAME_ANALYSIS,
+                    actions = actions,
+                    language = language,
+                    compactHeight = compactHeight,
+                    operationMessage = operationMessage,
+                )
             }
         }
         if (state.isLoading) {
@@ -208,46 +207,13 @@ public fun FrameProfilerScreen(
 }
 
 @Composable
-private fun EmptyState(
-    state: FrameProfilerState,
-    language: UiLanguage,
-    operationMessage: String?,
-) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(48.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(
-            text =
-                if (state.isCapturing) {
-                    localizedStringResource(Res.string.waiting_for_live_frame_data, language)
-                } else {
-                    localizedStringResource(Res.string.capture_online_or_import_framestats, language)
-                },
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text =
-                localizedStringResource(Res.string.select_a_debuggable_process_framemetrics_agent_is_preferred_and_gfxinf, language),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        operationMessage?.let { Text(it, modifier = Modifier.padding(top = 16.dp)) }
-        state.errorMessage?.let {
-            Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 16.dp))
-        }
-    }
-}
-
-@Composable
 private fun AnalysisContent(
     state: FrameProfilerState,
     analysis: FrameAnalysisResult,
     actions: FrameProfilerActions,
     language: UiLanguage,
     compactHeight: Boolean,
+    operationMessage: String?,
 ) {
     val sessionId =
         analysis.frames
@@ -282,33 +248,51 @@ private fun AnalysisContent(
         modifier = if (compactHeight) Modifier.fillMaxWidth() else Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
     ) {
-        SummaryCards(filteredAnalysis, language)
-        FrameAttributionSection(filteredAnalysis.attributions, language)
-        FrameFilterControls(
-            sources = availableSources,
-            source = sourceFilter,
-            onSourceSelected = { sourceFilter = it },
-            filter = frameFilter,
-            onFilterSelected = { frameFilter = it },
-            enabled = !state.isCapturing && !state.isLoading,
-            language = language,
-        )
-        state.warnings.forEach { warning ->
-            Text(warning, color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodySmall)
-        }
-        StudioPanel(modifier = Modifier.fillMaxWidth()) {
+        SummaryCards(filteredAnalysis, state.observedRefreshRatesHz, language)
+        StudioPanel(modifier = Modifier.fillMaxWidth().testTag("frame-timeline-panel")) {
             Column {
                 if (filteredAnalysis.frames.isEmpty()) {
-                    Text(
-                        localizedStringResource(Res.string.frame_timeline, language),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
+                    FrameTimelineHeading(
+                        language = language,
+                        filters = {
+                            FrameFilterControls(
+                                sources = availableSources,
+                                source = sourceFilter,
+                                onSourceSelected = { sourceFilter = it },
+                                filter = frameFilter,
+                                onFilterSelected = { frameFilter = it },
+                                enabled = !state.isCapturing && !state.isLoading,
+                                language = language,
+                            )
+                        },
                     )
-                    Spacer(Modifier.height(8.dp))
                     Text(
                         localizedStringResource(Res.string.no_frames_match_filter, language),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    if (state.analysis == null) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text =
+                                if (state.isCapturing) {
+                                    localizedStringResource(Res.string.waiting_for_live_frame_data, language)
+                                } else {
+                                    localizedStringResource(Res.string.capture_online_or_import_framestats, language)
+                                },
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            localizedStringResource(
+                                Res.string.select_a_debuggable_process_framemetrics_agent_is_preferred_and_gfxinf,
+                                language,
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        operationMessage?.let { Text(it, modifier = Modifier.padding(top = 8.dp)) }
+                        state.errorMessage?.let {
+                            Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
+                        }
+                    }
                 } else {
                     FrameTimeline(
                         frames = filteredAnalysis.frames,
@@ -319,6 +303,17 @@ private fun AnalysisContent(
                             ) { filteredAnalysis.clusters.flatMapTo(mutableSetOf()) { it.deadlineMissFrameIds } },
                         onSelectFrame = actions.onSelectFrame,
                         language = language,
+                        filters = {
+                            FrameFilterControls(
+                                sources = availableSources,
+                                source = sourceFilter,
+                                onSourceSelected = { sourceFilter = it },
+                                filter = frameFilter,
+                                onFilterSelected = { frameFilter = it },
+                                enabled = !state.isCapturing && !state.isLoading,
+                                language = language,
+                            )
+                        },
                     )
                 }
             }
@@ -362,25 +357,19 @@ private fun AnalysisContent(
                 modifier = Modifier.weight(1f).fillMaxSize().testTag("frame-detail-panel"),
             )
         }
-    }
-}
-
-@Composable
-private fun FrameWorkspaceHeading(
-    state: FrameProfilerState,
-    language: UiLanguage,
-) {
-    val captureLabel =
-        state.importedFileName ?: state.artifact?.let { artifact ->
-            "${artifact.completeness.name.lowercase()} · ${artifact.availableCapabilities.size} capabilities" +
-                if (artifact.limitations.isEmpty()) "" else " · ${artifact.limitations.size} limitation(s)"
+        if (filteredAnalysis.attributions.isNotEmpty() || state.warnings.isNotEmpty()) {
+            StudioPanel(modifier = Modifier.fillMaxWidth().testTag("frame-context-panel")) {
+                SelectionContainer {
+                    Column(verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap)) {
+                        FrameAttributionSection(filteredAnalysis.attributions, language)
+                        state.warnings.forEach { warning ->
+                            Text(warning, color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
         }
-    StudioWorkspaceHeader(
-        title = localizedStringResource(Res.string.frame_profiler_title, language),
-        subtitle = localizedStringResource(Res.string.frame_profiler_subtitle, language),
-        supportingText = captureLabel,
-        modifier = Modifier.testTag("frame-workspace-heading"),
-    )
+    }
 }
 
 @Composable
@@ -393,8 +382,13 @@ private fun FrameFilterControls(
     enabled: Boolean,
     language: UiLanguage,
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(localizedStringResource(Res.string.source, language), color = LocalViewerColors.current.secondaryText)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            localizedStringResource(Res.string.source, language),
+            modifier = Modifier.testTag("frame-source-label"),
+            color = LocalViewerColors.current.secondaryText,
+        )
+        Spacer(Modifier.width(8.dp))
         DropdownSelector(
             items = sources,
             selectedItem = source,
@@ -407,7 +401,13 @@ private fun FrameFilterControls(
             enabled = enabled && sources.isNotEmpty(),
             selectorDescription = localizedStringResource(Res.string.source, language),
         )
-        Text(localizedStringResource(Res.string.frame_filter, language), color = LocalViewerColors.current.secondaryText)
+        Spacer(Modifier.width(4.dp))
+        Text(
+            localizedStringResource(Res.string.frame_filter, language),
+            modifier = Modifier.testTag("frame-filter-label"),
+            color = LocalViewerColors.current.secondaryText,
+        )
+        Spacer(Modifier.width(8.dp))
         DropdownSelector(
             items = FrameViewFilter.entries,
             selectedItem = filter,
@@ -422,8 +422,44 @@ private fun FrameFilterControls(
 }
 
 @Composable
+private fun FrameTimelineHeading(
+    language: UiLanguage,
+    filters: @Composable () -> Unit,
+    actions: @Composable () -> Unit = {},
+) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        if (maxWidth >= 760.dp) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
+            ) {
+                Text(
+                    localizedStringResource(Res.string.frame_timeline, language),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Box(Modifier.weight(1f)) { filters() }
+                actions()
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap)) {
+                Text(
+                    localizedStringResource(Res.string.frame_timeline, language),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                filters()
+                actions()
+            }
+        }
+    }
+}
+
+@Composable
 private fun SummaryCards(
     analysis: FrameAnalysisResult,
+    observedRefreshRatesHz: Set<Double>,
     language: UiLanguage,
 ) {
     val summary = analysis.summary
@@ -438,12 +474,18 @@ private fun SummaryCards(
                 }
             }
         }
-    val refreshRates =
+    val frameRefreshRates =
         remember(analysis) {
             analysis.frames
                 .mapNotNull { it.sample.refreshRateHz?.takeIf { rate -> rate > 0.0 } }
                 .distinct()
                 .sorted()
+        }
+    val refreshRates =
+        if (frameRefreshRates.isNotEmpty()) {
+            frameRefreshRates
+        } else {
+            observedRefreshRatesHz.filter { it > 0.0 }.distinct().sorted()
         }
     val refreshRateText =
         when (refreshRates.size) {
@@ -517,33 +559,25 @@ private fun FrameAttributionSection(
     language: UiLanguage,
 ) {
     if (attributions.isEmpty()) return
-    var expanded by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        TextButton(
-            onClick = { expanded = !expanded },
-            modifier = Modifier.testTag("frame-attribution-toggle"),
-        ) {
-            Text("${if (expanded) "▾" else "▸"} ${localizedStringResource(Res.string.frame_attribution, language)}")
-        }
-        if (expanded) {
-            attributions.take(5).forEachIndexed { index, attribution ->
-                Text(
-                    localizedStringResource(
-                        Res.string.frame_attribution_entry,
-                        language,
-                        attribution.activityName,
-                        attribution.uiState,
-                        attribution.platformJankFrames,
-                        attribution.totalFrames,
-                        attribution.p95DurationNs.formatMillis(),
-                    ),
-                    modifier = Modifier.testTag("frame-attribution-entry-$index"),
-                    style = ViewerTypography.secondary,
-                    color = LocalViewerColors.current.secondaryText,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap)) {
+        StudioPanelHeader(localizedStringResource(Res.string.frame_attribution, language))
+        attributions.take(5).forEachIndexed { index, attribution ->
+            Text(
+                localizedStringResource(
+                    Res.string.frame_attribution_entry,
+                    language,
+                    attribution.activityName,
+                    attribution.uiState,
+                    attribution.platformJankFrames,
+                    attribution.totalFrames,
+                    attribution.p95DurationNs.formatMillis(),
+                ),
+                modifier = Modifier.testTag("frame-attribution-entry-$index"),
+                style = ViewerTypography.secondary,
+                color = LocalViewerColors.current.secondaryText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -628,6 +662,7 @@ private fun FrameTimeline(
     clusterFrameIds: Set<Long>,
     onSelectFrame: (Long) -> Unit,
     language: UiLanguage,
+    filters: @Composable () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
     val evidenceColors = LocalViewerColors.current
@@ -656,41 +691,40 @@ private fun FrameTimeline(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                localizedStringResource(Res.string.frame_timeline, language),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.weight(1f))
-            ProfilerCompactButton(
-                text = localizedStringResource(Res.string.timeline_previous, language),
-                enabled = window.startIndex > 0,
-                onClick = { firstVisibleIndex = (window.startIndex - window.count).coerceAtLeast(0) },
-            )
-            ProfilerCompactButton(
-                text = localizedStringResource(Res.string.timeline_next, language),
-                enabled = window.endExclusive < frames.size,
-                onClick = { firstVisibleIndex = (window.startIndex + window.count).coerceAtMost(frames.size - window.count) },
-            )
-            ProfilerCompactButton(
-                text = localizedStringResource(Res.string.timeline_zoom_in, language),
-                enabled = window.count > MIN_TIMELINE_VISIBLE_FRAMES,
-                onClick = { zoomTo((window.count / 2).coerceAtLeast(MIN_TIMELINE_VISIBLE_FRAMES)) },
-            )
-            ProfilerCompactButton(
-                text = localizedStringResource(Res.string.timeline_zoom_out, language),
-                enabled = window.count < maximumVisibleCount,
-                onClick = { zoomTo((window.count * 2).coerceAtMost(maximumVisibleCount)) },
-            )
-            TimelineLegendItem(localizedStringResource(Res.string.frame_timeline_normal, language), evidenceColors.accent)
-            TimelineLegendItem(localizedStringResource(Res.string.frame_timeline_jank, language), evidenceColors.warning)
-            TimelineLegendItem(localizedStringResource(Res.string.frame_timeline_cluster, language), evidenceColors.error)
-        }
+        FrameTimelineHeading(
+            language = language,
+            filters = filters,
+            actions = {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ProfilerCompactButton(
+                        text = localizedStringResource(Res.string.timeline_previous, language),
+                        enabled = window.startIndex > 0,
+                        onClick = { firstVisibleIndex = (window.startIndex - window.count).coerceAtLeast(0) },
+                    )
+                    ProfilerCompactButton(
+                        text = localizedStringResource(Res.string.timeline_next, language),
+                        enabled = window.endExclusive < frames.size,
+                        onClick = { firstVisibleIndex = (window.startIndex + window.count).coerceAtMost(frames.size - window.count) },
+                    )
+                    ProfilerCompactButton(
+                        text = localizedStringResource(Res.string.timeline_zoom_in, language),
+                        enabled = window.count > MIN_TIMELINE_VISIBLE_FRAMES,
+                        onClick = { zoomTo((window.count / 2).coerceAtLeast(MIN_TIMELINE_VISIBLE_FRAMES)) },
+                    )
+                    ProfilerCompactButton(
+                        text = localizedStringResource(Res.string.timeline_zoom_out, language),
+                        enabled = window.count < maximumVisibleCount,
+                        onClick = { zoomTo((window.count * 2).coerceAtMost(maximumVisibleCount)) },
+                    )
+                    TimelineLegendItem(localizedStringResource(Res.string.frame_timeline_normal, language), evidenceColors.accent)
+                    TimelineLegendItem(localizedStringResource(Res.string.frame_timeline_jank, language), evidenceColors.warning)
+                    TimelineLegendItem(localizedStringResource(Res.string.frame_timeline_cluster, language), evidenceColors.error)
+                }
+            },
+        )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(
                 localizedStringResource(Res.string.timeline_duration_axis, language),
@@ -818,6 +852,7 @@ private const val MAX_TIMELINE_INITIAL_FRAMES = 500
 private const val MAX_TIMELINE_VISIBLE_FRAMES = 1_000
 private const val MIN_TIMELINE_VISIBLE_FRAMES = 20
 private const val METRIC_SPARKLINE_SAMPLE_COUNT = 32
+private val EMPTY_FRAME_ANALYSIS = FrameAnalysisResult(emptyList(), FrameSummary(), emptyList())
 
 @Composable
 private fun FrameDetail(
@@ -897,6 +932,7 @@ private fun FrameDetail(
                             colors.primaryText,
                         )
                     }
+                    HorizontalDivider(color = colors.border, modifier = Modifier.testTag("frame-detail-metrics-divider"))
                     DetailRow(localizedStringResource(Res.string.budget_source, language), frame.sample.expectedDurationSource.name)
                     DetailRow(localizedStringResource(Res.string.verdict, language), frame.deadlineVerdict.name)
                     DetailRow(localizedStringResource(Res.string.missed_vsync, language), frame.missedVsyncCount?.toString() ?: "—")
@@ -917,7 +953,6 @@ private fun FrameDetail(
                             FrameStageRow(name, duration, maximumStage, index)
                         }
                     }
-                    HorizontalDivider(color = colors.border)
                     DetailRow(localizedStringResource(Res.string.source, language), frame.sample.source.displayName(language))
                     frame.sample.activityName?.let {
                         DetailRow(
@@ -960,14 +995,16 @@ private fun FrameDetail(
                         DetailRow(localizedStringResource(Res.string.state_detail, language, key), value)
                     }
                     onOpenTrace?.let { openTrace ->
-                        OutlinedButton(onClick = { openTrace(frame.sample) }) {
-                            Text(localizedStringResource(Res.string.open_trace_in_perfetto, language))
-                        }
+                        ProfilerCompactButton(
+                            text = localizedStringResource(Res.string.open_trace_in_perfetto, language),
+                            onClick = { openTrace(frame.sample) },
+                        )
                     }
                     onCopyEvidence?.let { copy ->
-                        OutlinedButton(onClick = { copySucceeded = copy(frame.copyEvidenceText(language)) }) {
-                            Text(localizedStringResource(Res.string.copy_evidence, language))
-                        }
+                        ProfilerCompactButton(
+                            text = localizedStringResource(Res.string.copy_evidence, language),
+                            onClick = { copySucceeded = copy(frame.copyEvidenceText(language)) },
+                        )
                         Text(
                             localizedStringResource(Res.string.copy_evidence_privacy_hint, language),
                             style = MaterialTheme.typography.bodySmall,
@@ -1060,8 +1097,8 @@ private fun DetailMetric(
 ) {
     val colors = LocalViewerColors.current
     Column(modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(label, color = colors.secondaryText, style = ViewerTypography.dense, maxLines = 1)
-        Text(value, color = valueColor, style = ViewerTypography.metric, maxLines = 1)
+        Text(label, color = colors.secondaryText, style = ViewerTypography.bodyCompact, maxLines = 1)
+        Text(value, color = valueColor, style = ViewerTypography.bodyCompact, maxLines = 1)
     }
 }
 
@@ -1080,23 +1117,31 @@ private fun FrameStageRow(
             2 -> MaterialTheme.colorScheme.error
             else -> MaterialTheme.colorScheme.secondary
         }
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            name,
-            modifier = Modifier.widthIn(min = 72.dp, max = 104.dp),
-            style = ViewerTypography.dense,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Box(Modifier.weight(1f).height(7.dp).background(colors.sectionBackground)) {
-            Box(
-                Modifier
-                    .fillMaxWidth((durationNs.toDouble() / maximumStageNs).toFloat().coerceIn(0f, 1f))
-                    .fillMaxSize()
-                    .background(barColor),
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                name,
+                modifier = Modifier.widthIn(min = 72.dp, max = 104.dp),
+                style = ViewerTypography.bodyCompact,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Box(Modifier.weight(1f).height(7.dp).background(colors.sectionBackground)) {
+                Box(
+                    Modifier
+                        .fillMaxWidth((durationNs.toDouble() / maximumStageNs).toFloat().coerceIn(0f, 1f))
+                        .fillMaxSize()
+                        .background(barColor),
+                )
+            }
+            Text(
+                durationNs.formatMillis(),
+                modifier = Modifier.widthIn(min = 48.dp, max = 72.dp),
+                style = ViewerTypography.bodyCompact,
+                maxLines = 1,
             )
         }
-        Text(durationNs.formatMillis(), modifier = Modifier.widthIn(min = 48.dp, max = 56.dp), style = ViewerTypography.dense, maxLines = 1)
+        HorizontalDivider(color = colors.border, modifier = Modifier.testTag("frame-stage-divider-$index"))
     }
 }
 
@@ -1105,9 +1150,23 @@ private fun DetailRow(
     label: String,
     value: String,
 ) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, fontWeight = FontWeight.Medium)
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                label,
+                modifier = Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = ViewerTypography.bodyCompact,
+            )
+            Text(
+                value,
+                modifier = Modifier.weight(1f),
+                fontWeight = FontWeight.Medium,
+                style = ViewerTypography.bodyCompact,
+                textAlign = androidx.compose.ui.text.style.TextAlign.End,
+            )
+        }
+        HorizontalDivider(color = LocalViewerColors.current.border, modifier = Modifier.testTag("frame-detail-divider-$label"))
     }
 }
 
@@ -1149,6 +1208,7 @@ private fun ClusterList(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ProblemFramesTable(
     analysis: FrameAnalysisResult,
@@ -1158,6 +1218,13 @@ private fun ProblemFramesTable(
     modifier: Modifier,
 ) {
     val problemFrames = remember(analysis) { analysis.frames.filter(AnalyzedFrame::isProblemFrame) }
+    val problemListState = rememberLazyListState()
+    LaunchedEffect(problemFrames, selectedFrameId) {
+        val selectedIndex = problemFrames.indexOfFirst { it.sample.frameId == selectedFrameId }
+        if (selectedIndex >= 0 && selectedIndex !in problemListState.layoutInfo.visibleItemsInfo.map { it.index }) {
+            problemListState.scrollToItem(selectedIndex)
+        }
+    }
     StudioDataTable(
         columns =
             listOf(
@@ -1176,7 +1243,11 @@ private fun ProblemFramesTable(
                 color = LocalViewerColors.current.secondaryText,
             )
         } else {
-            LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            LazyColumn(
+                state = problemListState,
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
                 items(problemFrames, key = { it.sample.frameId }) { frame ->
                     val selected = frame.sample.frameId == selectedFrameId
                     Row(
@@ -1201,13 +1272,43 @@ private fun ProblemFramesTable(
                             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                         )
                         Text(frame.sample.resolvedDurationNs().formatMillis(), modifier = Modifier.weight(0.8f), maxLines = 1)
-                        Text(
-                            frame.problemSignal(language),
+                        TooltipArea(
                             modifier = Modifier.weight(1.2f),
-                            color = LocalViewerColors.current.secondaryText,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                            tooltip = {
+                                val tooltipColors = LocalViewerColors.current
+                                Box(
+                                    Modifier
+                                        .widthIn(min = 220.dp, max = 420.dp)
+                                        .background(
+                                            tooltipColors.previewSurface,
+                                            RoundedCornerShape(StudioTokens.smallRadius),
+                                        ).border(
+                                            1.dp,
+                                            tooltipColors.accent.copy(alpha = 0.7f),
+                                            RoundedCornerShape(StudioTokens.smallRadius),
+                                        ).padding(10.dp),
+                                ) {
+                                    SelectionContainer {
+                                        Text(
+                                            frame.problemEvidence(language),
+                                            style = ViewerTypography.dense,
+                                            color = tooltipColors.primaryText,
+                                        )
+                                    }
+                                }
+                            },
+                        ) {
+                            Text(
+                                frame.problemSignal(language),
+                                modifier =
+                                    Modifier
+                                        .testTag("problem-frame-signal-${frame.sample.frameId}")
+                                        .semantics { contentDescription = frame.problemEvidence(language) },
+                                color = LocalViewerColors.current.secondaryText,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                         Text(
                             frame.sample.activityName?.substringAfterLast('.') ?: "—",
                             modifier = Modifier.weight(1f),

@@ -74,6 +74,7 @@
     <string name="no_problem_frames">当前筛选条件下没有问题帧。</string>
     <string name="no_frames_match_filter">当前筛选条件下没有帧。</string>
     <string name="deadline_miss_signal">超出帧预算</string>
+    <string name="over_budget_by">超出预算 %1$s</string>
     <string name="frame_signal">信号</string>
     <string name="frame_profiler_title">帧率分析 / Frame Profiler</string>
     <string name="frame_profiler_subtitle">帧耗时、帧预算未命中与平台卡顿证据</string>

@@ -6,7 +6,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertContentDescriptionEquals
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
@@ -14,8 +13,6 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
-import androidx.compose.ui.test.onAllNodesWithTag
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -27,6 +24,7 @@ import com.androidperformancestudio.frame.analysis.FrameJankAnalyzer
 import com.androidperformancestudio.frame.model.ExpectedDurationSource
 import com.androidperformancestudio.frame.model.FrameSample
 import com.androidperformancestudio.frame.model.FrameSource
+import com.androidperformancestudio.frame.model.FrameStages
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerDimensions
 import com.androidperformancestudio.ui.ViewerTheme
@@ -37,7 +35,25 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalTestApi::class)
 class FrameProfilerAcceptanceTest {
     @Test
-    fun `short native content viewport retains usable panes with expanded attribution and warnings`() =
+    fun `single frame detail separates metrics property rows and stage rows`() =
+        runDesktopComposeUiTest(width = 1280, height = 820) {
+            val analysis =
+                FrameJankAnalyzer().analyze(
+                    listOf(sample(7, 24_000_000L).copy(stages = FrameStages(drawNs = 4_000_000L))),
+                )
+            setContent {
+                ViewerTheme(darkTheme = false) {
+                    FrameProfilerScreen(FrameProfilerState(analysis = analysis), FrameProfilerActions(), UiLanguage.ENGLISH)
+                }
+            }
+            onNodeWithTag("frame-detail-metrics-divider").assertExists()
+            onNodeWithTag("frame-stage-divider-0").assertExists()
+            onNodeWithTag("frame-detail-divider-Budget Source").assertExists()
+            onNodeWithTag("frame-detail-divider-Source").performScrollTo().assertIsDisplayed()
+        }
+
+    @Test
+    fun `short native content viewport retains usable panes with visible attribution and warnings`() =
         runDesktopComposeUiTest(width = 1064, height = 600) {
             val analysis =
                 FrameJankAnalyzer().analyze(
@@ -57,8 +73,8 @@ class FrameProfilerAcceptanceTest {
                 }
             }
 
-            onNodeWithTag("frame-attribution-toggle").performClick()
-            onNodeWithTag("frame-attribution-entry-4").assertExists()
+            onNodeWithTag("frame-attribution-entry-4").performScrollTo().assertIsDisplayed()
+            onNodeWithTag("frame-attribution-toggle").assertDoesNotExist()
             onNodeWithTag("frame-detail-panel").performScrollTo()
             listOf("frame-clusters-panel", "frame-problems-panel", "frame-detail-panel").forEach { tag ->
                 onNodeWithTag(tag).assertIsDisplayed().assertHeightIsAtLeast(96.dp)
@@ -67,7 +83,7 @@ class FrameProfilerAcceptanceTest {
         }
 
     @Test
-    fun `short native content viewport keeps all analysis panes reachable below the workspace heading`() =
+    fun `short native content viewport keeps all analysis panes reachable without a top banner`() =
         runDesktopComposeUiTest(width = 1064, height = 560) {
             val analysis = FrameJankAnalyzer().analyze(listOf(sample(7, 34_000_000L)))
             setContent {
@@ -80,7 +96,6 @@ class FrameProfilerAcceptanceTest {
                 }
             }
 
-            onNodeWithTag("frame-workspace-heading").assertIsDisplayed()
             onNodeWithTag("frame-detail-panel").performScrollTo()
             listOf("frame-clusters-panel", "frame-problems-panel", "frame-detail-panel").forEach { tag ->
                 onNodeWithTag(tag).assertIsDisplayed().assertHeightIsAtLeast(96.dp)
@@ -89,7 +104,7 @@ class FrameProfilerAcceptanceTest {
         }
 
     @Test
-    fun `empty and analyzed frames share one compact workspace heading`() =
+    fun `empty and analyzed frames share one compact workspace layout`() =
         runDesktopComposeUiTest(width = 1280, height = 820) {
             var state by mutableStateOf(FrameProfilerState())
             val analysis = FrameJankAnalyzer().analyze(listOf(sample(7, 34_000_000L)))
@@ -99,13 +114,39 @@ class FrameProfilerAcceptanceTest {
                 }
             }
 
+            onNodeWithTag("frame-metric-frames").assertIsDisplayed()
+            onNodeWithTag("frame-timeline-panel").assertIsDisplayed()
+            onNodeWithTag("frame-source-filter").assertIsDisplayed()
+            onNodeWithTag("frame-context-panel").assertDoesNotExist()
+            onNodeWithTag("frame-clusters-panel").assertIsDisplayed()
+            onNodeWithTag("frame-problems-panel").assertIsDisplayed()
+            onNodeWithTag("frame-detail-panel").assertIsDisplayed()
+            onNodeWithText("Capture online or import FrameStats").assertIsDisplayed()
+            val emptyTimelineBounds = onNodeWithTag("frame-timeline-panel").fetchSemanticsNode().boundsInRoot
+            val emptyFilterBounds = onNodeWithTag("frame-source-filter").fetchSemanticsNode().boundsInRoot
+            val emptyClusterBounds = onNodeWithTag("frame-clusters-panel").fetchSemanticsNode().boundsInRoot
+            assertTrue(emptyTimelineBounds.top < emptyFilterBounds.top)
+            assertTrue(emptyFilterBounds.bottom < emptyTimelineBounds.bottom)
+            assertTrue(emptyTimelineBounds.bottom < emptyClusterBounds.top)
+
             repeat(2) { index ->
                 if (index == 1) runOnIdle { state = state.copy(analysis = analysis, importedFileName = "capture.txt") }
-                onAllNodesWithTag("frame-workspace-heading").assertCountEquals(1)
-                onNodeWithTag("frame-workspace-heading").assertHeightIsAtLeast(94.dp)
-                onAllNodesWithText("Frame Profiler").assertCountEquals(1)
             }
-            onNodeWithText("capture.txt").assertExists()
+            onNodeWithTag("frame-timeline-canvas").assertIsDisplayed()
+            val sourceFilterBounds = onNodeWithTag("frame-source-filter").fetchSemanticsNode().boundsInRoot
+            val timelineBounds = onNodeWithTag("frame-timeline-panel").fetchSemanticsNode().boundsInRoot
+            val clusterBounds = onNodeWithTag("frame-clusters-panel").fetchSemanticsNode().boundsInRoot
+            val detailBounds = onNodeWithTag("frame-detail-panel").fetchSemanticsNode().boundsInRoot
+            onNodeWithTag("frame-context-panel").assertIsDisplayed()
+            val contextBounds = onNodeWithTag("frame-context-panel").fetchSemanticsNode().boundsInRoot
+            val timelineRangeBounds = onNodeWithTag("frame-timeline-range").fetchSemanticsNode().boundsInRoot
+            val timelineTitleBounds = onNodeWithText("Frame Timeline").fetchSemanticsNode().boundsInRoot
+            assertTrue(kotlin.math.abs(timelineTitleBounds.center.y - sourceFilterBounds.center.y) < 4f)
+            assertTrue(timelineBounds.top < sourceFilterBounds.top)
+            assertTrue(sourceFilterBounds.bottom < timelineRangeBounds.top)
+            assertTrue(timelineBounds.bottom < clusterBounds.top)
+            assertTrue(clusterBounds.bottom > detailBounds.top)
+            assertTrue(detailBounds.bottom < contextBounds.top)
             listOf("frame-clusters-panel", "frame-problems-panel", "frame-detail-panel").forEach { tag ->
                 onNodeWithTag(tag).assertExists()
             }
@@ -150,7 +191,7 @@ class FrameProfilerAcceptanceTest {
         assertStableTimelineHover(hasClusters = false, language = UiLanguage.ENGLISH)
 
     @Test
-    fun `timeline controls use compact capture styling and share one row with the title and legend`() =
+    fun `timeline title shares a row with filters and keeps controls compact`() =
         runDesktopComposeUiTest(width = 1280, height = 820) {
             val analysis =
                 FrameJankAnalyzer().analyze(
@@ -166,20 +207,23 @@ class FrameProfilerAcceptanceTest {
                 }
             }
 
-            val labels =
-                listOf(
-                    "Frame Timeline",
-                    "Previous",
-                    "Next",
-                    "Zoom in",
-                    "Zoom out",
-                    "Within budget",
-                    "Jank",
-                    "Jank cluster",
-                )
-            val bounds = labels.map { onNodeWithText(it).fetchSemanticsNode().boundsInRoot }
-            val centers = bounds.map { it.center.y }
-            assertTrue(centers.max() - centers.min() < 1f, "Title, controls and legend must share one row")
+            val titleBounds = onNodeWithText("Frame Timeline").fetchSemanticsNode().boundsInRoot
+            val sourceBounds = onNodeWithTag("frame-source-filter").fetchSemanticsNode().boundsInRoot
+            val resultFilterBounds = onNodeWithTag("frame-result-filter").fetchSemanticsNode().boundsInRoot
+            val sourceLabelBounds = onNodeWithTag("frame-source-label").fetchSemanticsNode().boundsInRoot
+            val filterLabelBounds = onNodeWithTag("frame-filter-label").fetchSemanticsNode().boundsInRoot
+            assertEquals(8f, sourceLabelBounds.left - titleBounds.right, 0.1f)
+            assertEquals(4f, filterLabelBounds.left - sourceBounds.right, 0.1f)
+            assertTrue(kotlin.math.abs(titleBounds.center.y - sourceBounds.center.y) < 4f)
+            assertTrue(kotlin.math.abs(titleBounds.center.y - resultFilterBounds.center.y) < 4f)
+            val controlLabels = listOf("Previous", "Next", "Zoom in", "Zoom out", "Within budget", "Jank", "Jank cluster")
+            val controlBounds = controlLabels.map { onNodeWithText(it).fetchSemanticsNode().boundsInRoot }
+            val controlCenters = controlBounds.map { it.center.y }
+            assertTrue(controlCenters.max() - controlCenters.min() < 1f, "Navigation controls and legend must share a row")
+            assertTrue(
+                kotlin.math.abs(titleBounds.center.y - controlCenters.average()) < 4f,
+                "Timeline heading and controls must share a row",
+            )
             listOf("Previous", "Next", "Zoom in", "Zoom out").forEach {
                 onNodeWithText(it).assertHeightIsEqualTo(ViewerDimensions.compactControlHeight)
             }
@@ -201,7 +245,7 @@ class FrameProfilerAcceptanceTest {
         }
 
     @Test
-    fun `core metrics and collapsed attribution retain distinct evidence`() =
+    fun `core metrics and attribution are visible together without expanding`() =
         runDesktopComposeUiTest(width = 1280, height = 820) {
             val analysis =
                 FrameJankAnalyzer().analyze(
@@ -233,10 +277,23 @@ class FrameProfilerAcceptanceTest {
                 }
             assertTrue(metricBounds.all { it.top == metricBounds.first().top }, "All summary metrics must share a row")
             assertTrue(metricBounds.zipWithNext().all { (left, right) -> left.right < right.left })
-            onNodeWithTag("frame-attribution-entry-0").assertDoesNotExist()
-            onNodeWithTag("frame-attribution-toggle").performClick()
+            onNodeWithTag("frame-attribution-toggle").assertDoesNotExist()
             onNodeWithTag("frame-attribution-entry-0").assertTextContains("GalleryActivity", substring = true)
             onNodeWithTag("frame-attribution-entry-0").assertTextContains("1 jank / 2 frames", substring = true)
+        }
+
+    @Test
+    fun `summary signal cards keep unavailable values visible without data`() =
+        runDesktopComposeUiTest(width = 1064, height = 600) {
+            setContent {
+                ViewerTheme(darkTheme = false) {
+                    FrameProfilerScreen(FrameProfilerState(), FrameProfilerActions(), UiLanguage.SIMPLIFIED_CHINESE)
+                }
+            }
+            onNodeWithTag("frame-metric-platform-jank").assertIsDisplayed().assertTextEquals("—")
+            onNodeWithTag("frame-metric-refresh-rate").assertIsDisplayed().assertTextEquals("—")
+            onNodeWithText("平台 Jank 信号率").assertIsDisplayed()
+            onNodeWithText("刷新率").assertIsDisplayed()
         }
 
     @Test
@@ -259,8 +316,6 @@ class FrameProfilerAcceptanceTest {
             assertTrue(clusters.right < problems.left && problems.right < detail.left)
             assertTrue(clusters.top == problems.top && problems.top == detail.top)
             assertTrue(clusters.height > 0f && problems.height > 0f && detail.height > 0f)
-            onNodeWithTag("frame-workspace-heading", useUnmergedTree = true).assertExists()
-            onNodeWithText("Frame Profiler").assertExists()
             onNodeWithText("Date").assertDoesNotExist()
             onNodeWithText("Time range").assertDoesNotExist()
         }
@@ -310,6 +365,26 @@ class FrameProfilerAcceptanceTest {
             onNodeWithText("Zoom in").performClick()
             runOnIdle { selectedFrameId = 10_001L }
             onNodeWithTag("frame-timeline-range").assertTextContains("Frames 9502–10001 of 10001")
+        }
+
+    @Test
+    fun `selected problem frame scrolls both timeline and problem list into view`() =
+        runDesktopComposeUiTest(width = 1440, height = 860) {
+            val analysis = FrameJankAnalyzer().analyze((1L..2_000L).map { sample(it, 24_000_000L) })
+            var selectedFrameId by mutableStateOf(1L)
+            setContent {
+                ViewerTheme(darkTheme = false) {
+                    FrameProfilerScreen(
+                        FrameProfilerState(analysis = analysis, selectedFrameId = selectedFrameId),
+                        FrameProfilerActions(onSelectFrame = { selectedFrameId = it }),
+                        UiLanguage.ENGLISH,
+                    )
+                }
+            }
+
+            runOnIdle { selectedFrameId = 1_800L }
+            onNodeWithTag("frame-timeline-range").assertTextContains("Frames 1501–2000 of 2000")
+            onNodeWithTag("problem-frame-row-1800", useUnmergedTree = true).assertIsDisplayed()
         }
 
     private fun assertStableTimelineHover(

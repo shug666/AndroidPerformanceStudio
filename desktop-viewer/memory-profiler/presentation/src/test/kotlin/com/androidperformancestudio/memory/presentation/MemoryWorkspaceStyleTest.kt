@@ -3,19 +3,16 @@ package com.androidperformancestudio.memory.presentation
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class MemoryWorkspaceStyleTest {
     @Test
-    fun `all memory modes share one localized heading before snapshot evidence`() {
+    fun `all memory modes omit the decorative banner before snapshot evidence`() {
         val source = source("MemoryProfilerScreen.kt")
-        assertEquals(1, Regex("StudioWorkspaceHeader\\(").findAll(source).count())
-        assertTrue(source.contains("title = localizedStringResource(Res.string.memory_profiler, language)"))
-        assertTrue(source.contains(".testTag(\"memory-workspace-header\")"))
-        assertTrue(source.indexOf("StudioWorkspaceHeader(") < source.indexOf("if (presentedState.snapshotSummary"))
-        assertTrue(source.indexOf("StudioWorkspaceHeader(") < source.indexOf("when (presentedState.viewMode)"))
+        assertFalse(source.contains("StudioWorkspaceHeader("))
+        assertTrue(source.indexOf("if (presentedState.snapshotSummary") >= 0)
+        assertTrue(source.indexOf("when (presentedState.viewMode)") >= 0)
         assertTrue(source.indexOf("when (presentedState.viewMode)") < source.indexOf("MemoryProfilerStatusBar("))
         assertTrue(source.contains("StudioTokens.compactContentPadding"))
     }

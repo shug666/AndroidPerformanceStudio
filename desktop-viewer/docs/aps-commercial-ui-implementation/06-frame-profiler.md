@@ -1,4 +1,4 @@
-# 11. 页面 06：Frame Profiler
+# 页面 06：Frame Profiler
 
 ![Frame Profiler 设计参考](images/06-frame-profiler.png)
 

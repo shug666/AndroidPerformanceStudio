@@ -19,7 +19,7 @@ import kotlin.test.assertEquals
 @OptIn(ExperimentalTestApi::class)
 class StudioWorkspaceStyleTest {
     @Test
-    fun `shared dark surfaces match the original Startup workspace derivation`() {
+    fun `workspace background matches the shared sidebar surface in both themes`() {
         val shared = viewerColors(true)
         val original = ViewerPalettes.forDark(true, shared.accent)
         val base = original.canvasBackground.copy(
@@ -30,7 +30,8 @@ class StudioWorkspaceStyleTest {
         val surface = original.accent.copy(alpha = 0.08f).compositeOver(base)
 
         assertEquals(surface, shared.panel)
-        assertEquals(original.accent.copy(alpha = 0.035f).compositeOver(base), shared.workspace)
+        assertEquals(shared.toolbar, shared.workspace)
+        assertEquals(viewerColors(false).toolbar, viewerColors(false).workspace)
         assertEquals(original.accent.copy(alpha = 0.22f).compositeOver(surface), shared.border)
         assertEquals(original.accent.copy(alpha = 0.06f).compositeOver(surface), shared.sectionBackground)
     }
@@ -38,7 +39,7 @@ class StudioWorkspaceStyleTest {
     @Test
     fun `shared light surfaces preserve the existing light palette`() {
         val shared = viewerColors(false)
-        assertEquals(ViewerPalettes.forDark(false, shared.accent), shared)
+        assertEquals(ViewerPalettes.forDark(false, shared.accent).copy(workspace = shared.toolbar), shared)
     }
 
     @Test

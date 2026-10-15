@@ -1,4 +1,4 @@
-# 12. 页面 07：Startup Profiler
+# 页面 07：Startup Profiler
 
 ![Startup Profiler 设计参考](images/07-startup-profiler.png)
 

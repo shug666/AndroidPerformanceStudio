@@ -1,4 +1,4 @@
-# 17. 页面 12：Settings
+# 页面 12：Settings
 
 ![Settings 页面设计参考](images/reports-settings-v2-overview.png)
 

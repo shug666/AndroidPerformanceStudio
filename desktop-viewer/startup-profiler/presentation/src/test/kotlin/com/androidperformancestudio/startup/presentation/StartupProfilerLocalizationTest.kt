@@ -102,7 +102,7 @@ class StartupProfilerLocalizationTest {
                 Path.of("src/main/kotlin/com/androidperformancestudio/startup/presentation/StartupWorkspaceMetrics.kt"),
             )
 
-        assertTrue(controls.contains("StudioWorkspaceHeader("))
+        assertFalse(controls.contains("StudioWorkspaceHeader("))
         assertTrue(metrics.contains("StudioMetricCard("))
         assertFalse(source.contains("startupWorkspaceColors"))
         assertFalse(controls.contains("startupWorkspaceColors"))

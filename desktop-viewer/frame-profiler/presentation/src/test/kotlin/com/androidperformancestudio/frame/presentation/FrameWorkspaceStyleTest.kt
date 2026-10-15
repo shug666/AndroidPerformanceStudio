@@ -3,7 +3,6 @@ package com.androidperformancestudio.frame.presentation
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -14,24 +13,42 @@ class FrameWorkspaceStyleTest {
         )
 
     @Test
-    fun `empty and analyzed workspaces share exactly one heading above their content`() {
-        val workspace = source.substringAfter("public fun FrameProfilerScreen(").substringBefore("private fun EmptyState(")
-        assertEquals(1, Regex("StudioWorkspaceHeader\\(").findAll(source).count())
-        assertEquals(1, Regex("FrameWorkspaceHeading\\(state, language\\)").findAll(workspace).count())
-        assertTrue(workspace.indexOf("FrameWorkspaceHeading(state, language)") < workspace.indexOf("if (analysis == null)"))
-        val heading = source.substringAfter("private fun FrameWorkspaceHeading(").substringBefore("private fun FrameFilterControls(")
-        assertTrue(heading.contains("Res.string.frame_profiler_title, language"))
-        assertTrue(heading.contains("Res.string.frame_profiler_subtitle, language"))
-        assertTrue(heading.contains("supportingText = captureLabel"))
-        assertTrue(heading.contains("testTag(\"frame-workspace-heading\")"))
+    fun `empty and analyzed workspaces share the same analysis layout`() {
+        val workspace = source.substringAfter("public fun FrameProfilerScreen(").substringBefore("private fun AnalysisContent(")
+        assertFalse(source.contains("StudioWorkspaceHeader("))
+        assertTrue(workspace.contains("analysis = state.analysis ?: EMPTY_FRAME_ANALYSIS"))
+        assertTrue(source.contains("if (state.analysis == null)"))
+        assertTrue(source.contains("private val EMPTY_FRAME_ANALYSIS = FrameAnalysisResult(emptyList(), FrameSummary(), emptyList())"))
     }
 
     @Test
     fun `compact cards retain the three analysis panes and frame controls`() {
         assertTrue(source.contains(".padding(StudioTokens.compactContentPadding)"))
-        listOf("frame-clusters-panel", "frame-problems-panel", "frame-detail-panel").forEach { tag ->
+        listOf(
+            "frame-timeline-panel",
+            "frame-clusters-panel",
+            "frame-problems-panel",
+            "frame-detail-panel",
+            "frame-context-panel",
+        ).forEach { tag ->
             assertTrue(source.contains("testTag(\"$tag\")"))
         }
+        val workspace = source.substringAfter("private fun AnalysisContent(").substringBefore("private fun FrameFilterControls(")
+        assertTrue(workspace.indexOf("SummaryCards(") < workspace.indexOf("frame-timeline-panel"))
+        assertTrue(workspace.indexOf("frame-timeline-panel") < workspace.indexOf("FrameFilterControls("))
+        assertTrue(workspace.indexOf("FrameFilterControls(") < workspace.indexOf("frame-clusters-panel"))
+        assertTrue(workspace.indexOf("frame-detail-panel") < workspace.indexOf("frame-context-panel"))
+        val contextPanel = workspace.substringAfter("frame-context-panel")
+        assertTrue(workspace.contains("if (filteredAnalysis.attributions.isNotEmpty() || state.warnings.isNotEmpty())"))
+        assertTrue(contextPanel.contains("SelectionContainer {"))
+        assertTrue(contextPanel.contains("FrameAttributionSection("))
+        assertTrue(contextPanel.contains("state.warnings.forEach"))
+        assertFalse(contextPanel.contains("FrameFilterControls("))
+        val attribution = source.substringAfter("private fun FrameAttributionSection(").substringBefore("private fun FrameMetricCard(")
+        assertTrue(attribution.contains("StudioPanelHeader("))
+        assertTrue(attribution.contains("attributions.take(5).forEachIndexed"))
+        assertFalse(attribution.contains("TextButton("))
+        assertFalse(attribution.contains("expanded"))
         assertTrue(source.contains("modifier = Modifier.weight(0.85f)"))
         assertTrue(source.contains("modifier = Modifier.weight(1.45f)"))
         val detail = source.substringAfter("private fun FrameDetail(").substringBefore("private fun FrameLayoutPreview(")
@@ -39,8 +56,25 @@ class FrameWorkspaceStyleTest {
         listOf("onInspectLayout", "onOpenTrace", "onCopyEvidence", "previousFrameId", "nextFrameId").forEach { action ->
             assertTrue(detail.contains(action))
         }
+        assertTrue(Regex("ProfilerCompactButton\\(").findAll(detail).count() == 2)
+        assertFalse(detail.contains("OutlinedButton("))
         assertTrue(source.contains(".testTag(\"frame-source-filter\")"))
         assertTrue(source.contains(".testTag(\"frame-result-filter\")"))
+    }
+
+    @Test
+    fun `single frame metrics and detail rows use uniform compact text and row dividers`() {
+        val metric = source.substringAfter("private fun DetailMetric(").substringBefore("private fun FrameStageRow(")
+        assertTrue(Regex("style = ViewerTypography\\.bodyCompact\\b").findAll(metric).count() == 2)
+        assertFalse(metric.contains("ViewerTypography.metric"))
+        val stage = source.substringAfter("private fun FrameStageRow(").substringBefore("private fun DetailRow(")
+        assertTrue(Regex("style = ViewerTypography\\.bodyCompact\\b").findAll(stage).count() == 2)
+        assertTrue(stage.contains("HorizontalDivider("))
+        val row = source.substringAfter("private fun DetailRow(").substringBefore("private fun ClusterList(")
+        assertTrue(Regex("style = ViewerTypography\\.bodyCompact\\b").findAll(row).count() == 2)
+        assertFalse(Regex("ViewerTypography\\.body\\b").containsMatchIn(metric + stage + row))
+        assertTrue(row.contains("HorizontalDivider("))
+        assertTrue(source.contains("testTag(\"frame-detail-metrics-divider\")"))
     }
 
     @Test

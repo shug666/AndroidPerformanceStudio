@@ -93,7 +93,6 @@ import com.androidperformancestudio.memory.presentation.generated.resources.leak
 import com.androidperformancestudio.memory.presentation.generated.resources.leak_suspects
 import com.androidperformancestudio.memory.presentation.generated.resources.manual_verification
 import com.androidperformancestudio.memory.presentation.generated.resources.mapping_loaded_note
-import com.androidperformancestudio.memory.presentation.generated.resources.memory_profiler
 import com.androidperformancestudio.memory.presentation.generated.resources.native_heap
 import com.androidperformancestudio.memory.presentation.generated.resources.open_native_heap
 import com.androidperformancestudio.memory.presentation.generated.resources.native_heap_total
@@ -118,7 +117,6 @@ import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.studio.StudioCard
 import com.androidperformancestudio.ui.studio.StudioMetricCard
 import com.androidperformancestudio.ui.studio.StudioTokens
-import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 
 @Composable
 public fun MemoryProfilerScreen(
@@ -135,10 +133,6 @@ public fun MemoryProfilerScreen(
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background),
         ) {
-            StudioWorkspaceHeader(
-                title = localizedStringResource(Res.string.memory_profiler, language),
-                modifier = Modifier.padding(StudioTokens.compactContentPadding).testTag("memory-workspace-header"),
-            )
             if (presentedState.snapshotSummary != null || presentedState.artifact != null || presentedState.mappingLoaded) {
                 Column(
                     modifier =
