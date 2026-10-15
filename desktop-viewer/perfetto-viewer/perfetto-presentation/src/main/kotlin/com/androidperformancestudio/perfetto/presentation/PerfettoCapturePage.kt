@@ -843,6 +843,32 @@ private fun PerfettoConfigurationPanel(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 PerfettoCompactButton(
+                    text = localizedStringResource(Res.string.export_config, language),
+                    onClick = {
+                        onExportConfig(
+                            createCaptureConfig(
+                                selectedTemplate = selectedTemplate,
+                                targetPackage = targetPackage,
+                                durationSeconds = durationSeconds,
+                                bufferSizeKb = bufferSizeKb,
+                                bufferPolicy = bufferPolicy,
+                                androidSdk = deviceCapabilities?.androidSdk ?: 0,
+                                pollIntervals = pollIntervals,
+                                atraceCategories = atraceCategories,
+                                logBuffers = logBuffers,
+                                additionalCategories = additionalCategories,
+                                customConfigText = customConfigText,
+                                enabledProbes =
+                                    enabledProbes.filterTo(mutableSetOf()) { probe ->
+                                        deviceCapabilities?.unsupportedReason(probe) == null &&
+                                            (!probe.requiresTargetPackage || targetPackage.isNotBlank())
+                                    },
+                            ),
+                        )
+                    },
+                    selected = false,
+                )
+                PerfettoCompactButton(
                     text = localizedStringResource(Res.string.start_capture, language),
                     onClick = {
                         selectedDeviceSerial?.let { deviceSerial ->
@@ -881,32 +907,6 @@ private fun PerfettoConfigurationPanel(
                         onClick = { onOpenTrace(captureState.traceFile) },
                     )
                 }
-                PerfettoCompactButton(
-                    text = localizedStringResource(Res.string.export_config, language),
-                    onClick = {
-                        onExportConfig(
-                            createCaptureConfig(
-                                selectedTemplate = selectedTemplate,
-                                targetPackage = targetPackage,
-                                durationSeconds = durationSeconds,
-                                bufferSizeKb = bufferSizeKb,
-                                bufferPolicy = bufferPolicy,
-                                androidSdk = deviceCapabilities?.androidSdk ?: 0,
-                                pollIntervals = pollIntervals,
-                                atraceCategories = atraceCategories,
-                                logBuffers = logBuffers,
-                                additionalCategories = additionalCategories,
-                                customConfigText = customConfigText,
-                                enabledProbes =
-                                    enabledProbes.filterTo(mutableSetOf()) { probe ->
-                                        deviceCapabilities?.unsupportedReason(probe) == null &&
-                                            (!probe.requiresTargetPackage || targetPackage.isNotBlank())
-                                    },
-                            ),
-                        )
-                    },
-                    selected = false,
-                )
             }
 
             CaptureStatus(captureState, language)

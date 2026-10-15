@@ -95,7 +95,7 @@ class PerfettoCapturePageRenderTest {
                 repeat(3) { scene.render().close() }
                 val nodes = scene.semanticsOwners.flatMap { it.unmergedRootSemanticsNode.descendants() }
                 // The atrace probe card is present (ATRACE is enabled by default in System Overview).
-                assertTrue(nodes.any { it.text == "Atrace userspace annotations" })
+                assertTrue(nodes.any { it.text == "Atrace 用户态注解" })
                 // The config button (gear) is rendered for the atrace probe.
                 assertTrue(nodes.any { it.text == "⚙" })
                 // Atrace category labels are NOT rendered inline (they live inside the dialog, which
