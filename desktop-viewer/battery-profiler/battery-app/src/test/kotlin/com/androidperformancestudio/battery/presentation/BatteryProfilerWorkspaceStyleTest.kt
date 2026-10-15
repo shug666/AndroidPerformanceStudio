@@ -34,20 +34,28 @@ class BatteryProfilerWorkspaceStyleTest {
         assertTrue(source.contains("Res.string.thermal_status"))
         assertTrue(source.contains("tone = tone"))
         assertTrue(Regex("analysis\\.networkBytes,\\s*\"B\",\\s*colors\\.info").containsMatchIn(source))
-        assertTrue(Regex("analysis\\.peakTemperatureCelsius,\\s*\"\u00B0C\",\\s*colors\\.warning").containsMatchIn(source))
+        val thermalMetric = Regex("analysis\\.peakTemperatureCelsius,\\s*\"\u00B0C\",\\s*colors\\.warning")
+        assertTrue(thermalMetric.containsMatchIn(source))
     }
 
     @Test
     fun `shared run table retains selection evidence warnings and error states`() {
         assertTrue(source.contains("StudioDataTable("))
         assertTrue(source.contains("RunRow(run, run.runId == selected.runId, actions.onSelectRun, language)"))
-        assertTrue(source.contains("RunDetail(selected, language)"))
+        assertTrue(source.contains("BatteryRunWorkspace("))
+        assertTrue(source.contains("state.experiment?.runs ?: state.storedRuns"))
         assertTrue(source.contains("state.baseline?.let"))
         assertTrue(source.contains("state.errorMessage != null && analysis == null"))
         assertTrue(source.contains("state.operationMessage?.let"))
         assertTrue(source.contains("state.artifact?.let"))
         assertTrue(source.contains("state.warnings.forEach"))
-        assertTrue(source.contains("run.energy.forEach"))
-        assertTrue(source.contains("run.history.take(100)"))
+        val workspace =
+            Files.readString(
+                Path.of("src/main/kotlin/com/androidperformancestudio/battery/presentation/BatteryRunWorkspace.kt"),
+            )
+        assertTrue(workspace.contains("BatterySnapshotChart("))
+        assertTrue(workspace.contains("BatteryHistoryChart("))
+        assertTrue(workspace.contains("BatteryEvidenceInspector("))
+        assertFalse(workspace.contains(".take(100)"))
     }
 }

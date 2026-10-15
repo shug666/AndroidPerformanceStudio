@@ -15,4 +15,5 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.sqlite.jdbc)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.compose.ui.test.junit4)
 }

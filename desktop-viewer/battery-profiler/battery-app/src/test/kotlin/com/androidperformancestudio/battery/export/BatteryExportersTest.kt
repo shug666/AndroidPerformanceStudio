@@ -173,11 +173,21 @@ class BatteryExportersTest {
             42,
             imported.runs
                 .single()
-                .network.totalBytes,
+                .networkTotalBytes,
+        )
+        assertEquals(false, imported.runs.single().networkCountersAvailable)
+        assertEquals(
+            0,
+            imported.runs
+                .single()
+                .network.wifiRxBytes,
         )
         assertEquals(listOf("analysis warning"), imported.warnings)
         assertEquals(20.0, imported.wakelockDurationMs.mean)
         assertEquals(42.0, imported.networkBytes.mean)
+        val importedCsv = directory.resolve("imported.csv")
+        BatteryCsvExporter().export(imported, importedCsv, attributionScope = null)
+        assertContains(Files.readString(importedCsv), ",UNKNOWN,")
     }
 
     @Test

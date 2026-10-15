@@ -67,7 +67,7 @@ public class BatteryAnalyzer {
             wakeupAlarmCount = statistics(deltas.map { run -> run.alarms.sumOf(ResourceTimer::count).toDouble() }),
             jobDurationMs = statistics(deltas.map { run -> run.jobs.sumOf(ResourceTimer::durationMs).toDouble() }),
             sensorDurationMs = statistics(deltas.map { run -> run.sensors.sumOf(ResourceTimer::durationMs).toDouble() }),
-            networkBytes = statistics(deltas.map { run -> run.network.totalBytes.toDouble() }),
+            networkBytes = statistics(deltas.map { run -> run.networkTotalBytes.toDouble() }),
             energyMah = statistics(deltas.map { run -> run.energy.sumOf { it.energyMah ?: 0.0 }.takeIf { it > 0 } }),
             peakTemperatureCelsius = statistics(deltas.map { it.peakTemperatureCelsius }),
             thermalStatus = statistics(deltas.map { it.maxThermalStatus?.toDouble() }),

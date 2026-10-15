@@ -15,6 +15,9 @@ import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import com.androidperformancestudio.network.analysis.NetworkAnalyzer
 import com.androidperformancestudio.network.model.CacheDisposition
@@ -37,6 +40,7 @@ import com.androidperformancestudio.network.model.NetworkTimeDomain
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTheme
 import java.awt.image.BufferedImage
+import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import javax.imageio.ImageIO
@@ -89,6 +93,69 @@ class NetworkProfilerVisualCaptureTest {
             )
             System.getenv("APS_NETWORK_PROFILER_SCREENSHOT")?.let { output ->
                 ImageIO.write(screenshot.toBufferedImage(), "png", Path.of(output).toFile())
+            }
+        }
+
+    @Test
+    fun `English light workspace renders activity and domain summaries`() =
+        captureWorkspace(UiLanguage.ENGLISH, false, 1440, 960, "network-en-light")
+
+    @Test
+    fun `English dark narrow workspace stacks request detail`() =
+        captureWorkspace(UiLanguage.ENGLISH, true, 780, 1100, "network-en-dark-narrow")
+
+    @Test
+    fun `Chinese light narrow workspace stacks request detail`() =
+        captureWorkspace(UiLanguage.SIMPLIFIED_CHINESE, false, 780, 1100, "network-zh-light-narrow")
+
+    private fun captureWorkspace(language: UiLanguage, dark: Boolean, width: Int, height: Int, name: String) =
+        runDesktopComposeUiTest(width = width, height = height) {
+            setContent {
+                ViewerTheme(darkTheme = dark) {
+                    Box(Modifier.fillMaxSize().testTag("network-profiler-capture-root")) {
+                        NetworkProfilerScreen(networkVisualState(), NetworkProfilerActions(selectCall = {}), language)
+                    }
+                }
+            }
+            onNodeWithTag("network-activity-chart").assertExists()
+            if (width < 1000) {
+                onNodeWithTag("network-stacked-panes").assertExists()
+                val table = onNodeWithTag("network-request-table").fetchSemanticsNode().boundsInRoot
+                val detail = onNodeWithTag("network-request-detail").fetchSemanticsNode().boundsInRoot
+                val root = onNodeWithTag("network-profiler-capture-root").fetchSemanticsNode().boundsInRoot
+                assertTrue(table.height > 80f && detail.height > 80f, "Both stacked panes must remain usable")
+                assertTrue(table.bottom <= detail.top, "Narrow detail must follow, not overlap, the request table")
+                assertTrue(detail.left >= root.left && detail.right <= root.right, "Detail must stay inside the viewport")
+                assertTrue(detail.bottom <= root.bottom, "Detail must stay vertically inside the viewport")
+            }
+            onNodeWithTag("network-request-search").performTextInput("503")
+            onNodeWithTag("network-request-row-har-1").assertDoesNotExist()
+            onNodeWithTag("network-request-row-har-2").assertExists()
+            onNodeWithTag("network-request-detail").assertContentDescriptionEquals(
+                "POST · https://upload.example.test/<redacted-path>?token=<redacted> · 503",
+            )
+            onNodeWithTag("network-request-search").performTextReplacement("no-matching-request")
+            onNodeWithTag("network-request-row-har-2").assertDoesNotExist()
+            onNodeWithTag("network-request-detail").assertContentDescriptionEquals(
+                if (language == UiLanguage.ENGLISH) {
+                    "Select a call to inspect phase evidence"
+                } else {
+                    "选择请求查看阶段证据"
+                },
+            )
+            onNodeWithTag("network-request-search").performTextReplacement("503")
+            onNodeWithTag("network-domains-tab").performClick()
+            onNodeWithTag("network-domains-table").assertExists()
+            onNodeWithText("upload.example.test").assertExists()
+            onNodeWithTag("network-requests-tab").performClick()
+            waitForIdle()
+            val screenshot = onNodeWithTag("network-profiler-capture-root").captureToImage()
+            assertEquals(width, screenshot.width)
+            assertEquals(height, screenshot.height)
+            System.getenv("APS_NETWORK_PROFILER_SCREENSHOT_DIR")?.let { output ->
+                val directory = Path.of(output)
+                Files.createDirectories(directory)
+                ImageIO.write(screenshot.toBufferedImage(), "png", directory.resolve("$name.png").toFile())
             }
         }
 }

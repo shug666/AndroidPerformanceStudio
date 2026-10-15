@@ -85,4 +85,14 @@
     <string name="response_body_evidence">Response body</string>
     <string name="headers_not_captured">No redacted header evidence captured</string>
     <string name="body_not_captured">Body content is not captured by this profiler</string>
+    <string name="network_domains">Domains</string>
+    <string name="network_domain">Domain</string>
+    <string name="network_all_outcomes">All outcomes</string>
+    <string name="network_search">Search redacted URL, method or status…</string>
+    <string name="network_activity">Request activity · Bytes at call completion</string>
+    <string name="network_activity_notice">Top: call intervals (HAR dashed). Bottom: bytes assigned to call-end buckets, not measured throughput. Time relative to first timed request.</string>
+    <string name="network_activity_unavailable">Call activity unavailable: no valid completed intervals.</string>
+    <string name="network_completion_peak">Peak bucket: %1$s</string>
+    <string name="network_activity_omitted">%1$d calls lack valid interval endpoints and are not plotted.</string>
+    <string name="network_partial_bytes">%1$d calls have incomplete byte evidence; their completion buckets are unavailable.</string>
 </resources>

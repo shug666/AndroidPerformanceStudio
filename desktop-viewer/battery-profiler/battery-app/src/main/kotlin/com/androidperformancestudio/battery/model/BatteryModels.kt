@@ -208,6 +208,8 @@ public data class BatteryRunDelta(
     val maxThermalStatus: Int? = null,
     val throttledSamples: Int = 0,
     val performanceWindows: List<BatteryPerformanceWindow> = emptyList(),
+    val networkTotalBytes: Long = network.totalBytes,
+    val networkCountersAvailable: Boolean = true,
 )
 
 public data class BatteryStatistics(

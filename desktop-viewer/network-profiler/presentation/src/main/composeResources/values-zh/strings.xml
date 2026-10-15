@@ -85,4 +85,14 @@
     <string name="response_body_evidence">响应正文</string>
     <string name="headers_not_captured">未捕获脱敏后的请求头证据</string>
     <string name="body_not_captured">此分析器不捕获正文内容</string>
+    <string name="network_domains">域名</string>
+    <string name="network_domain">域名</string>
+    <string name="network_all_outcomes">全部结果</string>
+    <string name="network_search">搜索脱敏 URL、方法或状态…</string>
+    <string name="network_activity">请求活动 · 请求结束时记录的字节</string>
+    <string name="network_activity_notice">上方：请求区间（HAR 虚线）。下方：按请求结束时间分桶的字节，非实测吞吐率。横轴相对第一个有时间证据的请求。</string>
+    <string name="network_activity_unavailable">请求活动不可用：没有有效的完整时间区间。</string>
+    <string name="network_completion_peak">分桶峰值：%1$s</string>
+    <string name="network_activity_omitted">%1$d 个请求缺少有效的区间端点，未绘制。</string>
+    <string name="network_partial_bytes">%1$d 个请求字节证据不完整，其结束时间分桶不可用。</string>
 </resources>

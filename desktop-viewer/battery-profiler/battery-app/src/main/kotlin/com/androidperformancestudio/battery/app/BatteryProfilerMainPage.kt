@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -54,11 +55,13 @@ import com.androidperformancestudio.battery.battery_app.generated.resources.canc
 import com.androidperformancestudio.battery.battery_app.generated.resources.cancel_experiment
 import com.androidperformancestudio.battery.battery_app.generated.resources.capture_mode
 import com.androidperformancestudio.battery.battery_app.generated.resources.choose_location
+import com.androidperformancestudio.battery.battery_app.generated.resources.configuration_done
 import com.androidperformancestudio.battery.battery_app.generated.resources.cooldown
 import com.androidperformancestudio.battery.battery_app.generated.resources.cooldown_value
 import com.androidperformancestudio.battery.battery_app.generated.resources.device
 import com.androidperformancestudio.battery.battery_app.generated.resources.duration
 import com.androidperformancestudio.battery.battery_app.generated.resources.duration_value
+import com.androidperformancestudio.battery.battery_app.generated.resources.experiment_configuration
 import com.androidperformancestudio.battery.battery_app.generated.resources.generate_battery_historian_input
 import com.androidperformancestudio.battery.battery_app.generated.resources.import_analysis
 import com.androidperformancestudio.battery.battery_app.generated.resources.interactive
@@ -111,6 +114,7 @@ public fun FrameWindowScope.BatteryProfilerMainPage(
     val state by controller.state.collectAsState()
     val scope = rememberCoroutineScope()
     var experimentJob by remember { mutableStateOf<Job?>(null) }
+    var showConfiguration by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
     var confirmBugreport by remember { mutableStateOf(false) }
     val recentStore =
@@ -122,6 +126,7 @@ public fun FrameWindowScope.BatteryProfilerMainPage(
         }
     var recentFiles by remember { mutableStateOf(recentStore.load()) }
 
+    LaunchedEffect(controller) { controller.refreshSessions() }
     LaunchedEffect(controller) { controller.refreshDevices() }
     LaunchedEffect(state.isInteractiveActive, state.config.mode, state.config.pollingIntervalSeconds) {
         if (state.isInteractiveActive && state.config.mode == BatteryCaptureMode.ONLINE) {
@@ -197,127 +202,83 @@ public fun FrameWindowScope.BatteryProfilerMainPage(
             },
             onNavigateSettings = null,
         ) {
-            DropdownSelector(
-                items = state.devices,
-                selectedItem = state.devices.firstOrNull { it.serial == state.selectedDeviceSerial },
-                onItemSelected = { device -> scope.launch { controller.selectDevice(device.serial) } },
-                itemLabel = { it.name },
-                placeholder = localizedStringResource(Res.string.device, language),
-                enabled = !state.isRunning,
-                itemEnabled = { it.online },
-            )
-            HeaderSpacer()
-            DropdownSelector(
-                items = state.targets,
-                searchable = true,
-                searchLanguage = language,
-                selectedItem = state.targets.firstOrNull { it.packageName == state.selectedPackageName },
-                onItemSelected = { controller.selectTarget(it.packageName) },
-                itemLabel = {
-                    localizedStringResource(
-                        if (it.sharedUid) Res.string.package_uid_shared else Res.string.package_uid,
-                        language,
-                        it.packageName,
-                        it.uid,
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f)) {
+                val minimumToolbarWidth = maxWidth
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()).widthIn(min = minimumToolbarWidth),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    DropdownSelector(
+                        items = state.devices,
+                        selectedItem = state.devices.firstOrNull { it.serial == state.selectedDeviceSerial },
+                        onItemSelected = { device -> scope.launch { controller.selectDevice(device.serial) } },
+                        itemLabel = { it.name },
+                        placeholder = localizedStringResource(Res.string.device, language),
+                        enabled = !state.isRunning,
+                        itemEnabled = { it.online },
                     )
-                },
-                placeholder = localizedStringResource(Res.string.app_uid, language),
-                enabled = !state.isRunning && state.selectedDeviceSerial != null,
-            )
-            HeaderSpacer()
-            ProfilerCompactButton(
-                text = localizedStringResource(Res.string.refresh, language),
-                enabled = !state.isRunning && !state.isRefreshing,
-                onClick = { scope.launch { controller.refreshDevices() } },
-            )
-            HeaderSpacer()
-            ProfilerCompactButton(
-                text =
-                    when {
-                        state.isInteractiveActive -> localizedStringResource(Res.string.stop_analyze, language)
-                        state.isRunning -> localizedStringResource(Res.string.cancel_experiment, language)
-                        else -> localizedStringResource(Res.string.run_experiment, language)
-                    },
-                enabled = state.selectedPackageName != null,
-                onClick = {
-                    when {
-                        state.isInteractiveActive -> experimentJob = scope.launch { controller.stopInteractive() }
-                        state.isRunning -> experimentJob?.cancel()
-                        state.config.mode == BatteryCaptureMode.INTERACTIVE || state.config.mode == BatteryCaptureMode.ONLINE ->
-                            experimentJob =
-                                scope.launch { controller.startInteractive() }
-                        else -> experimentJob = scope.launch { controller.runAutomatic() }
-                    }
-                },
-            )
-            HeaderSpacer()
-            HeaderDivider()
-            HeaderSpacer()
-            DropdownSelector(
-                items = BatteryCaptureMode.entries,
-                selectedItem = state.config.mode,
-                onItemSelected = { mode -> controller.updateConfig { it.copy(mode = mode) } },
-                itemLabel = { it.label(language) },
-                placeholder = localizedStringResource(Res.string.capture_mode, language),
-                enabled = !state.isRunning,
-            )
-            HeaderSpacer()
-            DropdownSelector(
-                items = listOf(15, 30, 60, 120, 300, 600),
-                selectedItem = state.config.durationSeconds,
-                onItemSelected = { value -> controller.updateConfig { it.copy(durationSeconds = value) } },
-                itemLabel = { localizedStringResource(Res.string.seconds_short, language, it) },
-                selectedItemLabel = { localizedStringResource(Res.string.duration_value, language, it) },
-                placeholder = localizedStringResource(Res.string.duration, language),
-                enabled = !state.isRunning,
-            )
-            HeaderSpacer()
-            DropdownSelector(
-                items = listOf(5, 10, 15, 30, 60),
-                selectedItem = state.config.pollingIntervalSeconds,
-                onItemSelected = { value -> controller.updateConfig { it.copy(pollingIntervalSeconds = value) } },
-                itemLabel = { localizedStringResource(Res.string.seconds_short, language, it) },
-                selectedItemLabel = { localizedStringResource(Res.string.polling_value, language, it) },
-                placeholder = localizedStringResource(Res.string.polling, language),
-                enabled = !state.isRunning,
-            )
-            HeaderSpacer()
-            DropdownSelector(
-                items = listOf(1, 3, 5, 10),
-                selectedItem = state.config.measuredRuns,
-                onItemSelected = { value -> controller.updateConfig { it.copy(measuredRuns = value) } },
-                itemLabel = Int::toString,
-                selectedItemLabel = { localizedStringResource(Res.string.runs_value, language, it) },
-                placeholder = localizedStringResource(Res.string.runs, language),
-                enabled = !state.isRunning,
-            )
-            HeaderSpacer()
-            DropdownSelector(
-                items = listOf(0, 15, 30, 60, 120),
-                selectedItem = state.config.cooldownSeconds,
-                onItemSelected = { value -> controller.updateConfig { it.copy(cooldownSeconds = value) } },
-                itemLabel = { localizedStringResource(Res.string.seconds_short, language, it) },
-                selectedItemLabel = { localizedStringResource(Res.string.cooldown_value, language, it) },
-                placeholder = localizedStringResource(Res.string.cooldown, language),
-                enabled = !state.isRunning && state.config.mode == BatteryCaptureMode.REPEATED,
-            )
-            HeaderSpacer()
-            Checkbox(
-                checked = state.config.launchApp,
-                enabled = !state.isRunning,
-                onCheckedChange = { checked ->
-                    controller.updateConfig { it.copy(launchApp = checked) }
-                },
-            )
-            Text(localizedStringResource(Res.string.launch_app_automatically, language))
-            Spacer(Modifier.weight(1f))
-            ProfilerCompactButton(
-                text = localizedStringResource(Res.string.battery_historian, language),
-                enabled = state.selectedDeviceSerial != null && !state.isRunning,
-                onClick = {
-                    confirmBugreport = true
-                },
-            )
+                    HeaderSpacer()
+                    DropdownSelector(
+                        items = state.targets,
+                        searchable = true,
+                        searchLanguage = language,
+                        selectedItem = state.targets.firstOrNull { it.packageName == state.selectedPackageName },
+                        onItemSelected = { controller.selectTarget(it.packageName) },
+                        itemLabel = {
+                            localizedStringResource(
+                                if (it.sharedUid) Res.string.package_uid_shared else Res.string.package_uid,
+                                language,
+                                it.packageName,
+                                it.uid,
+                            )
+                        },
+                        placeholder = localizedStringResource(Res.string.app_uid, language),
+                        enabled = !state.isRunning && state.selectedDeviceSerial != null,
+                    )
+                    HeaderSpacer()
+                    ProfilerCompactButton(
+                        text = localizedStringResource(Res.string.refresh, language),
+                        enabled = !state.isRunning && !state.isRefreshing,
+                        onClick = { scope.launch { controller.refreshDevices() } },
+                    )
+                    HeaderSpacer()
+                    ProfilerCompactButton(
+                        text =
+                            when {
+                                state.isInteractiveActive -> localizedStringResource(Res.string.stop_analyze, language)
+                                state.isRunning -> localizedStringResource(Res.string.cancel_experiment, language)
+                                else -> localizedStringResource(Res.string.run_experiment, language)
+                            },
+                        enabled = state.selectedPackageName != null && !state.isLoadingSession,
+                        onClick = {
+                            when {
+                                state.isInteractiveActive -> experimentJob = scope.launch { controller.stopInteractive() }
+                                state.isRunning -> experimentJob?.cancel()
+                                state.config.mode == BatteryCaptureMode.INTERACTIVE || state.config.mode == BatteryCaptureMode.ONLINE ->
+                                    experimentJob =
+                                        scope.launch { controller.startInteractive() }
+                                else -> experimentJob = scope.launch { controller.runAutomatic() }
+                            }
+                        },
+                    )
+                    HeaderSpacer()
+                    HeaderDivider()
+                    HeaderSpacer()
+                    ProfilerCompactButton(
+                        text = localizedStringResource(Res.string.experiment_configuration, language),
+                        enabled = !state.isRunning,
+                        onClick = { showConfiguration = true },
+                    )
+                    Spacer(Modifier.weight(1f))
+                    ProfilerCompactButton(
+                        text = localizedStringResource(Res.string.battery_historian, language),
+                        enabled = state.selectedDeviceSerial != null && !state.isRunning,
+                        onClick = {
+                            confirmBugreport = true
+                        },
+                    )
+                }
+            }
         }
         HorizontalDivider(
             thickness = 1.dp,
@@ -339,11 +300,91 @@ public fun FrameWindowScope.BatteryProfilerMainPage(
             thickness = 1.dp,
             color = MaterialTheme.colorScheme.outline,
         )
-        BatteryProfilerScreen(state, BatteryProfilerActions(controller::selectRun), language, Modifier.weight(1f))
+        BatterySessionWorkspace(
+            state = state,
+            language = language,
+            onOpenSession = { id -> scope.launch { controller.openSession(id) } },
+            onNewExperiment = controller::newExperiment,
+            onRefreshSessions = { scope.launch { controller.refreshSessions() } },
+            modifier = Modifier.weight(1f),
+        ) {
+            BatteryProfilerScreen(state, BatteryProfilerActions(controller::selectRun), language)
+        }
         BatteryProfilerStatusBar(
             language = language,
             operationMessage = state.operationMessage,
             errorMessage = state.errorMessage,
+        )
+    }
+
+    if (showConfiguration) {
+        AlertDialog(
+            onDismissRequest = { showConfiguration = false },
+            title = { Text(localizedStringResource(Res.string.experiment_configuration, language)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DropdownSelector(
+                        items = BatteryCaptureMode.entries,
+                        selectedItem = state.config.mode,
+                        onItemSelected = { mode -> controller.updateConfig { it.copy(mode = mode) } },
+                        itemLabel = { it.label(language) },
+                        placeholder = localizedStringResource(Res.string.capture_mode, language),
+                        enabled = !state.isRunning,
+                    )
+                    DropdownSelector(
+                        items = listOf(15, 30, 60, 120, 300, 600),
+                        selectedItem = state.config.durationSeconds,
+                        onItemSelected = { value -> controller.updateConfig { it.copy(durationSeconds = value) } },
+                        itemLabel = { localizedStringResource(Res.string.seconds_short, language, it) },
+                        selectedItemLabel = { localizedStringResource(Res.string.duration_value, language, it) },
+                        placeholder = localizedStringResource(Res.string.duration, language),
+                        enabled = !state.isRunning,
+                    )
+                    DropdownSelector(
+                        items = listOf(5, 10, 15, 30, 60),
+                        selectedItem = state.config.pollingIntervalSeconds,
+                        onItemSelected = { value -> controller.updateConfig { it.copy(pollingIntervalSeconds = value) } },
+                        itemLabel = { localizedStringResource(Res.string.seconds_short, language, it) },
+                        selectedItemLabel = { localizedStringResource(Res.string.polling_value, language, it) },
+                        placeholder = localizedStringResource(Res.string.polling, language),
+                        enabled = !state.isRunning,
+                    )
+                    DropdownSelector(
+                        items = listOf(1, 3, 5, 10),
+                        selectedItem = state.config.measuredRuns,
+                        onItemSelected = { value -> controller.updateConfig { it.copy(measuredRuns = value) } },
+                        itemLabel = Int::toString,
+                        selectedItemLabel = { localizedStringResource(Res.string.runs_value, language, it) },
+                        placeholder = localizedStringResource(Res.string.runs, language),
+                        enabled = !state.isRunning,
+                    )
+                    DropdownSelector(
+                        items = listOf(0, 15, 30, 60, 120),
+                        selectedItem = state.config.cooldownSeconds,
+                        onItemSelected = { value -> controller.updateConfig { it.copy(cooldownSeconds = value) } },
+                        itemLabel = { localizedStringResource(Res.string.seconds_short, language, it) },
+                        selectedItemLabel = { localizedStringResource(Res.string.cooldown_value, language, it) },
+                        placeholder = localizedStringResource(Res.string.cooldown, language),
+                        enabled = !state.isRunning && state.config.mode == BatteryCaptureMode.REPEATED,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = state.config.launchApp,
+                            enabled = !state.isRunning,
+                            onCheckedChange = { checked ->
+                                controller.updateConfig { it.copy(launchApp = checked) }
+                            },
+                        )
+                        Text(localizedStringResource(Res.string.launch_app_automatically, language))
+                    }
+                }
+            },
+            confirmButton = {
+                ProfilerCompactButton(
+                    text = localizedStringResource(Res.string.configuration_done, language),
+                    onClick = { showConfiguration = false },
+                )
+            },
         )
     }
 

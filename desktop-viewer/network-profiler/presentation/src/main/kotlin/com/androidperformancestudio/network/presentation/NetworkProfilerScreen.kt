@@ -4,8 +4,10 @@ package com.androidperformancestudio.network.presentation
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
@@ -20,12 +22,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -96,36 +103,69 @@ public fun NetworkProfilerScreen(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalViewerColors.current
-    val selectedCall = state.result?.calls?.firstOrNull { it.callId == state.selectedCallId }
-    Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .background(colors.workspace)
-                .padding(StudioTokens.compactContentPadding)
-                .testTag("network-profiler-workspace"),
-        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
-    ) {
-        SummaryCards(state, language)
-        EvidenceCoverage(state, language)
-        state.message?.let { MessageStrip(it, StudioStatusTone.INFO) }
-        state.error?.let { MessageStrip(it, StudioStatusTone.ERROR) }
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
+    val calls = state.result?.calls.orEmpty()
+    var query by remember(state.result?.session?.id) { mutableStateOf("") }
+    var outcome by remember(state.result?.session?.id) { mutableStateOf<CallOutcome?>(null) }
+    var showDomains by remember { mutableStateOf(false) }
+    val visibleCalls = remember(calls, query, outcome) { filterNetworkCalls(calls, query, outcome) }
+    val selectedCall = visibleCalls.firstOrNull { it.callId == state.selectedCallId } ?: visibleCalls.firstOrNull()
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        val narrow = maxWidth < 1000.dp
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(colors.workspace)
+                    .padding(StudioTokens.compactContentPadding)
+                    .testTag("network-profiler-workspace"),
+            verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
         ) {
-            RequestTable(
-                calls = state.result?.calls.orEmpty(),
-                selectedCallId = state.selectedCallId,
+            SummaryCards(state, language)
+            EvidenceCoverage(state, language)
+            state.message?.let { MessageStrip(it, StudioStatusTone.INFO) }
+            state.error?.let { MessageStrip(it, StudioStatusTone.ERROR) }
+            NetworkActivityPanel(calls, language)
+            NetworkRequestControls(
+                query = query,
+                onQueryChange = { query = it },
+                outcome = outcome,
+                onOutcomeChange = { outcome = it },
+                showDomains = showDomains,
+                onShowDomains = { showDomains = it },
+                visibleCount = visibleCalls.size,
+                totalCount = calls.size,
                 language = language,
-                onSelectCall = actions.selectCall,
-                modifier = Modifier.weight(1.8f).fillMaxHeight(),
+                narrow = narrow,
             )
-            RequestDetail(
-                call = selectedCall,
-                language = language,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-            )
+            val table: @Composable (Modifier) -> Unit = { tableModifier ->
+                if (showDomains) {
+                    NetworkDomainsPanel(visibleCalls, language, tableModifier)
+                } else {
+                    BoxWithConstraints(tableModifier) {
+                        val tableWidth = maxWidth.coerceAtLeast(900.dp)
+                        Box(Modifier.fillMaxSize().horizontalScroll(rememberScrollState())) {
+                            RequestTable(
+                                calls = visibleCalls,
+                                selectedCallId = selectedCall?.callId,
+                                language = language,
+                                onSelectCall = actions.selectCall,
+                                modifier = Modifier.width(tableWidth).fillMaxHeight(),
+                            )
+                        }
+                    }
+                }
+            }
+            if (narrow) {
+                Column(Modifier.weight(1f).testTag("network-stacked-panes"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    table(Modifier.weight(1f).fillMaxWidth())
+                    RequestDetail(selectedCall, language, Modifier.weight(1.2f).fillMaxWidth())
+                }
+            } else {
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding)) {
+                    table(Modifier.weight(1.8f).fillMaxHeight())
+                    RequestDetail(selectedCall, language, Modifier.weight(1f).fillMaxHeight())
+                }
+            }
         }
     }
 }
@@ -135,66 +175,73 @@ private fun SummaryCards(state: NetworkProfilerState, language: UiLanguage) {
     val colors = LocalViewerColors.current
     val summary = state.summary
     val completeness = state.result?.session?.completeness
-    Row(
-        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        StudioMetricCard(
-            label = localizedStringResource(Res.string.calls, language),
-            value = summary?.callCount?.toString() ?: "—",
-            modifier = Modifier.weight(0.72f).fillMaxHeight(),
-            tone = colors.info,
-        )
-        StudioMetricCard(
-            label = localizedStringResource(Res.string.failures, language),
-            value = summary?.failureCount?.toString() ?: "—",
-            modifier = Modifier.weight(0.72f).fillMaxHeight(),
-            supportingText = if ((summary?.failureCount ?: 0) > 0) localizedStringResource(Res.string.failure_attention, language) else null,
-            tone = if ((summary?.failureCount ?: 0) > 0) colors.warning else colors.info,
-        )
-        StudioMetricCard(
-            label = localizedStringResource(Res.string.transferred_bytes, language),
-            value = summary?.transferredBytes?.let(::formatBytes) ?: "—",
-            supportingText =
-                summary?.let {
-                    localizedStringResource(
-                        Res.string.transferred_support,
-                        language,
-                        formatBytes(it.totalRequestBytes),
-                        formatBytes(it.totalResponseBytes),
-                    )
-                },
-            modifier = Modifier.weight(1.05f).fillMaxHeight(),
-            tone = colors.accent,
-        )
-        StudioMetricCard(
-            label = localizedStringResource(Res.string.median_slow_request, language),
-            value = summary?.let { "${formatDurationMs(it.medianDurationMs)} / ${formatDurationMs(it.p95DurationMs)}" } ?: "—",
-            supportingText = localizedStringResource(Res.string.median_p95_support, language),
-            modifier = Modifier.weight(1.18f).fillMaxHeight(),
-            tone = colors.warning,
-        )
-        StudioMetricCard(
-            label = localizedStringResource(Res.string.evidence_completeness, language),
-            value = completeness?.status?.displayName(language) ?: "—",
-            supportingText =
-                completeness?.let {
-                    localizedStringResource(
-                        Res.string.coverage_counts,
-                        language,
-                        it.droppedEvents,
-                        it.sequenceGaps,
-                        summary?.missingTimingCount ?: 0,
-                    )
-                },
-            modifier = Modifier.weight(1.2f).fillMaxHeight(),
-            tone =
-                when (completeness?.status) {
-                    EvidenceCompleteness.COMPLETE -> colors.success
-                    null -> colors.info
-                    else -> colors.warning
-                },
-        )
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val cardsWidth = maxWidth.coerceAtLeast(920.dp)
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+        ) {
+            Row(
+                modifier = Modifier.width(cardsWidth).height(IntrinsicSize.Max),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                StudioMetricCard(
+                    label = localizedStringResource(Res.string.calls, language),
+                    value = summary?.callCount?.toString() ?: "—",
+                    modifier = Modifier.weight(0.72f).fillMaxHeight(),
+                    tone = colors.info,
+                )
+                StudioMetricCard(
+                    label = localizedStringResource(Res.string.failures, language),
+                    value = summary?.failureCount?.toString() ?: "—",
+                    modifier = Modifier.weight(0.72f).fillMaxHeight(),
+                    supportingText = if ((summary?.failureCount ?: 0) > 0) localizedStringResource(Res.string.failure_attention, language) else null,
+                    tone = if ((summary?.failureCount ?: 0) > 0) colors.warning else colors.info,
+                )
+                StudioMetricCard(
+                    label = localizedStringResource(Res.string.transferred_bytes, language),
+                    value = summary?.transferredBytes?.let(::formatBytes) ?: "—",
+                    supportingText =
+                        summary?.let {
+                            localizedStringResource(
+                                Res.string.transferred_support,
+                                language,
+                                formatBytes(it.totalRequestBytes),
+                                formatBytes(it.totalResponseBytes),
+                            )
+                        },
+                    modifier = Modifier.weight(1.05f).fillMaxHeight(),
+                    tone = colors.accent,
+                )
+                StudioMetricCard(
+                    label = localizedStringResource(Res.string.median_slow_request, language),
+                    value = summary?.let { "${formatDurationMs(it.medianDurationMs)} / ${formatDurationMs(it.p95DurationMs)}" } ?: "—",
+                    supportingText = localizedStringResource(Res.string.median_p95_support, language),
+                    modifier = Modifier.weight(1.18f).fillMaxHeight(),
+                    tone = colors.warning,
+                )
+                StudioMetricCard(
+                    label = localizedStringResource(Res.string.evidence_completeness, language),
+                    value = completeness?.status?.displayName(language) ?: "—",
+                    supportingText =
+                        completeness?.let {
+                            localizedStringResource(
+                                Res.string.coverage_counts,
+                                language,
+                                it.droppedEvents,
+                                it.sequenceGaps,
+                                summary?.missingTimingCount ?: 0,
+                            )
+                        },
+                    modifier = Modifier.weight(1.2f).fillMaxHeight(),
+                    tone =
+                        when (completeness?.status) {
+                            EvidenceCompleteness.COMPLETE -> colors.success
+                            null -> colors.info
+                            else -> colors.warning
+                        },
+                )
+            }
+        }
     }
 }
 
@@ -373,7 +420,12 @@ private fun RequestDetail(
     language: UiLanguage,
     modifier: Modifier,
 ) {
-    StudioPanel(modifier.testTag("network-request-detail")) {
+    val detailDescription = call?.toPresentationRow()?.let { row ->
+        "${row.method} · ${row.redactedUrl} · ${row.statusCode ?: "—"}"
+    } ?: localizedStringResource(Res.string.select_a_call_to_inspect_phase_evidence, language)
+    StudioPanel(
+        modifier.testTag("network-request-detail").semantics { contentDescription = detailDescription },
+    ) {
         StudioPanelHeader(
             title = localizedStringResource(Res.string.request_details, language),
             subtitle = call?.redactedUrl,
@@ -698,7 +750,7 @@ private fun NetworkConfidence.toStudioEvidence(): StudioEvidence =
         NetworkConfidence.UNKNOWN -> StudioEvidence.UNKNOWN
     }
 
-private fun CallOutcome.displayName(language: UiLanguage): String =
+internal fun CallOutcome.displayName(language: UiLanguage): String =
     localizedStringResource(
         when (this) {
             CallOutcome.COMPLETED -> Res.string.outcome_completed

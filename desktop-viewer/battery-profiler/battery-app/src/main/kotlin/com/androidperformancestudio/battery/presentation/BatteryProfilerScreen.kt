@@ -36,45 +36,30 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.battery.analysis.BatteryAnalysisResult
 import com.androidperformancestudio.battery.battery_app.generated.resources.Res
 import com.androidperformancestudio.battery.battery_app.generated.resources.alarm
-import com.androidperformancestudio.battery.battery_app.generated.resources.alarms
 import com.androidperformancestudio.battery.battery_app.generated.resources.capability_attribution_uid
 import com.androidperformancestudio.battery.battery_app.generated.resources.diagnostics_and_warnings
 import com.androidperformancestudio.battery.battery_app.generated.resources.duration
 import com.androidperformancestudio.battery.battery_app.generated.resources.energy
 import com.androidperformancestudio.battery.battery_app.generated.resources.energy_evidence
-import com.androidperformancestudio.battery.battery_app.generated.resources.energy_evidence_detail
 import com.androidperformancestudio.battery.battery_app.generated.resources.experiment_runs
-import com.androidperformancestudio.battery.battery_app.generated.resources.history_event_detail
-import com.androidperformancestudio.battery.battery_app.generated.resources.history_timeline_events
-import com.androidperformancestudio.battery.battery_app.generated.resources.jobs
 import com.androidperformancestudio.battery.battery_app.generated.resources.median_network
 import com.androidperformancestudio.battery.battery_app.generated.resources.median_wakelock
 import com.androidperformancestudio.battery.battery_app.generated.resources.median_wakeup_alarms
 import com.androidperformancestudio.battery.battery_app.generated.resources.modeled_energy
-import com.androidperformancestudio.battery.battery_app.generated.resources.ms
 import com.androidperformancestudio.battery.battery_app.generated.resources.network
-import com.androidperformancestudio.battery.battery_app.generated.resources.network_b_mobile_radio_ms
 import com.androidperformancestudio.battery.battery_app.generated.resources.network_use_vs_previous_compatible_experiment_difference_only
-import com.androidperformancestudio.battery.battery_app.generated.resources.no_attributable_energy_data_was_provided_by_this_device
 import com.androidperformancestudio.battery.battery_app.generated.resources.no_delta_or_unavailable
 import com.androidperformancestudio.battery.battery_app.generated.resources.p90_n
 import com.androidperformancestudio.battery.battery_app.generated.resources.peak_temperature
-import com.androidperformancestudio.battery.battery_app.generated.resources.run_resource_details
 import com.androidperformancestudio.battery.battery_app.generated.resources.runs
 import com.androidperformancestudio.battery.battery_app.generated.resources.s
-import com.androidperformancestudio.battery.battery_app.generated.resources.sensors
-import com.androidperformancestudio.battery.battery_app.generated.resources.sustained_performance_window
 import com.androidperformancestudio.battery.battery_app.generated.resources.text
-import com.androidperformancestudio.battery.battery_app.generated.resources.thermal_evidence_detail
 import com.androidperformancestudio.battery.battery_app.generated.resources.thermal_status
 import com.androidperformancestudio.battery.battery_app.generated.resources.wakelock
-import com.androidperformancestudio.battery.battery_app.generated.resources.wakelocks
 import com.androidperformancestudio.battery.model.BatteryRunDelta
 import com.androidperformancestudio.battery.model.BatteryStatistics
 import com.androidperformancestudio.battery.model.ResourceTimer
@@ -108,7 +93,7 @@ public fun BatteryProfilerScreen(
             Box(workspaceModifier, contentAlignment = Alignment.Center) {
                 Text(state.errorMessage, color = MaterialTheme.colorScheme.error)
             }
-        analysis == null -> EmptyPane(state, language, workspaceModifier)
+        analysis == null || analysis.runs.isEmpty() -> EmptyPane(state, language, workspaceModifier)
         else -> ResultsPane(state, analysis, actions, language, workspaceModifier)
     }
 }
@@ -216,8 +201,15 @@ private fun ResultsPane(
                         modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
                         horizontalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
                     ) {
-                        row.forEach { (title, statistics, unit, tone) ->
-                            MetricCard(title, statistics, unit, language, tone, Modifier.weight(1f).fillMaxHeight())
+                        row.forEach { metric ->
+                            MetricCard(
+                                metric.title,
+                                metric.statistics,
+                                metric.unit,
+                                language,
+                                metric.tone,
+                                Modifier.weight(1f).fillMaxHeight(),
+                            )
                         }
                         repeat(columnCount - row.size) { Spacer(Modifier.weight(1f)) }
                     }
@@ -264,9 +256,11 @@ private fun ResultsPane(
                 }
             }
         }
-        StudioPanel(Modifier.fillMaxWidth()) {
-            RunDetail(selected, language)
-        }
+        BatteryRunWorkspace(
+            run = selected,
+            capturedRun = (state.experiment?.runs ?: state.storedRuns).firstOrNull { it.id == selected.runId },
+            language = language,
+        )
         if (analysis.warnings.isNotEmpty()) {
             StudioPanel(Modifier.fillMaxWidth()) {
                 StudioPanelHeader(localizedStringResource(Res.string.diagnostics_and_warnings, language))
@@ -359,123 +353,13 @@ private fun RunRow(
         Cell(localizedStringResource(Res.string.s, language, run.durationMs / 1000), 100f)
         Cell(run.wakelocks.sumOf(ResourceTimer::durationMs).toString(), 110f)
         Cell(run.alarms.sumOf(ResourceTimer::count).toString(), 90f)
-        Cell(run.network.totalBytes.toString(), 110f)
+        Cell(run.networkTotalBytes.toString(), 110f)
         Cell(
             run.energy
                 .sumOf { it.energyMah ?: 0.0 }
                 .takeIf { it > 0.0 }
                 .format("mAh"),
             100f,
-        )
-    }
-}
-
-@Composable
-private fun RunDetail(
-    run: BatteryRunDelta,
-    language: UiLanguage,
-) {
-    StudioPanelHeader(
-        localizedStringResource(Res.string.run_resource_details, language, run.iteration),
-    )
-    ResourceSection(localizedStringResource(Res.string.wakelocks, language), run.wakelocks, language)
-    ResourceSection(localizedStringResource(Res.string.alarms, language), run.alarms, language)
-    ResourceSection(localizedStringResource(Res.string.jobs, language), run.jobs, language)
-    ResourceSection(localizedStringResource(Res.string.sensors, language), run.sensors, language)
-    Text(
-        localizedStringResource(
-            Res.string.network_b_mobile_radio_ms,
-            language,
-            run.network.totalBytes,
-            run.network.mobileRadioActiveMs,
-        ),
-        fontWeight = FontWeight.SemiBold,
-    )
-    Text(localizedStringResource(Res.string.energy_evidence, language), fontWeight = FontWeight.SemiBold)
-    if (run.energy.isEmpty()) {
-        Text(localizedStringResource(Res.string.no_attributable_energy_data_was_provided_by_this_device, language))
-    }
-    run.energy.forEach { energy ->
-        Text(
-            localizedStringResource(
-                Res.string.energy_evidence_detail,
-                language,
-                energy.component,
-                energy.energyMah.format("mAh"),
-                energy.energyUws ?: "—",
-                energy.source,
-                energy.attributionScope,
-                energy.confidence,
-            ),
-        )
-    }
-    Text(
-        localizedStringResource(
-            Res.string.thermal_evidence_detail,
-            language,
-            run.peakTemperatureCelsius?.format("°C") ?: "—",
-            run.maxThermalStatus ?: "—",
-            run.throttledSamples,
-        ),
-        fontWeight = FontWeight.SemiBold,
-    )
-    run.performanceWindows.forEach { window ->
-        Text(
-            localizedStringResource(
-                Res.string.sustained_performance_window,
-                language,
-                window.durationMs,
-                window.peakTemperatureCelsius?.format("°C") ?: "—",
-                window.maxThermalStatus ?: "—",
-                window.throttled,
-            ),
-            style = MaterialTheme.typography.bodySmall,
-        )
-    }
-    Text(
-        localizedStringResource(Res.string.history_timeline_events, language, run.history.size),
-        fontWeight = FontWeight.SemiBold,
-    )
-    run.history.take(100).forEach { event ->
-        Text(
-            localizedStringResource(
-                Res.string.history_event_detail,
-                language,
-                event.elapsedMs ?: "—",
-                event.kind,
-                event.active ?: "?",
-                event.name.orEmpty(),
-            ),
-            fontFamily = FontFamily.Monospace,
-            style = MaterialTheme.typography.bodySmall,
-        )
-    }
-    run.warnings.forEach {
-        Text(
-            localizedStringResource(Res.string.text, language, it),
-            color = MaterialTheme.colorScheme.tertiary,
-        )
-    }
-}
-
-@Composable
-private fun ResourceSection(
-    title: String,
-    resources: List<ResourceTimer>,
-    language: UiLanguage,
-) {
-    Text(title, fontWeight = FontWeight.SemiBold)
-    if (resources.isEmpty()) Text(localizedStringResource(Res.string.no_delta_or_unavailable, language))
-    resources.take(100).forEach { timer ->
-        Text(
-            localizedStringResource(
-                Res.string.ms,
-                language,
-                timer.name,
-                timer.durationMs,
-                timer.count,
-                timer.confidence,
-            ),
         )
     }
 }

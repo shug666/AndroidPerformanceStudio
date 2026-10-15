@@ -12,8 +12,10 @@ class BatteryProfilerEvidenceVisibilityTest {
             Files.readString(
                 Path.of("src/main/kotlin/com/androidperformancestudio/battery/presentation/BatteryProfilerScreen.kt"),
             )
-        val energyKpi = source.substringAfter("analysis.networkBytes,")
-            .substringBefore("analysis.peakTemperatureCelsius,")
+        val energyKpi =
+            source
+                .substringAfter("analysis.networkBytes,")
+                .substringBefore("analysis.peakTemperatureCelsius,")
 
         assertTrue(energyKpi.contains("if (analysis.energyMah.count > 0)"))
         assertTrue(energyKpi.contains("Res.string.modeled_energy"))

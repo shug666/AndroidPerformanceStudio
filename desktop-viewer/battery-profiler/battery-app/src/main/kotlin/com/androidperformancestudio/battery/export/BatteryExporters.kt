@@ -64,7 +64,7 @@ public class BatteryJsonExporter {
             put("runId", delta.runId)
             put("iteration", delta.iteration)
             put("durationMs", delta.durationMs)
-            put("networkBytes", delta.network.totalBytes)
+            put("networkBytes", delta.networkTotalBytes)
             put("peakTemperatureCelsius", delta.peakTemperatureCelsius)
             put("maxThermalStatus", delta.maxThermalStatus)
             put("throttledSamples", delta.throttledSamples)
@@ -132,7 +132,7 @@ public class BatteryCsvExporter {
     public fun export(
         analysis: BatteryAnalysisResult,
         output: Path,
-        attributionScope: AttributionScope = AttributionScope.UID,
+        attributionScope: AttributionScope? = AttributionScope.UID,
     ) {
         output.toAbsolutePath().parent?.let(Files::createDirectories)
         Files.newBufferedWriter(output).use { writer ->
@@ -142,7 +142,7 @@ public class BatteryCsvExporter {
                 writeTimers(writer, run, "alarm", run.alarms, attributionScope)
                 writeTimers(writer, run, "job", run.jobs, attributionScope)
                 writeTimers(writer, run, "sensor", run.sensors, attributionScope)
-                writer.appendLine("1,${run.iteration},network,total,,,${run.network.totalBytes},,,,,")
+                writer.appendLine("1,${run.iteration},network,total,,,${run.networkTotalBytes},,,,,")
                 writer.appendLine(
                     "1,${run.iteration},thermal,peak_temperature_c,,,${run.peakTemperatureCelsius ?: ""},,,,,",
                 )
@@ -176,7 +176,7 @@ public class BatteryCsvExporter {
         run: BatteryRunDelta,
         kind: String,
         timers: List<ResourceTimer>,
-        attributionScope: AttributionScope,
+        attributionScope: AttributionScope?,
     ) {
         timers.forEach { timer ->
             writer.appendLine(
@@ -191,7 +191,7 @@ public class BatteryCsvExporter {
                     "",
                     "",
                     "UID_COUNTER",
-                    attributionScope.name,
+                    attributionScope?.name ?: "UNKNOWN",
                     timer.confidence.name,
                 ).joinToString(","),
             )
