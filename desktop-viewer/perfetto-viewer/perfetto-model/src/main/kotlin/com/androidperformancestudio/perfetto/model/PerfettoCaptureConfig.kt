@@ -281,8 +281,8 @@ data class PerfettoDeviceCapabilities(
 data class PerfettoCaptureConfig(
     val template: PerfettoTraceTemplate,
     val targetPackage: String? = null,
-    val durationSeconds: Int = 10,
-    val bufferSizeKb: Int = 32768,
+    val durationSeconds: Int = 30,
+    val bufferSizeKb: Int = 65536,
     val additionalCategories: List<String> = emptyList(),
     val customConfigText: String? = null,
     val enabledProbes: Set<PerfettoProbe>? = null,

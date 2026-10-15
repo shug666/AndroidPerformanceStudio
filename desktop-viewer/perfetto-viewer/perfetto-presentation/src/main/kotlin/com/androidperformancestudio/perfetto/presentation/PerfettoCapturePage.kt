@@ -107,8 +107,8 @@ fun PerfettoCapturePage(
 ) {
     var selectedTemplate by remember { mutableStateOf(PerfettoTraceTemplate.SYSTEM_OVERVIEW) }
     var targetPackage by remember { mutableStateOf("") }
-    var durationSeconds by remember { mutableStateOf(10) }
-    var bufferSizeKb by remember { mutableStateOf(32768) }
+    var durationSeconds by remember { mutableStateOf(30) }
+    var bufferSizeKb by remember { mutableStateOf(65536) }
     var additionalCategories by remember { mutableStateOf("") }
     var customConfigText by remember { mutableStateOf("") }
     var enabledProbes by remember { mutableStateOf(selectedTemplate.defaultProbes()) }
