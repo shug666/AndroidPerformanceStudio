@@ -114,6 +114,7 @@ internal class FrameProfilerController(
     val state: StateFlow<FrameProfilerState> = mutableState.asStateFlow()
 
     fun close() {
+        processSelectionSubscription.close()
         targetSubscription.close()
     }
 

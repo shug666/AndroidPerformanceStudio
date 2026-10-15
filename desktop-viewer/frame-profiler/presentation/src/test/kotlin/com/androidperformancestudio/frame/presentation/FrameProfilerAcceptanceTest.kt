@@ -1,0 +1,278 @@
+package com.androidperformancestudio.frame.presentation
+
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertContentDescriptionEquals
+import androidx.compose.ui.test.assertHeightIsEqualTo
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.v2.runDesktopComposeUiTest
+import com.androidperformancestudio.frame.analysis.FrameJankAnalyzer
+import com.androidperformancestudio.frame.model.ExpectedDurationSource
+import com.androidperformancestudio.frame.model.FrameSample
+import com.androidperformancestudio.frame.model.FrameSource
+import com.androidperformancestudio.ui.UiLanguage
+import com.androidperformancestudio.ui.ViewerDimensions
+import com.androidperformancestudio.ui.ViewerTheme
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+@OptIn(ExperimentalTestApi::class)
+class FrameProfilerAcceptanceTest {
+    @Test
+    fun `timeline uses sixteen dp padding and a labeled duration scale`() =
+        runDesktopComposeUiTest(width = 1280, height = 820) {
+            val analysis = FrameJankAnalyzer().analyze(listOf(sample(7, 34_000_000L), sample(42, 8_000_000L)))
+            var selectedFrameId by mutableStateOf(7L)
+            setContent {
+                ViewerTheme(darkTheme = false) {
+                    FrameProfilerScreen(
+                        FrameProfilerState(analysis = analysis, selectedFrameId = selectedFrameId),
+                        FrameProfilerActions(onSelectFrame = { selectedFrameId = it }),
+                        UiLanguage.ENGLISH,
+                    )
+                }
+            }
+
+            val titleBounds = onNodeWithText("Frame Timeline").fetchSemanticsNode().boundsInRoot
+            val panelBounds = onNodeWithTag("frame-clusters-panel").fetchSemanticsNode().boundsInRoot
+            assertEquals(16f, titleBounds.left - panelBounds.left)
+            onNodeWithText("Frame time (ms)").assertExists()
+            onNodeWithTag("frame-timeline-duration-axis")
+                .assertContentDescriptionEquals("0 ms, 16 ms, 32 ms, 48 ms, 64 ms")
+            onNodeWithTag("frame-timeline-frame-axis").assertContentDescriptionEquals("#7, #42")
+            onNodeWithTag("frame-timeline-canvas").performMouseInput {
+                moveTo(Offset(center.x * 1.5f, center.y))
+                press()
+                release()
+            }
+            runOnIdle { assertEquals(42L, selectedFrameId) }
+        }
+
+    @Test
+    fun `timeline hover follows the cluster hint without moving the analysis panels`() =
+        assertStableTimelineHover(hasClusters = true, language = UiLanguage.SIMPLIFIED_CHINESE)
+
+    @Test
+    fun `timeline hover reserves a stable caption line when there are no clusters`() =
+        assertStableTimelineHover(hasClusters = false, language = UiLanguage.ENGLISH)
+
+    @Test
+    fun `timeline controls use compact capture styling and share one row with the title and legend`() =
+        runDesktopComposeUiTest(width = 1280, height = 820) {
+            val analysis =
+                FrameJankAnalyzer().analyze(
+                    (1L..1_500L).map { sample(it, if (it <= 500L) 8_000_000L else 34_000_000L) },
+                )
+            setContent {
+                ViewerTheme(darkTheme = false) {
+                    FrameProfilerScreen(
+                        FrameProfilerState(analysis = analysis),
+                        FrameProfilerActions(),
+                        UiLanguage.ENGLISH,
+                    )
+                }
+            }
+
+            val labels =
+                listOf(
+                    "Frame Timeline",
+                    "Previous",
+                    "Next",
+                    "Zoom in",
+                    "Zoom out",
+                    "Within budget",
+                    "Jank",
+                    "Jank cluster",
+                )
+            val bounds = labels.map { onNodeWithText(it).fetchSemanticsNode().boundsInRoot }
+            val centers = bounds.map { it.center.y }
+            assertTrue(centers.max() - centers.min() < 1f, "Title, controls and legend must share one row")
+            listOf("Previous", "Next", "Zoom in", "Zoom out").forEach {
+                onNodeWithText(it).assertHeightIsEqualTo(ViewerDimensions.compactControlHeight)
+            }
+            onNodeWithTag("frame-timeline-duration-axis").assertContentDescriptionEquals("0 ms, 2 ms, 4 ms, 6 ms, 8 ms")
+            onNodeWithText("Previous").assertIsNotEnabled()
+            onNodeWithText("Next").assertIsEnabled().performClick()
+            onNodeWithTag("frame-timeline-range").assertTextContains("Frames 501–1000 of 1500")
+            onNodeWithTag("frame-timeline-frame-axis").assertContentDescriptionEquals("#501, #625, #750, #875, #1000")
+            onNodeWithTag("frame-timeline-duration-axis")
+                .assertContentDescriptionEquals("0 ms, 16 ms, 32 ms, 48 ms, 64 ms")
+            onNodeWithText("Zoom in").performClick()
+            onNodeWithTag("frame-timeline-range").assertTextContains("Frames 626–875 of 1500")
+            onNodeWithTag("frame-timeline-frame-axis").assertContentDescriptionEquals("#626, #688, #750, #812, #875")
+            onNodeWithText("Zoom out").performClick()
+            onNodeWithTag("frame-timeline-range").assertTextContains("Frames 501–1000 of 1500")
+            onNodeWithText("Previous").assertIsEnabled().performClick()
+            onNodeWithTag("frame-timeline-range").assertTextContains("Frames 1–500 of 1500")
+            onNodeWithTag("frame-timeline-duration-axis").assertContentDescriptionEquals("0 ms, 2 ms, 4 ms, 6 ms, 8 ms")
+        }
+
+    @Test
+    fun `core metrics and collapsed attribution retain distinct evidence`() =
+        runDesktopComposeUiTest(width = 1280, height = 820) {
+            val analysis =
+                FrameJankAnalyzer().analyze(
+                    listOf(sample(1, 8_000_000L), sample(2, 24_000_000L).copy(platformJank = true)),
+                )
+            setContent {
+                ViewerTheme(darkTheme = false) {
+                    FrameProfilerScreen(
+                        FrameProfilerState(analysis = analysis),
+                        FrameProfilerActions(),
+                        UiLanguage.ENGLISH,
+                    )
+                }
+            }
+
+            onNodeWithTag("frame-metric-frames").assertTextContains("2", substring = true)
+            onNodeWithTag("frame-metric-deadline").assertTextContains("50.0%", substring = true)
+            onNodeWithTag("frame-metric-p50").assertTextContains("8.00 ms", substring = true)
+            onNodeWithTag("frame-metric-p95").assertTextContains("24.00 ms", substring = true)
+            onNodeWithTag("frame-metric-worst").assertTextContains("24.00 ms", substring = true)
+            onNodeWithTag("frame-attribution-entry-0").assertDoesNotExist()
+            onNodeWithTag("frame-attribution-toggle").performClick()
+            onNodeWithTag("frame-attribution-entry-0").assertTextContains("GalleryActivity", substring = true)
+            onNodeWithTag("frame-attribution-entry-0").assertTextContains("1 jank / 2 frames", substring = true)
+        }
+
+    @Test
+    fun `compact workspace retains ordered analysis columns and a date free heading`() =
+        runDesktopComposeUiTest(width = 1280, height = 820) {
+            val analysis = FrameJankAnalyzer().analyze(listOf(sample(1, 24_000_000L)))
+            setContent {
+                ViewerTheme(darkTheme = false) {
+                    FrameProfilerScreen(
+                        FrameProfilerState(analysis = analysis),
+                        FrameProfilerActions(),
+                        UiLanguage.ENGLISH,
+                    )
+                }
+            }
+
+            val clusters = onNodeWithTag("frame-clusters-panel").fetchSemanticsNode().boundsInRoot
+            val problems = onNodeWithTag("frame-problems-panel").fetchSemanticsNode().boundsInRoot
+            val detail = onNodeWithTag("frame-detail-panel").fetchSemanticsNode().boundsInRoot
+            assertTrue(clusters.right < problems.left && problems.right < detail.left)
+            assertTrue(clusters.top == problems.top && problems.top == detail.top)
+            assertTrue(clusters.height > 0f && problems.height > 0f && detail.height > 0f)
+            onNodeWithTag("frame-workspace-heading", useUnmergedTree = true).assertExists()
+            onNodeWithText("Frame Profiler").assertExists()
+            onNodeWithText("Date").assertDoesNotExist()
+            onNodeWithText("Time range").assertDoesNotExist()
+        }
+
+    @Test
+    fun `unknown budget stays unavailable despite an untrusted numeric duration`() =
+        runDesktopComposeUiTest(width = 1440, height = 860) {
+            val analysis =
+                FrameJankAnalyzer().analyze(
+                    listOf(sample(1, 24_000_000L).copy(expectedDurationSource = ExpectedDurationSource.UNKNOWN)),
+                )
+            setContent {
+                ViewerTheme(darkTheme = true) {
+                    FrameProfilerScreen(
+                        FrameProfilerState(analysis = analysis),
+                        FrameProfilerActions(),
+                        UiLanguage.ENGLISH,
+                    )
+                }
+            }
+
+            onNodeWithTag("frame-selected-budget").assertTextContains("—", substring = true)
+            onNodeWithTag("frame-metric-deadline").assertTextContains("—", substring = true)
+            onNodeWithText("16.67 ms").assertDoesNotExist()
+        }
+
+    @Test
+    fun `ten thousand frames auto scroll selection and bound the rendered window`() =
+        runDesktopComposeUiTest(width = 1440, height = 860) {
+            val analysis = FrameJankAnalyzer().analyze((1L..10_001L).map { sample(it, 8_000_000L) })
+            var selectedFrameId by mutableStateOf(9_500L)
+            setContent {
+                ViewerTheme(darkTheme = false) {
+                    FrameProfilerScreen(
+                        FrameProfilerState(analysis = analysis, selectedFrameId = selectedFrameId),
+                        FrameProfilerActions(onSelectFrame = { selectedFrameId = it }),
+                        UiLanguage.ENGLISH,
+                    )
+                }
+            }
+
+            onNodeWithTag("frame-timeline-canvas").assertExists()
+            onNodeWithTag("frame-timeline-range").assertTextContains("Frames 9250–9749 of 10001")
+            onNodeWithText("Zoom out").performClick()
+            onNodeWithTag("frame-timeline-range").assertTextContains("Frames 9000–9999 of 10001")
+            onNodeWithText("Zoom out").assertExists()
+            onNodeWithText("Zoom in").performClick()
+            runOnIdle { selectedFrameId = 10_001L }
+            onNodeWithTag("frame-timeline-range").assertTextContains("Frames 9502–10001 of 10001")
+        }
+
+    private fun assertStableTimelineHover(
+        hasClusters: Boolean,
+        language: UiLanguage,
+    ) = runDesktopComposeUiTest(width = 1280, height = 820) {
+        val durationNs = if (hasClusters) 24_000_000L else 8_000_000L
+        val analysis = FrameJankAnalyzer().analyze((1L..3L).map { sample(it, durationNs) })
+        assertEquals(hasClusters, analysis.clusters.isNotEmpty())
+        setContent {
+            ViewerTheme(darkTheme = true) {
+                FrameProfilerScreen(FrameProfilerState(analysis = analysis), FrameProfilerActions(), language)
+            }
+        }
+
+        val canvas = onNodeWithTag("frame-timeline-canvas")
+        val canvasBounds = canvas.fetchSemanticsNode().boundsInRoot
+        val panelTags = listOf("frame-clusters-panel", "frame-problems-panel", "frame-detail-panel")
+        val panelBounds = panelTags.map { onNodeWithTag(it).fetchSemanticsNode().boundsInRoot }
+        val hint = if (hasClusters) "顶部标记表示截止时间未命中区间" else ""
+        val frameLabel = if (language == UiLanguage.SIMPLIFIED_CHINESE) "帧" else "Frame"
+        val duration = if (hasClusters) "24.00 ms" else "8.00 ms"
+        val verdict = if (hasClusters) "MISSED" else "MET"
+
+        (1..3).forEach { frameId ->
+            canvas.performMouseInput {
+                moveTo(Offset(1f, center.y))
+                moveTo(Offset(center.x * (2 * frameId - 1) / 3f, center.y))
+            }
+            val hoverText = "$frameLabel #$frameId · $duration · $verdict"
+            onNodeWithText(hoverText, substring = true).assertExists()
+            assertEquals(panelBounds, panelTags.map { onNodeWithTag(it).fetchSemanticsNode().boundsInRoot })
+            assertEquals(canvasBounds, canvas.fetchSemanticsNode().boundsInRoot)
+            onNodeWithTag("frame-timeline-caption").assertTextEquals(
+                if (hasClusters) "$hint  |  $hoverText" else hoverText,
+            )
+            canvas.performMouseInput { exit() }
+            onNodeWithText(hoverText, substring = true).assertDoesNotExist()
+            onNodeWithTag("frame-timeline-caption").assertTextEquals(hint)
+            assertEquals(panelBounds, panelTags.map { onNodeWithTag(it).fetchSemanticsNode().boundsInRoot })
+        }
+    }
+
+    private fun sample(
+        frameId: Long,
+        durationNs: Long,
+    ): FrameSample =
+        FrameSample(
+            frameId = frameId,
+            sessionId = "acceptance-session",
+            source = FrameSource.PERFETTO,
+            activityName = "com.example.GalleryActivity",
+            intendedVsyncNs = frameId * 20_000_000L,
+            totalDurationNs = durationNs,
+            expectedDurationNs = 16_666_667L,
+            expectedDurationSource = ExpectedDurationSource.FRAME_INTERVAL,
+            states = mapOf("screen" to "Gallery"),
+        )
+}

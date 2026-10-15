@@ -92,4 +92,6 @@
     <string name="diagnostic_power_rails_description">硬件电源轨能量与平均功率</string>
     <string name="diagnostic_power_frame_alignment_title">功耗与帧对齐</string>
     <string name="diagnostic_power_frame_alignment_description">与 FrameTimeline 帧重叠的电源轨区间</string>
+    <string name="diagnostic_result_rows">%1$d 行结果</string>
+    <string name="diagnostic_data_source_limitation">结果仅覆盖此 Trace 产物实际记录的数据源。</string>
 </resources>

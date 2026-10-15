@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 dependencies {
+    implementation(libs.aps.adb.core)
     implementation(libs.aps.ui.components)
     implementation(project(":gpu-integration-model"))
     implementation(project(":agi-toolchain"))

@@ -21,6 +21,7 @@ import com.androidperformancestudio.gpu.model.AgiLaunchMode
 import com.androidperformancestudio.gpu.model.ArtifactLocationStatus
 import com.androidperformancestudio.gpu.model.GpuArtifact
 import com.androidperformancestudio.gpu.model.GpuArtifactKind
+import com.androidperformancestudio.gpu.model.GpuDeviceContext
 import com.androidperformancestudio.gpu.presentation.generated.resources.*
 import com.androidperformancestudio.gpu.presentation.generated.resources.Res
 import com.androidperformancestudio.ui.UiLanguage
@@ -34,15 +35,24 @@ public data class GpuArtifactAvailability(
     val locationStatus: ArtifactLocationStatus,
     val resolvedPath: Path?,
     val primaryAction: ArtifactPrimaryAction,
-)
+) {
+    public val canOpen: Boolean
+        get() = locationStatus == ArtifactLocationStatus.AVAILABLE && resolvedPath != null && primaryAction != ArtifactPrimaryAction.NONE
+}
 
 public data class GpuIntegrationState(
     val capability: AgiCapability? = null,
     val artifacts: List<GpuArtifact> = emptyList(),
     val availabilityByArtifactId: Map<String, GpuArtifactAvailability> = emptyMap(),
+    val devices: List<GpuDeviceContext> = emptyList(),
+    val selectedDeviceSerial: String? = null,
+    val selectedArtifactId: String? = null,
     val isBusy: Boolean = false,
+    val isRefreshingDevices: Boolean = false,
+    val isInspectingDevice: Boolean = false,
     val message: String? = null,
     val error: String? = null,
+    val deviceError: String? = null,
 )
 
 public data class GpuIntegrationActions(
@@ -50,6 +60,10 @@ public data class GpuIntegrationActions(
     val onVerifyArtifact: (GpuArtifact) -> Unit,
     val onRevealArtifact: (GpuArtifact) -> Unit,
     val onRelocateArtifact: (GpuArtifact) -> Unit,
+    val onRefreshDevices: () -> Unit = {},
+    val onSelectDevice: (String) -> Unit = {},
+    val onSelectArtifact: (String) -> Unit = {},
+    val onOpenTraceAnalyzer: () -> Unit = {},
 )
 
 @Composable
@@ -161,8 +175,7 @@ public fun GpuIntegrationScreen(
                             OutlinedButton(
                                 enabled =
                                     !state.isBusy &&
-                                        availability?.primaryAction != null &&
-                                        availability.primaryAction != ArtifactPrimaryAction.NONE,
+                                        availability?.canOpen == true,
                                 onClick = { actions.onOpenArtifact(artifact) },
                             ) {
                                 Text(
@@ -190,7 +203,7 @@ public fun GpuIntegrationScreen(
     }
 }
 
-private fun GpuArtifactKind.displayName(language: UiLanguage): String =
+internal fun GpuArtifactKind.displayName(language: UiLanguage): String =
     localizedStringResource(
         when (this) {
             GpuArtifactKind.AGI_SYSTEM_PROFILE -> Res.string.artifact_kind_agi_system_profile
@@ -203,7 +216,7 @@ private fun GpuArtifactKind.displayName(language: UiLanguage): String =
         language,
     )
 
-private fun AgiLaunchMode.displayName(language: UiLanguage): String =
+internal fun AgiLaunchMode.displayName(language: UiLanguage): String =
     localizedStringResource(
         when (this) {
             AgiLaunchMode.VERIFIED_CLI -> Res.string.launch_mode_verified_cli
@@ -213,7 +226,7 @@ private fun AgiLaunchMode.displayName(language: UiLanguage): String =
         language,
     )
 
-private fun ArtifactPrimaryAction.displayName(language: UiLanguage): String =
+internal fun ArtifactPrimaryAction.displayName(language: UiLanguage): String =
     localizedStringResource(
         when (this) {
             ArtifactPrimaryAction.OPEN_AGI -> Res.string.open_in_agi
@@ -225,17 +238,19 @@ private fun ArtifactPrimaryAction.displayName(language: UiLanguage): String =
         language,
     )
 
-private fun ArtifactLocationStatus.displayName(language: UiLanguage): String =
+internal fun ArtifactLocationStatus.displayName(language: UiLanguage): String =
     localizedStringResource(
         when (this) {
             ArtifactLocationStatus.AVAILABLE -> Res.string.artifact_available
             ArtifactLocationStatus.MISSING -> Res.string.artifact_missing
             ArtifactLocationStatus.SIZE_CHANGED -> Res.string.artifact_size_changed
+            ArtifactLocationStatus.CONTENT_CHANGED -> Res.string.artifact_content_changed
+            ArtifactLocationStatus.UNREADABLE -> Res.string.artifact_unreadable
         },
         language,
     )
 
-private fun localizedWarning(
+internal fun localizedWarning(
     warning: String,
     language: UiLanguage,
 ): String =
@@ -244,6 +259,10 @@ private fun localizedWarning(
             localizedStringResource(Res.string.warning_agi_executable_not_found, language)
         "AGI version probe timed out; GUI launch remains available." ->
             localizedStringResource(Res.string.warning_agi_probe_timed_out, language)
+        "AGI help probe timed out; CLI capabilities were not verified." ->
+            localizedStringResource(Res.string.warning_agi_help_probe_timed_out, language)
+        "AGI help probe failed; CLI capabilities were not verified." ->
+            localizedStringResource(Res.string.warning_agi_help_probe_failed, language)
         "AGI version could not be determined." ->
             localizedStringResource(Res.string.warning_agi_version_unknown, language)
         "No stable automation arguments were detected; AGI will be launched in GUI-only mode." ->
@@ -251,6 +270,8 @@ private fun localizedWarning(
         "Unknown artifact format; it is indexed as opaque evidence." ->
             localizedStringResource(Res.string.warning_unknown_artifact, language)
         "Opening an artifact through this configured executable was not verified." ->
+            localizedStringResource(Res.string.warning_agi_artifact_open_unverified, language)
+        "Opening an artifact through this AGI executable was not verified; launch AGI and open it from the application." ->
             localizedStringResource(Res.string.warning_agi_artifact_open_unverified, language)
         else -> warning
     }

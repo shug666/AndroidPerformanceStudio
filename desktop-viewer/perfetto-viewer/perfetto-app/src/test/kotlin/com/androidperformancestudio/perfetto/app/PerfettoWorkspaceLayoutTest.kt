@@ -14,30 +14,38 @@ class PerfettoWorkspaceLayoutTest {
         )
 
     @Test
-    fun `workspace uses compact inspector chrome without a page title`() {
-        assertFalse(source.contains("Text(\"Perfetto Trace Analyzer\""))
+    fun `workspace keeps shared shell chrome around the commercial trace analyzer`() {
         assertTrue(source.contains("HeaderToolbar("))
         assertFalse(source.contains("private fun PerfettoToolbar("))
         assertFalse(source.contains("HomeButton("))
         assertTrue(source.contains("DropdownSelector("))
         assertTrue(source.contains("onNavigateHome = onNavigateHome"))
+        assertTrue(source.contains("TraceAnalyzerWorkspace("))
+        assertTrue(source.contains("state = workspaceState"))
+        assertTrue(source.contains("actions = workspaceActions"))
     }
 
     @Test
-    fun `workspace composes sessions and diagnostics around the capture panels`() {
-        assertTrue(source.contains("RecentSessionsPanel("))
-        assertTrue(source.contains("TraceDiagnosticsWorkspacePanel("))
-        assertTrue(source.contains("PerfettoWorkspacePanel("))
+    fun `workspace maps capture sessions artifacts and structured diagnostics`() {
+        assertTrue(source.contains("TraceAnalyzerWorkspaceState("))
+        assertTrue(source.contains("TraceAnalyzerWorkspaceActions("))
+        assertTrue(source.contains("TraceWorkspaceSession("))
+        assertTrue(source.contains("TraceWorkspaceArtifact("))
+        assertTrue(source.contains("TraceInsightEvidence("))
+        assertTrue(source.contains("DiagnosticOutcome("))
+        assertTrue(source.contains("DiagnosticResult("))
+        assertTrue(source.contains("diagnostic_result_rows"))
+        assertTrue(source.contains("diagnostic_data_source_limitation"))
         assertTrue(source.contains("PerfettoCapturePage("))
-        assertTrue(source.contains("VerticalDivider("))
-        assertTrue(source.contains("HorizontalDivider(color = MaterialTheme.colorScheme.outline)"))
-        assertTrue(source.contains("modifier = Modifier.width(240.dp).fillMaxHeight()"))
-        assertTrue(source.contains("onExport = { session -> exportRawTrace(session.traceFile) }"))
-        assertTrue(
-            source.contains(
-                "PerfettoCompactButton(text = localizedStringResource(Res.string.export, language), onClick = onExport)",
-            ),
-        )
+        assertTrue(source.contains("captureContent = {"))
+        assertTrue(source.contains("onRunDiagnostic = { queryId ->"))
+        assertTrue(source.contains("onDeleteSession = { sessionId ->"))
+        assertTrue(source.contains("sessionStore.delete(sessionId)"))
+        assertTrue(source.contains("onOpenInTimeline = { insight ->"))
+        assertTrue(source.contains("insight.timestampNanos"))
+        assertTrue(source.contains("onExport = { activeTraceFile?.let(exportRawTrace) }"))
+        assertFalse(source.contains("private fun RecentSessionsPanel("))
+        assertFalse(source.contains("private fun TraceDiagnosticsWorkspacePanel("))
     }
 
     @Test
@@ -71,12 +79,16 @@ class PerfettoWorkspaceLayoutTest {
     }
 
     @Test
-    fun `trace diagnostics uses vertical navigation and a separate content pane`() {
-        assertTrue(source.contains("private fun TraceDiagnosticNavigation("))
-        assertTrue(source.contains("private fun TraceDiagnosticContent("))
-        assertTrue(source.contains("Modifier.width(240.dp)"))
-        assertTrue(source.contains("Res.string.select_a_diagnostic_on_the_left_to_view_its_result"))
-        assertFalse(source.contains("chunked(3)"))
+    fun `diagnostic failures remain artifact scoped and preserve the active viewer`() {
+        val start = source.indexOf("val runDiagnostic: (DiagnosticQuery) -> Unit")
+        val end = source.indexOf("PerfettoFileMenuBar(", start)
+        val diagnosticBlock = source.substring(start, end)
+
+        assertTrue(diagnosticBlock.contains("recordFailure"))
+        assertTrue(diagnosticBlock.contains("activeArtifact?.id == artifact.id"))
+        assertTrue(diagnosticBlock.contains("DiagnosticOutcome(error = message)"))
+        assertFalse(diagnosticBlock.contains("activeTraceFile = null"))
+        assertFalse(diagnosticBlock.contains("activeArtifact = null"))
     }
 
     @Test

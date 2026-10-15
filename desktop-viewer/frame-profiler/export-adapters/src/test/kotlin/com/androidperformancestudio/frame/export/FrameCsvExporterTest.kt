@@ -1,6 +1,7 @@
 package com.androidperformancestudio.frame.export
 
 import com.androidperformancestudio.frame.analysis.FrameJankAnalyzer
+import com.androidperformancestudio.frame.model.ExpectedDurationSource
 import com.androidperformancestudio.frame.model.FrameSample
 import com.androidperformancestudio.frame.model.FrameSource
 import kotlin.io.path.createTempFile
@@ -21,6 +22,7 @@ class FrameCsvExporterTest {
                         source = FrameSource.GFXINFO,
                         totalDurationNs = 10_000_000,
                         expectedDurationNs = 8_333_333,
+                        expectedDurationSource = ExpectedDurationSource.FRAME_INTERVAL,
                         platformJankRuleId = "jank-rule",
                         platformJankRuleVersion = "1.2.3",
                     ),

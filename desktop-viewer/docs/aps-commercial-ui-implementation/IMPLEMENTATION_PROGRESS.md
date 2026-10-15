@@ -55,6 +55,135 @@ This is a continuation checkpoint for the [phased implementation plan](README.md
   No fresh real-device startup experiment or compilation-state mutation was performed. No commit or
   push; this records bounded implementation and local evidence, not whole-app/release completion.
 
+## 2026-10-14: Frame timeline compact padding and coordinate axes
+
+- Removed the timeline's extra inner padding; it now uses the existing `StudioPanel` 16dp padding
+  without changing shared panel tokens or other cards.
+- Added a labeled frame-duration ruler (ms), a visible-frame ID axis and aligned dashed grid lines.
+  The duration scale contains the longest visible frame; frame IDs come from the actual samples,
+  and both axes update with paging and zoom. Axis values are not inferred frame budgets.
+- Regressions cover panel inset, duration scales including extreme durations, small capture/window
+  labels, paging/zoom updates and pointer selection with the axis gutter. Existing hover-caption
+  stability and the single-row compact toolbar remain passing.
+- Fixed the formatting issue that stopped the prior final validation. Freshly reran Frame
+  presentation **27 tests**, Frame app **30 tests** and desktop app **170 tests**: **227 tests**, zero
+  failures/errors/skips. Presentation `ktlintCheck`, changed-file Detekt, desktop compilation and
+  `git diff --check` pass.
+- Full presentation Detekt still reports **10 existing findings** in `FrameEvidenceText.kt`,
+  `FrameEvidenceTextTest.kt` and `FrameClusterPresentationTest.kt`; those files match HEAD and were
+  left untouched. Full-module static analysis is not green.
+- Reviewed the new automated dark/Chinese screenshot against the reference for this timeline slice;
+  it does not establish whole-page visual equivalence or acceptance in the running native desktop
+  window. Evidence: `/tmp/aps-frame-timeline-axis-continued-final-20261014.log`,
+  `/tmp/aps-frame-timeline-axis-full-detekt-continued-20261014.log` and
+  `/tmp/aps-frame-timeline-axis-continued-20261014.png`.
+- No application was restarted or installed, and no commit or push was performed. Existing GPU
+  and Startup worktree changes were not modified in this continuation.
+
+## 2026-10-14: Frame timeline inline hover caption
+
+- Hovered frame details now follow the deadline-miss marker hint on the same line, separated by
+  `|`. Leaving the canvas clears only the hover details, not the caption line's layout space.
+- The caption remains a single line with ellipsis overflow. When there are no clusters, its blank
+  line still reserves the same height, so hovering smooth frames does not move the analysis panels.
+- Two real-pointer Compose regressions cover every frame in three-frame samples with and without
+  clusters, including pointer exit, the hint/separator order, and unchanged canvas/panel bounds.
+  Both failed before the fix, reproducing a 17px panel displacement, and pass afterward.
+- Frame presentation **23 tests**, Frame app **30 tests** and desktop app **170 tests** pass with
+  zero failures/errors/skips. Presentation `ktlintCheck`, changed-file Detekt, desktop compilation
+  and `git diff --check` pass; the previously documented full-module Detekt findings remain open.
+- Evidence: `/tmp/aps-frame-timeline-hover-final-20261014.log` and
+  `/tmp/aps-frame-timeline-hover-20261014.png` (dark/Chinese automated rendering with frame #9
+  hovered). This is automated verification, not acceptance in the running desktop application.
+  No application was restarted or installed, and no commit or push was performed.
+
+## 2026-10-14: Frame timeline single-row compact toolbar
+
+- The timeline title, Previous/Next/Zoom in/Zoom out controls, and Within budget/Jank/Jank cluster
+  legend now share one vertically centred row. The four controls reuse `ProfilerCompactButton`, the
+  same 24dp shared component as Start Capture, instead of duplicating button styling.
+- Existing enabled predicates, paging and zoom anchors are unchanged. A new 1280px Compose
+  regression checks shared vertical centres, token-defined button height, initial disabled Previous,
+  and the range transitions for Next, Zoom in, Zoom out and Previous. It failed before the change.
+- Frame presentation **21 tests** pass with zero failures/errors/skips; `ktlintCheck`, changed-file
+  Detekt and desktop Kotlin compilation pass. Frame app **30 tests** and desktop app **170 tests**
+  remain passing (their tasks were up-to-date in the final verification run).
+- Full Frame presentation Detekt is not green: the 10 existing findings documented below remain
+  outside this localized toolbar change. `git diff --check` passes.
+- Evidence: `/tmp/aps-frame-timeline-toolbar-final-20261014.log` and
+  `/tmp/aps-frame-timeline-toolbar-20261014.png` (1440px dark/Chinese automated rendering).
+  This is automated UI verification, not acceptance in the currently running application; no desktop
+  application was restarted or installed in this slice. Changes remain uncommitted.
+
+## 2026-10-14: Frame device discovery on workspace entry
+
+- Fixed the retained-page refresh trigger: Frame previously ran device discovery only when its
+  controller was first composed. The desktop route now supplies `isActive`; becoming active reruns
+  discovery without replacing the retained controller or analysis. Hidden pages do not start this
+  entry refresh, and the existing capture guard remains in force.
+- The existing selection policy is preserved: automatically choose the sole online device, retain a
+  still-online selection/process, and require an explicit choice when multiple devices are online.
+- Added four controller regressions for initial automatic selection, connecting after an empty
+  first visit, retaining selection without duplicate process discovery, and multiple-device safety;
+  added the route/activation wiring regression. The wiring test failed before the fix and passed
+  afterward.
+- Frame app **30 tests** and desktop app **170 tests** pass with zero failures/errors/skips.
+  Frame app `ktlintCheck` and full-module `detekt`, desktop compile and macOS distribution build pass.
+- A temporary probe invoked the real default Frame controller and ADB backend (no capture started):
+  one online `TCL T702W` was listed, selected serial matched, four profileable/debuggable processes
+  loaded, and `errorMessage=null`. Evidence: `/tmp/aps-frame-device-final-20261014.log`.
+- This verifies live device discovery/controller selection, not re-entry interaction in the currently
+  running desktop window. A new application bundle was built; no running application was stopped,
+  replaced or restarted. Changes remain uncommitted.
+
+## 2026-10-14: Frame and GPU review fixes — local verification
+
+### Implemented
+
+- Frame restores the documented five core metrics: Frames, Deadline Miss Rate, P50, P95 and Worst.
+  Platform Jank Signal Rate remains separate from deadline misses, alongside the observed refresh rate.
+- Activity/UI-state attribution is available in a compact, initially collapsed section; expanding it
+  retains the previous five-entry preview with frame counts, platform-jank counts and P95.
+- The latest visual instruction takes precedence over the older two-pane text diagram: retain
+  clusters, problem frames and frame detail as three adjacent panels, without adding a date row.
+  Source/result filters and existing capture/import/trace/layout behavior remain in place.
+- GPU artifact availability now requires matching size **and** SHA-256. Same-size replacements and
+  unreadable files cannot be opened; a registered alternative can be used only after verification.
+  Opening revalidates the authoritative indexed artifact instead of trusting cached UI availability
+  or a caller-supplied path. Missing/changed artifacts keep Verify/Reveal/Relocate recovery actions.
+- Regression coverage includes exact KPI values, collapsed attribution, unknown-budget rendering,
+  1280px three-column bounds, a 10,001-frame timeline with selection/range/zoom, and the GPU viewer,
+  integrity, busy-state and device-error action matrix.
+
+### Fresh verification
+
+- Re-executed all nine requested test suites (not only an up-to-date test result): Frame presentation
+  20, Frame app 25, analysis 12, export 2; GPU artifact index 14, toolchain 9, app 26, presentation 6;
+  desktop app 170. **284 tests, zero failures/errors/skips**.
+- Frame presentation and the four changed GPU modules pass `ktlintCheck`;
+  `:desktop-app:compileKotlin` and `:desktop-app:createDistributable` pass.
+- GPU artifact index, toolchain, app and presentation pass full-module Detekt. Frame changed-file
+  Detekt passes; full Frame presentation Detekt still reports **10 existing findings** in unchanged
+  `FrameEvidenceText.kt`, `FrameEvidenceTextTest.kt` and `FrameClusterPresentationTest.kt`. Those files
+  were compared byte-for-byte to HEAD and left untouched; full-module static analysis is not green.
+- The built Frame presentation, GPU app and GPU presentation JARs match their packaged counterparts
+  entry-for-entry (53, 83 and 54 entries). Container hashes differ because packaging rewrites ZIPs;
+  no class/resource entry differs.
+- Local evidence: `/tmp/aps-frame-gpu-fresh-tests-20261014.log`,
+  `/tmp/aps-frame-gpu-final-20261014.log`, `/tmp/aps-frame-gpu-static-desktop-20261014.log`, and
+  `/tmp/aps-frame-profiler-verified-20261014.png` (1440px dark/Chinese automated rendering).
+
+### Open acceptance gates
+
+- Automated bounds/rendering do not prove reference-image visual equivalence or native packaged-GUI
+  acceptance; the reference's visual styling still needs acceptance on the actual application.
+- The 10,001-frame test proves bounded navigation/rendering structure, not measured recomposition
+  counts, interaction latency or a performance benchmark.
+- No fresh real-device capture or external AGI launch/open acceptance was performed in this slice.
+  The macOS app was built, not installed or substituted for an already running application.
+- Source changes remain uncommitted; this entry records verified progress, not completion of the full
+  commercial UI plan.
+
 ## 2026-10-14: In-app Macrobenchmark orchestration
 
 ### Implemented

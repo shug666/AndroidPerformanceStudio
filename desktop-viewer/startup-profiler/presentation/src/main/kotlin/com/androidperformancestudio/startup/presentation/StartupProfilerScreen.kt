@@ -213,15 +213,6 @@ private fun StartupMainWorkspace(
     StartupWorkspaceHero(language)
     StartupTypeTabs(state, actions, language)
     StartupScenarioControls(state, actions, language)
-    state.operationMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-    state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-    if (state.isRunning && state.totalRuns > 0) {
-        Text(localizedStringResource(Res.string.progress_runs, language, state.completedRuns, state.totalRuns))
-        LinearProgressIndicator(
-            progress = { (state.completedRuns.toFloat() / state.totalRuns).coerceIn(0f, 1f) },
-            modifier = Modifier.fillMaxWidth().testTag("startup-progress"),
-        )
-    }
     StartupMetricOverview(state.analysis, language)
     val analysis = state.analysis
     if (analysis == null || selected == null) {
@@ -256,6 +247,15 @@ private fun StartupMainWorkspace(
             Text(localizedStringResource(Res.string.baseline_comparison_title, language), fontWeight = FontWeight.SemiBold)
             Text(localizedStringResource(Res.string.baseline_comparison_empty, language), style = MaterialTheme.typography.bodySmall)
         }
+    state.operationMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+    state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+    if (state.isRunning && state.totalRuns > 0) {
+        Text(localizedStringResource(Res.string.progress_runs, language, state.completedRuns, state.totalRuns))
+        LinearProgressIndicator(
+            progress = { (state.completedRuns.toFloat() / state.totalRuns).coerceIn(0f, 1f) },
+            modifier = Modifier.fillMaxWidth().testTag("startup-progress"),
+        )
+    }
 }
 
 @Composable

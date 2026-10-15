@@ -8,39 +8,26 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.FrameWindowScope
+import com.androidperformancestudio.adb.defaultAdbCommandExecutable
 import com.androidperformancestudio.gpu.artifact.AgiArtifactIndexer
 import com.androidperformancestudio.gpu.artifact.JsonAgiArtifactStore
+import com.androidperformancestudio.gpu.gpu_integration_app.generated.resources.*
 import com.androidperformancestudio.gpu.gpu_integration_app.generated.resources.Res
-import com.androidperformancestudio.gpu.gpu_integration_app.generated.resources.agi_capability_refreshed
-import com.androidperformancestudio.gpu.gpu_integration_app.generated.resources.artifact_hash_verified
-import com.androidperformancestudio.gpu.gpu_integration_app.generated.resources.artifact_indexing
-import com.androidperformancestudio.gpu.gpu_integration_app.generated.resources.artifact_missing_or_changed
-import com.androidperformancestudio.gpu.gpu_integration_app.generated.resources.artifact_relocated
-import com.androidperformancestudio.gpu.gpu_integration_app.generated.resources.configure_agi
-import com.androidperformancestudio.gpu.gpu_integration_app.generated.resources.configured_file
-import com.androidperformancestudio.gpu.gpu_integration_app.generated.resources.import_agi_perfetto_artifact
-import com.androidperformancestudio.gpu.gpu_integration_app.generated.resources.import_artifact
-import com.androidperformancestudio.gpu.gpu_integration_app.generated.resources.imported_file
-import com.androidperformancestudio.gpu.gpu_integration_app.generated.resources.launch_agi
-import com.androidperformancestudio.gpu.gpu_integration_app.generated.resources.no_compatible_viewer
-import com.androidperformancestudio.gpu.gpu_integration_app.generated.resources.refresh_agi
-import com.androidperformancestudio.gpu.gpu_integration_app.generated.resources.select_android_gpu_inspector_executable
-import com.androidperformancestudio.gpu.gpu_integration_app.generated.resources.unable_to_open_artifact
 import com.androidperformancestudio.gpu.model.ArtifactLocationStatus
 import com.androidperformancestudio.gpu.model.ArtifactOpenRoute
 import com.androidperformancestudio.gpu.model.GpuArtifact
 import com.androidperformancestudio.gpu.presentation.ArtifactPrimaryAction
+import com.androidperformancestudio.gpu.presentation.GpuAnalysisHubScreen
 import com.androidperformancestudio.gpu.presentation.GpuArtifactAvailability
 import com.androidperformancestudio.gpu.presentation.GpuIntegrationActions
-import com.androidperformancestudio.gpu.presentation.GpuIntegrationScreen
-import com.androidperformancestudio.gpu.presentation.GpuIntegrationState
+import com.androidperformancestudio.gpu.toolchain.AgiExecutablePreferenceStore
 import com.androidperformancestudio.gpu.toolchain.AgiLocator
 import com.androidperformancestudio.ui.HeaderSpacer
 import com.androidperformancestudio.ui.HeaderToolbar
@@ -48,6 +35,7 @@ import com.androidperformancestudio.ui.ProfilerCompactButton
 import com.androidperformancestudio.ui.ProfilerToolbarStatus
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.localizedStringResource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -62,118 +50,72 @@ public fun FrameWindowScope.GpuIntegrationMainPage(
     language: UiLanguage = UiLanguage.ENGLISH,
     onBack: () -> Unit = {},
     onOpenTrace: (Path) -> Unit = {},
+    onOpenTraceAnalyzer: () -> Unit = {},
 ) {
+    val root = remember { Path.of(System.getProperty("user.home"), ".android-performance-studio", "gpu-integration") }
     val locator = remember { AgiLocator() }
     val indexer = remember { AgiArtifactIndexer() }
-    val store =
-        remember {
-            JsonAgiArtifactStore(
-                Path.of(
-                    System.getProperty("user.home"),
-                    ".android-performance-studio",
-                    "gpu-integration",
-                    "artifacts.json",
-                ),
-            )
-        }
+    val reader = remember { AndroidGpuDeviceContextReader(defaultAdbCommandExecutable()) }
+    val controller = remember {
+        GpuIntegrationController(
+            JsonAgiArtifactStore(root.resolve("artifacts.json")),
+            AgiExecutablePreferenceStore(root.resolve("agi-executable.txt")),
+            locator, indexer, reader::discoverDevices, reader::inspect,
+        )
+    }
+    val state by controller.state.collectAsState()
     val scope = rememberCoroutineScope()
-    var state by
-        remember {
-            val capability = locator.locate()
-            val loaded = runCatching(store::load)
-            mutableStateOf(
-                withAvailability(
-                    GpuIntegrationState(
-                        capability = capability,
-                        artifacts = loaded.getOrDefault(emptyList()),
-                        error = loaded.exceptionOrNull()?.message,
-                    ),
-                    indexer,
-                ),
-            )
-        }
+    LaunchedEffect(controller) { controller.initialize() }
+    LaunchedEffect(reader) { controller.refreshDevices() }
 
     fun open(artifact: GpuArtifact) {
-        runCatching {
-            val availability = artifactAvailability(artifact, state.capability, indexer)
-            val path = requireNotNull(availability.resolvedPath) { "Artifact is missing or changed" }
-            when (availability.primaryAction) {
-                ArtifactPrimaryAction.OPEN_PERFETTO -> onOpenTrace(path)
-                ArtifactPrimaryAction.OPEN_AGI -> locator.launchArtifact(requireNotNull(state.capability), path)
-                ArtifactPrimaryAction.LAUNCH_AGI -> locator.launch(requireNotNull(state.capability))
-                ArtifactPrimaryAction.OPEN_DESKTOP -> Desktop.getDesktop().open(path.toFile())
-                ArtifactPrimaryAction.NONE -> error(localizedStringResource(Res.string.no_compatible_viewer, language))
-            }
-        }.onFailure {
-            state =
-                withAvailability(
-                    state.copy(
-                        error = it.message ?: localizedStringResource(Res.string.unable_to_open_artifact, language),
-                    ),
-                    indexer,
-                )
-        }
-    }
-
-    fun reveal(artifact: GpuArtifact) {
-        runCatching {
-            require(Desktop.isDesktopSupported()) { "Desktop file browsing is unavailable" }
-            val path = indexer.resolveLocation(artifact).path ?: artifact.path
-            val directory = path.parent?.takeIf(Files::isDirectory) ?: error("Artifact directory is unavailable")
-            Desktop.getDesktop().open(directory.toFile())
-        }.onFailure { state = state.copy(error = it.message) }
-    }
-
-    fun relocate(artifact: GpuArtifact) {
-        chooseArtifact(window, language)?.let { file ->
-            val artifacts = state.artifacts
-            state = state.copy(isBusy = true, message = localizedStringResource(Res.string.artifact_indexing, language))
-            scope.launch {
-                runCatching {
-                    withContext(Dispatchers.IO) {
-                        val relocated = indexer.relocate(artifact, file.toPath())
-                        val updated = artifacts.map { if (it.id == artifact.id) relocated else it }
-                        store.save(updated)
-                        updated
-                    }
-                }.onSuccess { updated ->
-                    state =
-                        withAvailability(
-                            state.copy(
-                                artifacts = updated,
-                                isBusy = false,
-                                message = localizedStringResource(Res.string.artifact_relocated, language, file.name),
-                                error = null,
-                            ),
-                            indexer,
-                        )
-                }.onFailure {
-                    state = state.copy(isBusy = false, error = it.message)
+        scope.launch {
+            controller.openArtifact(
+                artifact,
+                localizedStringResource(Res.string.artifact_missing_or_changed, language),
+                localizedStringResource(Res.string.no_compatible_viewer, language),
+            ) { availability, capability ->
+                val path = requireNotNull(availability.resolvedPath)
+                when (availability.primaryAction) {
+                    ArtifactPrimaryAction.OPEN_PERFETTO -> onOpenTrace(path)
+                    ArtifactPrimaryAction.OPEN_AGI -> withContext(Dispatchers.IO) { locator.launchArtifact(requireNotNull(capability), path) }
+                    ArtifactPrimaryAction.LAUNCH_AGI -> withContext(Dispatchers.IO) { locator.launch(requireNotNull(capability)) }
+                    ArtifactPrimaryAction.OPEN_DESKTOP -> withContext(Dispatchers.IO) { Desktop.getDesktop().open(path.toFile()) }
+                    ArtifactPrimaryAction.NONE -> error(localizedStringResource(Res.string.no_compatible_viewer, language))
                 }
             }
         }
     }
 
+    fun reveal(artifact: GpuArtifact) {
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    require(Desktop.isDesktopSupported()) { "Desktop file browsing is unavailable" }
+                    val path = indexer.resolveLocation(artifact).path ?: artifact.path
+                    val directory = path.parent?.takeIf(Files::isDirectory) ?: error("Artifact directory is unavailable")
+                    Desktop.getDesktop().open(directory.toFile())
+                }
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (failure: Exception) {
+                controller.reportError(failure)
+            }
+        }
+    }
+
+    fun relocate(artifact: GpuArtifact) {
+        chooseArtifact(window, language)?.let { file ->
+            scope.launch { controller.relocateArtifact(artifact, file.toPath(), localizedStringResource(Res.string.artifact_relocated, language, file.name)) }
+        }
+    }
+
     Column(Modifier.fillMaxSize()) {
-        HeaderToolbar(
-            language = language,
-            onNavigateHome = onBack,
-            onNavigateSettings = null,
-        ) {
+        HeaderToolbar(language = language, onNavigateHome = onBack, onNavigateSettings = null) {
             ProfilerCompactButton(
                 text = localizedStringResource(Res.string.refresh_agi, language),
                 enabled = !state.isBusy,
-                onClick = {
-                    state =
-                        withAvailability(
-                            state.copy(
-                                capability = locator.locate(),
-                                message = localizedStringResource(Res.string.agi_capability_refreshed, language),
-                                error = null,
-                            ),
-                            indexer,
-                        )
-                },
+                onClick = { scope.launch { controller.refreshAgi(message = localizedStringResource(Res.string.agi_capability_refreshed, language)) } },
             )
             HeaderSpacer()
             ProfilerCompactButton(
@@ -181,15 +123,7 @@ public fun FrameWindowScope.GpuIntegrationMainPage(
                 enabled = !state.isBusy,
                 onClick = {
                     chooseExecutable(window, language)?.let { file ->
-                        state =
-                            withAvailability(
-                                state.copy(
-                                    capability = locator.locate(file.toPath()),
-                                    message = localizedStringResource(Res.string.configured_file, language, file.name),
-                                    error = null,
-                                ),
-                                indexer,
-                            )
+                        scope.launch { controller.refreshAgi(file.toPath(), localizedStringResource(Res.string.configured_file, language, file.name)) }
                     }
                 },
             )
@@ -198,8 +132,15 @@ public fun FrameWindowScope.GpuIntegrationMainPage(
                 text = localizedStringResource(Res.string.launch_agi, language),
                 enabled = !state.isBusy && state.capability?.launchSupported == true,
                 onClick = {
-                    runCatching { locator.launch(requireNotNull(state.capability)) }
-                        .onFailure { state = state.copy(error = it.message) }
+                    scope.launch {
+                        try {
+                            withContext(Dispatchers.IO) { locator.launch(requireNotNull(state.capability)) }
+                        } catch (failure: CancellationException) {
+                            throw failure
+                        } catch (failure: Exception) {
+                            controller.reportError(failure)
+                        }
+                    }
                 },
             )
             HeaderSpacer()
@@ -208,37 +149,7 @@ public fun FrameWindowScope.GpuIntegrationMainPage(
                 enabled = !state.isBusy,
                 onClick = {
                     chooseArtifact(window, language)?.let { file ->
-                        val agiVersion = state.capability?.version
-                        val artifacts = state.artifacts
-                        state =
-                            state.copy(
-                                isBusy = true,
-                                message = localizedStringResource(Res.string.artifact_indexing, language),
-                                error = null,
-                            )
-                        scope.launch {
-                            runCatching {
-                                withContext(Dispatchers.IO) {
-                                    val artifact = indexer.import(file.toPath(), agiVersion = agiVersion)
-                                    val updated = indexer.mergeLocation(artifacts, artifact)
-                                    store.save(updated)
-                                    updated
-                                }
-                            }.onSuccess { updated ->
-                                state =
-                                    withAvailability(
-                                        state.copy(
-                                            artifacts = updated,
-                                            isBusy = false,
-                                            message = localizedStringResource(Res.string.imported_file, language, file.name),
-                                            error = null,
-                                        ),
-                                        indexer,
-                                    )
-                            }.onFailure {
-                                state = state.copy(isBusy = false, error = it.message)
-                            }
-                        }
+                        scope.launch { controller.importArtifact(file.toPath(), localizedStringResource(Res.string.imported_file, language, file.name)) }
                     }
                 },
             )
@@ -246,55 +157,34 @@ public fun FrameWindowScope.GpuIntegrationMainPage(
             ProfilerToolbarStatus(state.message, state.error)
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-        GpuIntegrationScreen(
+        GpuAnalysisHubScreen(
             state,
             GpuIntegrationActions(
                 onOpenArtifact = ::open,
                 onVerifyArtifact = { artifact ->
-                    state = state.copy(isBusy = true)
                     scope.launch {
-                        runCatching { withContext(Dispatchers.IO) { indexer.verify(artifact) } }
-                            .onSuccess { verified ->
-                                state =
-                                    withAvailability(
-                                        state.copy(
-                                            isBusy = false,
-                                            message =
-                                                localizedStringResource(
-                                                    if (verified) {
-                                                        Res.string.artifact_hash_verified
-                                                    } else {
-                                                        Res.string.artifact_missing_or_changed
-                                                    },
-                                                    language,
-                                                ),
-                                        ),
-                                        indexer,
-                                    )
-                            }.onFailure {
-                                state = state.copy(isBusy = false, error = it.message)
-                            }
+                        controller.verifyArtifact(
+                            artifact,
+                            localizedStringResource(Res.string.artifact_hash_verified, language),
+                            localizedStringResource(Res.string.artifact_missing_or_changed, language),
+                        )
                     }
                 },
                 onRevealArtifact = ::reveal,
                 onRelocateArtifact = ::relocate,
+                onRefreshDevices = { scope.launch { controller.refreshDevices() } },
+                onSelectDevice = { serial ->
+                    controller.selectDevice(serial)
+                    scope.launch { controller.inspectSelectedDevice() }
+                },
+                onSelectArtifact = controller.selectArtifact,
+                onOpenTraceAnalyzer = onOpenTraceAnalyzer,
             ),
             language,
             Modifier.weight(1f),
         )
     }
 }
-
-private fun withAvailability(
-    state: GpuIntegrationState,
-    indexer: AgiArtifactIndexer,
-): GpuIntegrationState =
-    state.copy(
-        availabilityByArtifactId =
-            state.artifacts.associate { artifact ->
-                artifact.id to artifactAvailability(artifact, state.capability, indexer)
-            },
-    )
 
 internal fun artifactAvailability(
     artifact: GpuArtifact,

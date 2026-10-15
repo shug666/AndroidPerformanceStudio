@@ -82,6 +82,7 @@ public fun FrameWindowScope.FrameProfilerMainPage(
     onBack: () -> Unit = {},
     onOpenLayoutInspector: (FrameLayoutInspectionRequest) -> Unit = {},
     onOpenPerfetto: (FramePerfettoInspectionRequest) -> Unit = {},
+    isActive: Boolean = true,
 ) {
     val controller = remember { FrameProfilerController() }
     DisposableEffect(controller) { onDispose(controller::close) }
@@ -104,7 +105,9 @@ public fun FrameWindowScope.FrameProfilerMainPage(
     var showImportDialog by remember { mutableStateOf(false) }
     val operationMessage = state.operationStatus?.localizedText(language)
 
-    LaunchedEffect(controller) { controller.refreshDevices() }
+    LaunchedEffect(controller, isActive) {
+        if (isActive) controller.refreshDevices()
+    }
     LaunchedEffect(state.isCapturing) {
         while (controller.state.value.isCapturing) {
             controller.pollOnlineCapture()

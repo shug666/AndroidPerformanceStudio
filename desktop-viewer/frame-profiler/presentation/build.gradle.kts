@@ -13,4 +13,5 @@ dependencies {
     implementation(project(":analysis-frame"))
     implementation(libs.compose.material3)
     implementation(libs.compose.components.resources)
+    testImplementation(libs.compose.ui.test.junit4)
 }

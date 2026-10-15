@@ -356,6 +356,7 @@ fun FrameWindowScope.DesktopAppMainPage(
                             AppDestination.FRAME_PROFILER ->
                                 FrameProfilerMainPage(
                                     language = language,
+                                    isActive = active,
                                     onBack = { navigator.open(AppDestination.HOME) },
                                     onOpenLayoutInspector = { request ->
                                         val activity =
@@ -385,6 +386,7 @@ fun FrameWindowScope.DesktopAppMainPage(
                                         navigator.openPerfettoTrace(
                                             request.traceFile,
                                             localizedStringResource(Res.string.frame_perfetto_correlation, language, correlation),
+                                            request.intendedVsyncNs,
                                         )
                                     },
                                 )
@@ -413,6 +415,7 @@ fun FrameWindowScope.DesktopAppMainPage(
                                 GpuIntegrationMainPage(
                                     language = language,
                                     onBack = { navigator.open(AppDestination.HOME) },
+                                    onOpenTraceAnalyzer = { navigator.open(AppDestination.PERFETTO) },
                                     onOpenTrace = { path ->
                                         navigator.openPerfettoTrace(
                                             path,

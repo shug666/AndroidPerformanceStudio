@@ -10,7 +10,7 @@ public enum class GraphicsApi { VULKAN, OPENGL_ES, WEBGPU, UNKNOWN }
 
 public enum class ArtifactOpenRoute { AGI, PERFETTO, DESKTOP, NONE }
 
-public enum class ArtifactLocationStatus { AVAILABLE, MISSING, SIZE_CHANGED }
+public enum class ArtifactLocationStatus { AVAILABLE, MISSING, SIZE_CHANGED, CONTENT_CHANGED, UNREADABLE }
 
 public enum class AgiLaunchMode { VERIFIED_CLI, GUI_ONLY, UNSUPPORTED }
 
@@ -22,6 +22,7 @@ public data class AgiCapability(
     val launchMode: AgiLaunchMode,
     val supportedArguments: Set<String>,
     val warnings: List<String>,
+    val artifactOpenArgument: String? = null,
 )
 
 public data class GpuDeviceContext(
@@ -32,6 +33,9 @@ public data class GpuDeviceContext(
     val gpuRenderer: String?,
     val driverVersion: String?,
     val evidenceSources: Map<String, String> = emptyMap(),
+    val displayName: String? = null,
+    val graphicsApis: Set<GraphicsApi> = emptySet(),
+    val graphicsImplementation: GraphicsImplementationContext? = null,
 )
 
 public data class GraphicsImplementationContext(

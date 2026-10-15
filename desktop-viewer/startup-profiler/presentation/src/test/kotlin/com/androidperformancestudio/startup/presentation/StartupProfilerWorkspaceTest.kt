@@ -5,12 +5,14 @@ package com.androidperformancestudio.startup.presentation
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import com.androidperformancestudio.startup.analysis.StartupAnalyzer
@@ -63,7 +65,68 @@ class StartupProfilerWorkspaceTest {
             onNodeWithTag("startup-type-HOT").assertIsNotEnabled()
             onNodeWithTag("startup-start-stop").assertIsEnabled().performClick()
             assertTrue(cancelled)
+            onNodeWithTag("startup-main").performMouseInput { scroll(1200f) }
+            waitForIdle()
             onNodeWithTag("startup-progress").assertIsDisplayed()
+            onNodeWithText("Measured runs: 2 / 5").assertIsDisplayed()
+        }
+
+    @Test
+    fun `operation messages and errors appear below the baseline comparison`() =
+        runDesktopComposeUiTest(width = 1336, height = 904) {
+            setContent {
+                ViewerTheme(darkTheme = true) {
+                    StartupProfilerScreen(
+                        startupVisualState().copy(operationMessage = "Capture finished", errorMessage = "Trace inspection failed"),
+                        StartupProfilerActions(),
+                        UiLanguage.ENGLISH,
+                    )
+                }
+            }
+
+            onNodeWithTag("startup-scenario").assertIsDisplayed()
+            onNodeWithTag("startup-metric-TTID").assertIsDisplayed()
+            onNodeWithText("Capture finished").assertIsNotDisplayed()
+            onNodeWithText("Trace inspection failed").assertIsNotDisplayed()
+            onNodeWithText("Trace inspection failed").performScrollTo()
+            onNodeWithText("Capture finished").assertIsDisplayed()
+            onNodeWithText("Trace inspection failed").assertIsDisplayed()
+
+            val comparison = onNodeWithText("Baseline Comparison").fetchSemanticsNode().boundsInRoot
+            val message = onNodeWithText("Capture finished").fetchSemanticsNode().boundsInRoot
+            assertTrue(message.top >= comparison.bottom)
+        }
+
+    @Test
+    fun `stacked layout retains messages errors and running progress after the analysis content`() =
+        runDesktopComposeUiTest(width = 900, height = 720) {
+            setContent {
+                ViewerTheme(darkTheme = false) {
+                    StartupProfilerScreen(
+                        startupVisualState().copy(
+                            isRunning = true,
+                            completedRuns = 2,
+                            totalRuns = 5,
+                            operationMessage = "Measuring startup",
+                            errorMessage = "Optional trace unavailable",
+                        ),
+                        StartupProfilerActions(),
+                        UiLanguage.ENGLISH,
+                    )
+                }
+            }
+
+            onNodeWithText("Measured runs: 2 / 5").performScrollTo()
+            onNodeWithTag("startup-stacked-workspace").performMouseInput { scroll(40f) }
+            waitForIdle()
+            onNodeWithText("Measuring startup").assertIsDisplayed()
+            onNodeWithText("Optional trace unavailable").assertIsDisplayed()
+            onNodeWithText("Measured runs: 2 / 5").assertIsDisplayed()
+            onNodeWithTag("startup-progress").assertIsDisplayed()
+
+            val comparison = onNodeWithText("Baseline Comparison").fetchSemanticsNode().boundsInRoot
+            val message = onNodeWithText("Measuring startup").fetchSemanticsNode().boundsInRoot
+            assertTrue(message.top >= comparison.bottom)
         }
 
     @Test

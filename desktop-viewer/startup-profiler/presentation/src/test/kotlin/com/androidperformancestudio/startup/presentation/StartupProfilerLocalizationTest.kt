@@ -92,6 +92,23 @@ class StartupProfilerLocalizationTest {
     }
 
     @Test
+    fun `operation messages errors and progress follow the analysis cards and baseline comparison`() {
+        val workspace =
+            source
+                .substringAfter("private fun StartupMainWorkspace(")
+                .substringBefore("private fun StartupEvidenceRail(")
+        val scenario = workspace.indexOf("StartupScenarioControls(state, actions, language)")
+        val metrics = workspace.indexOf("StartupMetricOverview(state.analysis, language)")
+        val comparison = workspace.indexOf("Res.string.baseline_comparison_empty")
+
+        assertTrue(scenario >= 0 && metrics > scenario)
+        assertTrue(comparison > metrics)
+        listOf("state.operationMessage", "state.errorMessage", "startup-progress").forEach { marker ->
+            assertTrue(workspace.indexOf(marker) > comparison, "$marker must appear below the analysis content")
+        }
+    }
+
+    @Test
     fun `multi-run waterfall appears before the selectable table and comparison`() {
         val results =
             source

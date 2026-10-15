@@ -2,6 +2,7 @@
 
 package com.androidperformancestudio.gpu.artifact
 
+import com.androidperformancestudio.contracts.ArtifactFileEvidence
 import com.androidperformancestudio.gpu.model.ArtifactLocationStatus
 import com.androidperformancestudio.gpu.model.ArtifactOpenRoute
 import com.androidperformancestudio.gpu.model.GpuArtifact
@@ -10,7 +11,6 @@ import com.androidperformancestudio.gpu.model.GpuCaptureContext
 import com.androidperformancestudio.gpu.model.GpuDeviceContext
 import com.androidperformancestudio.gpu.model.GraphicsApi
 import com.androidperformancestudio.gpu.model.GraphicsImplementationContext
-import com.androidperformancestudio.contracts.ArtifactFileEvidence
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -24,11 +24,14 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import java.io.IOException
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
+import java.nio.file.attribute.BasicFileAttributes
 import java.time.Instant
 
 public data class ArtifactLocationResolution(
@@ -79,23 +82,40 @@ public class AgiArtifactIndexer(
 
     public fun resolveLocation(artifact: GpuArtifact): ArtifactLocationResolution {
         var foundRegularFile = false
+        var contentChanged = false
+        var unreadable = false
         artifact.locations.forEach { path ->
-            val size = runCatching { if (Files.isRegularFile(path)) Files.size(path) else null }.getOrNull()
-            if (size != null) {
+            try {
+                val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
+                if (!attributes.isRegularFile) return@forEach
                 foundRegularFile = true
-                if (size == artifact.sizeBytes) {
-                    return ArtifactLocationResolution(ArtifactLocationStatus.AVAILABLE, path)
+                if (attributes.size() != artifact.sizeBytes) return@forEach
+                if (sha256(path) != artifact.sha256) {
+                    contentChanged = true
+                    return@forEach
                 }
+                return ArtifactLocationResolution(ArtifactLocationStatus.AVAILABLE, path)
+            } catch (_: NoSuchFileException) {
+                // A stale location must not prevent another registered copy from being verified.
+            } catch (_: IOException) {
+                unreadable = true
+            } catch (_: SecurityException) {
+                unreadable = true
             }
         }
         return ArtifactLocationResolution(
-            if (foundRegularFile) ArtifactLocationStatus.SIZE_CHANGED else ArtifactLocationStatus.MISSING,
+            when {
+                contentChanged -> ArtifactLocationStatus.CONTENT_CHANGED
+                unreadable -> ArtifactLocationStatus.UNREADABLE
+                foundRegularFile -> ArtifactLocationStatus.SIZE_CHANGED
+                else -> ArtifactLocationStatus.MISSING
+            },
             null,
         )
     }
 
     public fun verify(artifact: GpuArtifact): Boolean =
-        resolveLocation(artifact).path?.let { path -> sha256(path) == artifact.sha256 } == true
+        resolveLocation(artifact).status == ArtifactLocationStatus.AVAILABLE
 
     public fun mergeLocation(
         artifacts: List<GpuArtifact>,
@@ -243,6 +263,9 @@ public class JsonAgiArtifactStore(
             device.gpuVendor?.let { put("gpuVendor", it) }
             device.gpuRenderer?.let { put("gpuRenderer", it) }
             device.driverVersion?.let { put("driverVersion", it) }
+            device.displayName?.let { put("displayName", it) }
+            put("graphicsApis", buildJsonArray { device.graphicsApis.forEach { add(JsonPrimitive(it.name)) } })
+            device.graphicsImplementation?.let { put("graphicsImplementation", encodeGraphicsImplementation(it)) }
             put("evidenceSources", buildJsonObject { device.evidenceSources.forEach { (field, source) -> put(field, source) } })
         }
 
@@ -254,6 +277,9 @@ public class JsonAgiArtifactStore(
             gpuVendor = value["gpuVendor"]?.jsonPrimitive?.contentOrNull,
             gpuRenderer = value["gpuRenderer"]?.jsonPrimitive?.contentOrNull,
             driverVersion = value["driverVersion"]?.jsonPrimitive?.contentOrNull,
+            displayName = value["displayName"]?.jsonPrimitive?.contentOrNull,
+            graphicsApis = value["graphicsApis"]?.jsonArray?.map { decodeGraphicsApi(it.jsonPrimitive.content) }?.toSet().orEmpty(),
+            graphicsImplementation = value["graphicsImplementation"]?.jsonObject?.let(::decodeGraphicsImplementation),
             evidenceSources = value["evidenceSources"]?.jsonObject?.mapValues { it.value.jsonPrimitive.content }.orEmpty(),
         )
 
