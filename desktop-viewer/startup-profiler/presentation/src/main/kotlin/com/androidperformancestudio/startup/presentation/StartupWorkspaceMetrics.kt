@@ -2,16 +2,11 @@
 
 package com.androidperformancestudio.startup.presentation
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,7 +40,9 @@ import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerAccentPalette
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
+import com.androidperformancestudio.ui.studio.StudioCard
 import com.androidperformancestudio.ui.studio.StudioPanel
+import com.androidperformancestudio.ui.studio.StudioTokens
 
 @Composable
 internal fun StartupMetricOverview(
@@ -53,7 +50,10 @@ internal fun StartupMetricOverview(
     language: UiLanguage,
 ) {
     val colors = LocalViewerColors.current
-    StudioPanel(Modifier.fillMaxWidth()) {
+    StudioPanel(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = StudioTokens.compactContentPadding,
+    ) {
         Text(localizedStringResource(Res.string.startup_metrics, language), fontWeight = FontWeight.SemiBold)
         run {
             val metrics = @Composable { modifier: Modifier ->
@@ -132,14 +132,10 @@ private fun StartupMetricCard(
     evidence: String,
     modifier: Modifier,
 ) {
-    val shape = RoundedCornerShape(6.dp)
-    Column(
-        modifier
-            .testTag("startup-metric-$id")
-            .background(tone.copy(alpha = 0.10f), shape)
-            .border(1.dp, tone.copy(alpha = 0.5f), shape)
-            .padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+    StudioCard(
+        modifier = modifier.testTag("startup-metric-$id"),
+        containerColor = tone.copy(alpha = 0.10f),
+        borderColor = tone.copy(alpha = 0.5f),
     ) {
         Text(title, color = tone, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
         Text(description, color = LocalViewerColors.current.secondaryText, fontSize = ViewerTypography.secondary.fontSize)

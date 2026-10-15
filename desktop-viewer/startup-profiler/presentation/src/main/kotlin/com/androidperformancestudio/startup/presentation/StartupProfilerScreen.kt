@@ -27,9 +27,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
@@ -151,6 +150,7 @@ import com.androidperformancestudio.ui.ProfilerCompactButton
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
+import com.androidperformancestudio.ui.studio.StudioCard
 import com.androidperformancestudio.ui.studio.StudioDataTable
 import com.androidperformancestudio.ui.studio.StudioPanel
 import com.androidperformancestudio.ui.studio.StudioPanelHeader
@@ -225,7 +225,10 @@ private fun StartupMainWorkspace(
     StartupMetricOverview(state.analysis, language)
     val analysis = state.analysis
     if (analysis == null || selected == null) {
-        StudioPanel(Modifier.fillMaxWidth()) {
+        StudioPanel(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = StudioTokens.compactContentPadding,
+        ) {
             StudioPanelHeader(localizedStringResource(Res.string.startup_waterfall, language))
             Text(localizedStringResource(Res.string.choose_a_device_and_app_to_run_repeatable_cold_warm, language))
         }
@@ -238,6 +241,7 @@ private fun StartupMainWorkspace(
                     columns = runTableColumns(language),
                     title = localizedStringResource(Res.string.measured_runs, language),
                     modifier = Modifier.width(tableWidth),
+                    contentPadding = StudioTokens.compactContentPadding,
                 ) {
                     analysis.runs.forEach { run -> RunRow(run, run.id == selected.id, actions.onSelectRun, language) }
                 }
@@ -245,7 +249,10 @@ private fun StartupMainWorkspace(
         }
     }
     state.comparison?.let { comparison -> BaselineComparison(comparison, language) }
-        ?: StudioPanel(Modifier.fillMaxWidth()) {
+        ?: StudioPanel(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = StudioTokens.compactContentPadding,
+        ) {
             Text(localizedStringResource(Res.string.baseline_comparison_title, language), fontWeight = FontWeight.SemiBold)
             Text(localizedStringResource(Res.string.baseline_comparison_empty, language), style = MaterialTheme.typography.bodySmall)
         }
@@ -259,24 +266,31 @@ private fun StartupEvidenceRail(
     language: UiLanguage,
 ) {
     StartupProfileSummary(selected, language)
-    StudioPanel(Modifier.fillMaxWidth()) {
-        StudioPanelHeader(localizedStringResource(Res.string.optimization_evidence, language))
-        val findings =
-            (state.warnings + state.analysis?.warnings.orEmpty() + selected?.warnings.orEmpty() + selected?.diagnostics.orEmpty())
-                .distinct()
-        if (selected != null && selected.platform.fullyDrawnTimeMs == null) {
-            Text(
-                localizedStringResource(Res.string.report_fully_drawn_hint, language),
-                color = LocalViewerColors.current.warning,
-                style = MaterialTheme.typography.bodySmall,
-            )
+    StudioPanel(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = StudioTokens.compactContentPadding,
+    ) {
+        SelectionContainer {
+            Column(verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap)) {
+                StudioPanelHeader(localizedStringResource(Res.string.optimization_evidence, language))
+                val findings =
+                    (state.warnings + state.analysis?.warnings.orEmpty() + selected?.warnings.orEmpty() + selected?.diagnostics.orEmpty())
+                        .distinct()
+                if (selected != null && selected.platform.fullyDrawnTimeMs == null) {
+                    Text(
+                        localizedStringResource(Res.string.report_fully_drawn_hint, language),
+                        color = LocalViewerColors.current.warning,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                if (findings.isEmpty()) {
+                    Text(localizedStringResource(Res.string.optimization_empty, language), style = MaterialTheme.typography.bodySmall)
+                }
+                findings.forEach { Text("• $it", color = LocalViewerColors.current.warning, style = MaterialTheme.typography.bodySmall) }
+            }
         }
-        if (findings.isEmpty()) {
-            Text(localizedStringResource(Res.string.optimization_empty, language), style = MaterialTheme.typography.bodySmall)
-        }
-        findings.forEach { Text("• $it", color = LocalViewerColors.current.warning, style = MaterialTheme.typography.bodySmall) }
     }
-    StudioPanel(Modifier.fillMaxWidth()) {
+    StudioCard(Modifier.fillMaxWidth()) {
         StudioPanelHeader(localizedStringResource(Res.string.related_actions, language))
         ProfilerCompactButton(
             localizedStringResource(Res.string.import_report, language),
@@ -299,7 +313,10 @@ private fun StartupEvidenceRail(
         }
     }
     selected?.let { run ->
-        StudioPanel(Modifier.fillMaxWidth().testTag("startup-run-detail")) {
+        StudioPanel(
+            modifier = Modifier.fillMaxWidth().testTag("startup-run-detail"),
+            contentPadding = StudioTokens.compactContentPadding,
+        ) {
             CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.bodySmall) {
                 RunDetail(run, actions, language)
                 ExpandableEvidence(localizedStringResource(Res.string.phase_details, language), run.id) {
@@ -316,7 +333,7 @@ private fun BaselineComparison(
     comparison: StartupComparison,
     language: UiLanguage,
 ) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+    StudioCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
         Column(Modifier.padding(vertical = 6.dp, horizontal = 8.dp)) {
             Text(
                 localizedStringResource(

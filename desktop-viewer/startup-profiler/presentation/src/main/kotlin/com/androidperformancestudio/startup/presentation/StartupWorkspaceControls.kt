@@ -214,7 +214,10 @@ internal fun StartupScenarioControls(
 ) {
     var advanced by remember { mutableStateOf(false) }
     val config = state.config
-    StudioPanel(Modifier.fillMaxWidth().testTag("startup-scenario")) {
+    StudioPanel(
+        modifier = Modifier.fillMaxWidth().testTag("startup-scenario"),
+        contentPadding = StudioTokens.compactContentPadding,
+    ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 localizedStringResource(Res.string.scenario_configuration, language),
@@ -399,7 +402,10 @@ internal fun StartupProfileSummary(
     val verified = evidence.hasVerifiedBaselineProfile()
     val colors = LocalViewerColors.current
     val tone = if (verified) colors.success else colors.warning
-    StudioPanel(Modifier.fillMaxWidth().testTag("startup-profile-status")) {
+    StudioPanel(
+        modifier = Modifier.fillMaxWidth().testTag("startup-profile-status"),
+        contentPadding = StudioTokens.compactContentPadding,
+    ) {
         Text(localizedStringResource(Res.string.baseline_profile_status, language), fontWeight = FontWeight.SemiBold)
         Text(
             localizedStringResource(

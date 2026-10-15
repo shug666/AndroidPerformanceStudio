@@ -75,4 +75,14 @@ class StartupEvidencePresentationTest {
         assertTrue(detail.contains("evidence.captured && !traceFile.isNullOrBlank()"))
         assertTrue(detail.contains("traceOpenFailed = !openTrace(traceFile)"))
     }
+
+    @Test
+    fun `optimization evidence content is selectable`() {
+        val source = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/startup/presentation/StartupProfilerScreen.kt"))
+        val rail = source.substringAfter("private fun StartupEvidenceRail(").substringBefore("private fun BaselineComparison(")
+
+        assertTrue(rail.contains("SelectionContainer"))
+        assertTrue(rail.contains("Res.string.optimization_evidence"))
+        assertTrue(rail.contains("findings.forEach"))
+    }
 }

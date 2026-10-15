@@ -46,6 +46,7 @@ import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.studio.StudioPanel
+import com.androidperformancestudio.ui.studio.StudioTokens
 
 internal fun startupWaterfallPreview(
     runs: List<StartupRun>,
@@ -77,7 +78,10 @@ internal fun StartupRunsWaterfall(
                     }
                 }
             }.distinct()
-    StudioPanel(Modifier.fillMaxWidth().testTag("startup-waterfall")) {
+    StudioPanel(
+        modifier = Modifier.fillMaxWidth().testTag("startup-waterfall"),
+        contentPadding = StudioTokens.compactContentPadding,
+    ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(localizedStringResource(Res.string.startup_waterfall, language), Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
             Text(

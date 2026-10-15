@@ -84,6 +84,20 @@ class StudioComponentsTest {
         }
 
     @Test
+    fun `compact studio card composes with the shared viewer theme`() =
+        runDesktopComposeUiTest {
+            setContent {
+                ViewerTheme(darkTheme = true) {
+                    StudioCard {
+                        androidx.compose.material3.Text("Compact evidence")
+                    }
+                }
+            }
+
+            onNodeWithText("Compact evidence").assertIsDisplayed()
+        }
+
+    @Test
     fun `search field accepts input using the shared viewer theme`() =
         runDesktopComposeUiTest {
             setContent {

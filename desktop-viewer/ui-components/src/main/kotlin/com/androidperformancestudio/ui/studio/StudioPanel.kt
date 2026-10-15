@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.ViewerTypography
@@ -33,6 +34,7 @@ import org.jetbrains.compose.resources.painterResource
 @Composable
 public fun StudioPanel(
     modifier: Modifier = Modifier,
+    contentPadding: Dp = StudioTokens.contentPadding,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = LocalViewerColors.current
@@ -46,7 +48,7 @@ public fun StudioPanel(
                     color = colors.border,
                     shape = RoundedCornerShape(StudioTokens.panelRadius),
                 )
-                .padding(StudioTokens.contentPadding),
+                .padding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
         content = content,
     )
@@ -147,11 +149,12 @@ public fun StudioDataTable(
     columns: List<StudioTableColumn>,
     modifier: Modifier = Modifier,
     title: String? = null,
+    contentPadding: Dp = StudioTokens.contentPadding,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     require(columns.isNotEmpty()) { "StudioDataTable requires at least one column" }
     val colors = LocalViewerColors.current
-    StudioPanel(modifier = modifier) {
+    StudioPanel(modifier = modifier, contentPadding = contentPadding) {
         title?.let { StudioPanelHeader(it) }
         Row(
             modifier =
