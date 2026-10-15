@@ -2,6 +2,7 @@ package com.androidperformancestudio.perfetto.capture
 
 import com.androidperformancestudio.perfetto.model.PerfettoBufferPolicy
 import com.androidperformancestudio.perfetto.model.PerfettoCaptureConfig
+import com.androidperformancestudio.perfetto.model.PerfettoLogBuffer
 import com.androidperformancestudio.perfetto.model.PerfettoProbe
 import com.androidperformancestudio.perfetto.model.PerfettoTraceTemplate
 import kotlin.test.Test
@@ -177,8 +178,8 @@ class PerfettoConfigTextBuilderTest {
         assertTrue(text.contains("disable_generic_events: true"))
         // flush_period_ms removed.
         assertFalse(text.contains("flush_period_ms"))
-        // process_stats polling on by default (PROCESS_MEMORY_POLL in default probes).
-        assertTrue(text.contains("proc_stats_poll_ms: 1000"))
+        // process_stats polling is NOT on by default (PROCESS_MEMORY_POLL not in System Overview defaults).
+        assertFalse(text.contains("proc_stats_poll_ms"))
         // Default fill policy is RING_BUFFER.
         assertTrue(text.contains("fill_policy: RING_BUFFER"))
     }
@@ -346,5 +347,56 @@ class PerfettoConfigTextBuilderTest {
         // atrace category without slash is NOT added (atrace is now via the multi-select).
         // "audio" is not in the System Overview preset, so it must be absent.
         assertFalse(text.contains("atrace_categories: \"audio\""))
+    }
+
+    @Test
+    fun `android log with no buffers captures all (empty config)`() {
+        val text =
+            PerfettoConfigTextBuilder.build(
+                PerfettoCaptureConfig(
+                    template = PerfettoTraceTemplate.SYSTEM_OVERVIEW,
+                    androidSdk = 33,
+                    enabledProbes = setOf(PerfettoProbe.ANDROID_LOG),
+                    logBuffers = emptySet(),
+                ),
+            )
+        assertTrue(text.contains("name: \"android.log\""))
+        // Empty logBuffers = all buffers (no log_ids emitted).
+        assertFalse(text.contains("log_ids"))
+    }
+
+    @Test
+    fun `android log with selected buffers emits log_ids`() {
+        val text =
+            PerfettoConfigTextBuilder.build(
+                PerfettoCaptureConfig(
+                    template = PerfettoTraceTemplate.SYSTEM_OVERVIEW,
+                    androidSdk = 33,
+                    enabledProbes = setOf(PerfettoProbe.ANDROID_LOG),
+                    logBuffers = setOf(PerfettoLogBuffer.LID_CRASH, PerfettoLogBuffer.LID_SYSTEM),
+                ),
+            )
+        assertTrue(text.contains("log_ids: LID_CRASH"))
+        assertTrue(text.contains("log_ids: LID_SYSTEM"))
+        // Other buffers not selected.
+        assertFalse(text.contains("LID_RADIO"))
+    }
+
+    @Test
+    fun `system overview default omits proc_stats_poll_ms`() {
+        val text =
+            PerfettoConfigTextBuilder.build(
+                PerfettoCaptureConfig(template = PerfettoTraceTemplate.SYSTEM_OVERVIEW, androidSdk = 33),
+            )
+        assertFalse(text.contains("proc_stats_poll_ms"))
+    }
+
+    @Test
+    fun `memory profile default still has proc_stats_poll_ms`() {
+        val text =
+            PerfettoConfigTextBuilder.build(
+                PerfettoCaptureConfig(template = PerfettoTraceTemplate.MEMORY_PROFILE, targetPackage = "com.example.app"),
+            )
+        assertTrue(text.contains("proc_stats_poll_ms: 1000"))
     }
 }

@@ -1,6 +1,7 @@
 package com.androidperformancestudio.perfetto.capture
 
 import com.androidperformancestudio.perfetto.model.PerfettoCaptureConfig
+import com.androidperformancestudio.perfetto.model.PerfettoLogBuffer
 import com.androidperformancestudio.perfetto.model.PerfettoProbe
 import com.androidperformancestudio.perfetto.model.PerfettoTraceTemplate
 import com.androidperformancestudio.perfetto.model.defaultProbes
@@ -44,7 +45,7 @@ object PerfettoConfigTextBuilder {
                 }
                 if (probes.any { it in SYS_STATS_PROBES }) add(systemStats(probes, config.pollIntervals))
                 if (probes.any { it in PROCESS_STATS_PROBES }) add(processStats(PerfettoProbe.PROCESS_MEMORY_POLL in probes))
-                addDirectSources(probes, config.targetPackage)
+                addDirectSources(probes, config.targetPackage, config.logBuffers)
                 add(PerfettoDataSource("android.packages_list"))
             }
         return PerfettoConfigComposer.compose(
@@ -60,6 +61,7 @@ object PerfettoConfigTextBuilder {
     private fun MutableList<PerfettoDataSource>.addDirectSources(
         probes: Set<PerfettoProbe>,
         targetPackage: String?,
+        logBuffers: Set<PerfettoLogBuffer>?,
     ) {
         fun addIf(
             probe: PerfettoProbe,
@@ -88,7 +90,17 @@ object PerfettoConfigTextBuilder {
         )
         addIf(PerfettoProbe.GPU_MEMORY, "android.gpu.memory")
         addIf(PerfettoProbe.GPU_RENDER_STAGES, "gpu.renderstages")
-        addIf(PerfettoProbe.ANDROID_LOG, "android.log")
+        if (PerfettoProbe.ANDROID_LOG in probes) {
+            val logConfig =
+                logBuffers?.takeIf { it.isNotEmpty() }?.let { buffers ->
+                    buildString {
+                        appendLine("android_log_config {")
+                        buffers.sortedBy { it.ordinal }.forEach { appendLine("  log_ids: ${it.id}") }
+                        appendLine("}")
+                    }.trimIndent()
+                }.orEmpty()
+            add(PerfettoDataSource("android.log", logConfig))
+        }
         addIf(PerfettoProbe.FRAME_TIMELINE, "android.surfaceflinger.frametimeline")
         addIf(PerfettoProbe.GAME_INTERVENTIONS, "android.game_interventions")
         addIf(
