@@ -95,7 +95,9 @@ class StartupProfilerLocalizationTest {
     fun `Startup consumes shared workspace styling without applying a second local palette`() {
         val controls =
             Files.readString(
-                Path.of("src/main/kotlin/com/androidperformancestudio/startup/presentation/StartupWorkspaceControls.kt"),
+                Path.of(
+                    "src/main/kotlin/com/androidperformancestudio/startup/presentation/StartupWorkspaceControls.kt",
+                ),
             )
         val metrics =
             Files.readString(
@@ -116,7 +118,7 @@ class StartupProfilerLocalizationTest {
                 .substringBefore("private fun StartupEvidenceRail(")
         val scenario = workspace.indexOf("StartupScenarioControls(state, actions, language)")
         val metrics = workspace.indexOf("StartupMetricOverview(state.analysis, language)")
-        val comparison = workspace.indexOf("Res.string.baseline_comparison_empty")
+        val comparison = workspace.indexOf("StartupBaselineComparison(state, actions, language)")
 
         assertTrue(scenario >= 0 && metrics > scenario)
         assertTrue(comparison > metrics)
@@ -131,9 +133,10 @@ class StartupProfilerLocalizationTest {
             source
                 .substringAfter("private fun StartupMainWorkspace(")
                 .substringBefore("private fun StartupEvidenceRail(")
-        val waterfallIndex = results.indexOf("StartupRunsWaterfall(analysis.runs, selected, actions, language)")
+        val waterfallIndex =
+            results.indexOf("StartupRunsWaterfall(analysis.runs, selected, actions, language, state.isRunning)")
         assertTrue(waterfallIndex < results.indexOf("StudioDataTable("))
-        val comparisonIndex = results.indexOf("BaselineComparison(comparison, language)")
+        val comparisonIndex = results.indexOf("StartupBaselineComparison(state, actions, language)")
         assertTrue(results.indexOf("StudioDataTable(") < comparisonIndex)
         assertTrue(source.contains("RunDetail(run, actions, language)"))
     }

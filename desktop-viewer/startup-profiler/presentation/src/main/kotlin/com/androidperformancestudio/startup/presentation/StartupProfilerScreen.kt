@@ -50,7 +50,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.androidperformancestudio.startup.analysis.StartupComparison
 import com.androidperformancestudio.startup.model.EvidenceConfidence
 import com.androidperformancestudio.startup.model.StartupMilestoneKind
 import com.androidperformancestudio.startup.model.StartupPerfettoSlice
@@ -65,9 +64,6 @@ import com.androidperformancestudio.startup.presentation.generated.resources.act
 import com.androidperformancestudio.startup.presentation.generated.resources.agent
 import com.androidperformancestudio.startup.presentation.generated.resources.agent_first_frame
 import com.androidperformancestudio.startup.presentation.generated.resources.agent_ready
-import com.androidperformancestudio.startup.presentation.generated.resources.baseline_comparison
-import com.androidperformancestudio.startup.presentation.generated.resources.baseline_comparison_empty
-import com.androidperformancestudio.startup.presentation.generated.resources.baseline_comparison_title
 import com.androidperformancestudio.startup.presentation.generated.resources.choose_a_device_and_app_to_run_repeatable_cold_warm
 import com.androidperformancestudio.startup.presentation.generated.resources.cold
 import com.androidperformancestudio.startup.presentation.generated.resources.compilation_details
@@ -103,7 +99,6 @@ import com.androidperformancestudio.startup.presentation.generated.resources.opt
 import com.androidperformancestudio.startup.presentation.generated.resources.phase_activity_create
 import com.androidperformancestudio.startup.presentation.generated.resources.phase_activity_to_resumed
 import com.androidperformancestudio.startup.presentation.generated.resources.phase_agent_initialization
-import com.androidperformancestudio.startup.presentation.generated.resources.phase_comparison
 import com.androidperformancestudio.startup.presentation.generated.resources.phase_details
 import com.androidperformancestudio.startup.presentation.generated.resources.phase_first_frame_to_fully_drawn
 import com.androidperformancestudio.startup.presentation.generated.resources.phase_process_bootstrap
@@ -219,7 +214,7 @@ private fun StartupMainWorkspace(
             Text(localizedStringResource(Res.string.choose_a_device_and_app_to_run_repeatable_cold_warm, language))
         }
     } else {
-        StartupRunsWaterfall(analysis.runs, selected, actions, language)
+        StartupRunsWaterfall(analysis.runs, selected, actions, language, state.isRunning)
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val tableWidth = maxOf(maxWidth, RUN_TABLE_MIN_WIDTH)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
@@ -234,14 +229,7 @@ private fun StartupMainWorkspace(
             }
         }
     }
-    state.comparison?.let { comparison -> BaselineComparison(comparison, language) }
-        ?: StudioPanel(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = StudioTokens.compactContentPadding,
-        ) {
-            Text(localizedStringResource(Res.string.baseline_comparison_title, language), fontWeight = FontWeight.SemiBold)
-            Text(localizedStringResource(Res.string.baseline_comparison_empty, language), style = MaterialTheme.typography.bodySmall)
-        }
+    StartupBaselineComparison(state, actions, language)
     state.operationMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
     state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
     if (state.isRunning && state.totalRuns > 0) {
@@ -318,45 +306,6 @@ private fun StartupEvidenceRail(
                     StartupWaterfallChart(run, language)
                     PlatformDurationBars(run, language)
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun BaselineComparison(
-    comparison: StartupComparison,
-    language: UiLanguage,
-) {
-    StudioCard(
-        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-    ) {
-        Column(Modifier.padding(vertical = 6.dp, horizontal = 8.dp)) {
-            Text(
-                localizedStringResource(
-                    Res.string.baseline_comparison,
-                    language,
-                    comparison.status.name
-                        .lowercase()
-                        .replace('_', ' '),
-                    comparison.medianDifferenceMs.formatMs(),
-                    comparison.confidenceIntervalLowMs.formatMs(),
-                    comparison.confidenceIntervalHighMs.formatMs(),
-                ),
-            )
-            comparison.reasons.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
-            comparison.phaseDifferences.forEach { phase ->
-                Text(
-                    localizedStringResource(
-                        Res.string.phase_comparison,
-                        language,
-                        phase.name,
-                        phase.medianDifferenceMs.formatMs(),
-                        phase.confidence.localizedLabel(language),
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                )
             }
         }
     }

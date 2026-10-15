@@ -19,7 +19,10 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -30,18 +33,24 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.androidperformancestudio.startup.model.StartupMilestoneKind
+import com.androidperformancestudio.startup.model.StartupPhase
 import com.androidperformancestudio.startup.model.StartupRun
 import com.androidperformancestudio.startup.presentation.generated.resources.Res
+import com.androidperformancestudio.startup.presentation.generated.resources.export_csv
 import com.androidperformancestudio.startup.presentation.generated.resources.platform_durations_independent
 import com.androidperformancestudio.startup.presentation.generated.resources.run
 import com.androidperformancestudio.startup.presentation.generated.resources.startup_waterfall
+import com.androidperformancestudio.startup.presentation.generated.resources.waterfall_all_phases
 import com.androidperformancestudio.startup.presentation.generated.resources.waterfall_axis
 import com.androidperformancestudio.startup.presentation.generated.resources.waterfall_clock_domain
 import com.androidperformancestudio.startup.presentation.generated.resources.waterfall_no_intervals
 import com.androidperformancestudio.startup.presentation.generated.resources.waterfall_platform_only
 import com.androidperformancestudio.startup.presentation.generated.resources.waterfall_runs_preview
 import com.androidperformancestudio.startup.presentation.generated.resources.waterfall_unplotted_phases
+import com.androidperformancestudio.ui.DropdownSelector
 import com.androidperformancestudio.ui.LocalViewerColors
+import com.androidperformancestudio.ui.ProfilerCompactButton
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
@@ -62,22 +71,21 @@ internal fun StartupRunsWaterfall(
     selected: StartupRun,
     actions: StartupProfilerActions,
     language: UiLanguage,
+    isRunning: Boolean = false,
 ) {
     val preview = remember(runs, selected.id) { startupWaterfallPreview(runs, selected) }
     val models = remember(preview) { preview.associate { it.id to it.waterfallModel() } }
     val sources = models.values.flatMap { it.groups.map { group -> group.source } }.distinct()
     val colors = LocalViewerColors.current
     val palette = listOf(colors.info, colors.success, colors.warning, colors.accent, colors.error, colors.online)
-    val phaseKinds =
+    val phases =
         models.values
-            .flatMap {
-                it.groups.flatMap { group ->
-                    group.segments.map { segment ->
-                        segment.phase.start to
-                            segment.phase.end
-                    }
-                }
-            }.distinct()
+            .flatMap { it.groups }
+            .flatMap { it.segments }
+            .map { it.phase }
+            .distinctBy { it.start to it.end }
+    val phaseKinds = phases.map { it.start to it.end }
+    var phaseFilter by remember(runs, phaseKinds) { mutableStateOf<Pair<StartupMilestoneKind, StartupMilestoneKind>?>(null) }
     StudioPanel(
         modifier = Modifier.fillMaxWidth().testTag("startup-waterfall"),
         contentPadding = StudioTokens.compactContentPadding,
@@ -88,6 +96,19 @@ internal fun StartupRunsWaterfall(
                 localizedStringResource(Res.string.waterfall_axis, language),
                 color = colors.secondaryText,
                 fontSize = ViewerTypography.secondary.fontSize,
+            )
+        }
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            StartupWaterfallPhaseSelector(phases, phaseFilter, { phaseFilter = it }, language)
+            ProfilerCompactButton(
+                localizedStringResource(Res.string.export_csv, language),
+                enabled = !isRunning,
+                modifier = Modifier.testTag("startup-waterfall-export"),
+                onClick = actions.onExportCsv,
             )
         }
         if (sources.isEmpty()) {
@@ -125,19 +146,27 @@ internal fun StartupRunsWaterfall(
                     fontSize = ViewerTypography.secondary.fontSize,
                 )
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    models[selected.id]?.groups?.firstOrNull { it.source == source }?.segments.orEmpty().forEach { segment ->
-                        val index = phaseKinds.indexOf(segment.phase.start to segment.phase.end)
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Box(Modifier.size(7.dp).background(palette[index % palette.size]))
-                            Text(segment.phase.localizedName(language), fontSize = ViewerTypography.secondary.fontSize)
+                    models.values
+                        .flatMap { it.groups }
+                        .filter { it.source == source }
+                        .flatMap { it.segments }
+                        .distinctBy { it.phase.start to it.phase.end }
+                        .filterPhase(phaseFilter)
+                        .forEach { segment ->
+                            val index = phaseKinds.indexOf(segment.phase.start to segment.phase.end)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Box(Modifier.size(7.dp).background(palette[index % palette.size]))
+                                Text(segment.phase.localizedName(language), fontSize = ViewerTypography.secondary.fontSize)
+                            }
                         }
-                    }
                 }
                 preview.forEach { run ->
                     val group = models.getValue(run.id).groups.firstOrNull { it.source == source }
+                    val originNs = group?.originNs ?: 0L
                     val isSelected = run.id == selected.id
+                    val visibleSegments = group?.segments.orEmpty().filterPhase(phaseFilter)
                     val rowDescription =
-                        group?.segments.orEmpty().joinToString("; ") { segment ->
+                        visibleSegments.joinToString("; ") { segment ->
                             "${segment.phase.localizedName(
                                 language,
                             )} ${(segment.phase.durationNs / 1_000_000.0).formatMs()} ${segment.phase.confidence.localizedLabel(language)}"
@@ -163,10 +192,10 @@ internal fun StartupRunsWaterfall(
                                 val x = size.width * tick / 4f
                                 drawLine(colors.border, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
                             }
-                            group?.segments?.forEach { segment ->
+                            visibleSegments.forEach { segment ->
                                 val index = phaseKinds.indexOf(segment.phase.start to segment.phase.end)
                                 val x =
-                                    ((segment.startNs - group.originNs).toDouble() / extent * size.width).toFloat().coerceIn(
+                                    ((segment.startNs - originNs).toDouble() / extent * size.width).toFloat().coerceIn(
                                         0f,
                                         size.width,
                                     )
@@ -189,15 +218,7 @@ internal fun StartupRunsWaterfall(
                         Text(run.platform.totalTimeMs.formatMs(), Modifier.width(72.dp), fontSize = ViewerTypography.secondary.fontSize)
                     }
                 }
-                Row(Modifier.fillMaxWidth().padding(start = 52.dp, end = 80.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    for (tick in 0..4) {
-                        Text(
-                            (extent / 1_000_000.0 * tick / 4.0).formatMs().removeSuffix(" ms"),
-                            color = colors.secondaryText,
-                            fontSize = ViewerTypography.secondary.fontSize,
-                        )
-                    }
-                }
+                StartupWaterfallAxis(extent)
             }
         }
         val omitted = models.values.sumOf { it.unplottedPhaseCount }
@@ -223,5 +244,41 @@ internal fun StartupRunsWaterfall(
             color = colors.secondaryText,
             fontSize = ViewerTypography.secondary.fontSize,
         )
+    }
+}
+
+@Composable
+private fun StartupWaterfallPhaseSelector(
+    phases: List<StartupPhase>,
+    selected: Pair<StartupMilestoneKind, StartupMilestoneKind>?,
+    onSelect: (Pair<StartupMilestoneKind, StartupMilestoneKind>?) -> Unit,
+    language: UiLanguage,
+) {
+    val allPhases = localizedStringResource(Res.string.waterfall_all_phases, language)
+    DropdownSelector(
+        items = listOf(null) + phases.map { it.start to it.end },
+        selectedItem = selected,
+        onItemSelected = onSelect,
+        itemLabel = { kind -> phases.firstOrNull { it.start to it.end == kind }?.localizedName(language) ?: allPhases },
+        placeholder = allPhases,
+        enabled = phases.isNotEmpty(),
+        modifier = Modifier.testTag("startup-waterfall-phase-filter"),
+    )
+}
+
+private fun List<StartupWaterfallSegment>.filterPhase(
+    kind: Pair<StartupMilestoneKind, StartupMilestoneKind>?,
+): List<StartupWaterfallSegment> = if (kind == null) this else filter { it.phase.start to it.phase.end == kind }
+
+@Composable
+private fun StartupWaterfallAxis(extentNs: Long) {
+    Row(Modifier.fillMaxWidth().padding(start = 52.dp, end = 80.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        for (tick in 0..4) {
+            Text(
+                (extentNs / 1_000_000.0 * tick / 4.0).formatMs().removeSuffix(" ms"),
+                color = LocalViewerColors.current.secondaryText,
+                fontSize = ViewerTypography.secondary.fontSize,
+            )
+        }
     }
 }

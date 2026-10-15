@@ -94,6 +94,7 @@ public fun FrameWindowScope.StartupProfilerMainPage(
             onSelectStartupType = controller::selectStartupType,
             onSelectCompilationMode = controller::selectCompilationMode,
             onSelectProfileSource = controller::selectProfileSource,
+            onUpdateBaselineProfileArtifact = controller::updateBaselineProfileArtifact,
             onUpdateCounts = controller::updateCounts,
             onUpdateTimeout = controller::updateTimeout,
             onSetPerfettoTraceEnabled = controller::setPerfettoTraceEnabled,

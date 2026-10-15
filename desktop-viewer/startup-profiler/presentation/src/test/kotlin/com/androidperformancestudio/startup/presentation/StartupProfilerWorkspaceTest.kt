@@ -2,24 +2,36 @@
 
 package com.androidperformancestudio.startup.presentation
 
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertContentDescriptionContains
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import com.androidperformancestudio.startup.analysis.StartupAnalyzer
+import com.androidperformancestudio.startup.analysis.StartupComparison
+import com.androidperformancestudio.startup.analysis.StartupComparisonStatus
 import com.androidperformancestudio.startup.model.CompilationMode
 import com.androidperformancestudio.startup.model.EvidenceConfidence
+import com.androidperformancestudio.startup.model.StartupMilestoneKind
 import com.androidperformancestudio.startup.model.StartupProfileSource
 import com.androidperformancestudio.startup.model.StartupType
 import com.androidperformancestudio.ui.UiLanguage
@@ -83,7 +95,7 @@ class StartupProfilerWorkspaceTest {
             onNodeWithTag("startup-main").performMouseInput { scroll(1200f) }
             waitForIdle()
             onNodeWithTag("startup-progress").assertIsDisplayed()
-            onNodeWithText("Measured runs: 2 / 5").assertIsDisplayed()
+            onNodeWithText("Experiment progress (including compilation warmups): 2 / 5").assertIsDisplayed()
         }
 
     @Test
@@ -92,7 +104,10 @@ class StartupProfilerWorkspaceTest {
             setContent {
                 ViewerTheme(darkTheme = true) {
                     StartupProfilerScreen(
-                        startupVisualState().copy(operationMessage = "Capture finished", errorMessage = "Trace inspection failed"),
+                        startupVisualState().copy(
+                            operationMessage = "Capture finished",
+                            errorMessage = "Trace inspection failed",
+                        ),
                         StartupProfilerActions(),
                         UiLanguage.ENGLISH,
                     )
@@ -131,12 +146,12 @@ class StartupProfilerWorkspaceTest {
                 }
             }
 
-            onNodeWithText("Measured runs: 2 / 5").performScrollTo()
+            onNodeWithText("Experiment progress (including compilation warmups): 2 / 5").performScrollTo()
             onNodeWithTag("startup-stacked-workspace").performMouseInput { scroll(40f) }
             waitForIdle()
             onNodeWithText("Measuring startup").assertIsDisplayed()
             onNodeWithText("Optional trace unavailable").assertIsDisplayed()
-            onNodeWithText("Measured runs: 2 / 5").assertIsDisplayed()
+            onNodeWithText("Experiment progress (including compilation warmups): 2 / 5").assertIsDisplayed()
             onNodeWithTag("startup-progress").assertIsDisplayed()
 
             val comparison = onNodeWithText("Baseline Comparison").fetchSemanticsNode().boundsInRoot
@@ -216,6 +231,107 @@ class StartupProfilerWorkspaceTest {
         }
 
     @Test
+    fun `waterfall phase filtering retains evidence intervals selection and real export action`() =
+        runDesktopComposeUiTest(width = 1336, height = 904) {
+            var exports = 0
+            var selected: String? = null
+            setContent {
+                ViewerTheme(darkTheme = true) {
+                    StartupProfilerScreen(
+                        startupVisualState(),
+                        StartupProfilerActions(onSelectRun = { selected = it }, onExportCsv = { exports++ }),
+                        UiLanguage.ENGLISH,
+                    )
+                }
+            }
+            onNodeWithTag("startup-waterfall-phase-filter").performClick()
+            onAllNodesWithText("Activity Create").onLast().performClick()
+            onNodeWithTag("startup-waterfall-run-2")
+                .assertContentDescriptionContains(
+                    "AGENT · Activity Create 108.0 ms Exact",
+                ).performClick()
+            assertEquals("run-2", selected)
+            onNodeWithTag("startup-waterfall-export").performClick()
+            assertEquals(1, exports)
+            onNodeWithTag("startup-waterfall-phase-filter").performClick()
+            onNodeWithText("All phases").performClick()
+            onNodeWithTag("startup-waterfall-run-2").assertContentDescriptionContains(
+                "Process Bootstrap",
+                substring = true,
+            )
+        }
+
+    @Test
+    fun `running experiment locks provenance and comparison import and export`() =
+        runDesktopComposeUiTest(width = 1336, height = 904) {
+            setContent {
+                ViewerTheme(darkTheme = false) {
+                    StartupProfilerScreen(
+                        startupVisualState().copy(isRunning = true, completedRuns = 2, totalRuns = 7),
+                        StartupProfilerActions(),
+                        UiLanguage.ENGLISH,
+                    )
+                }
+            }
+            onNodeWithTag("startup-waterfall-export").assertIsNotEnabled()
+            onNodeWithTag("startup-advanced").performClick()
+            onNode(
+                hasAnyAncestor(hasTestTag("startup-profile-artifact")) and
+                    SemanticsMatcher.keyIsDefined(SemanticsProperties.Disabled),
+            ).assertIsNotEnabled()
+            onNodeWithTag("startup-main").performMouseInput {
+                moveTo(center)
+                scroll(2000f)
+            }
+            waitForIdle()
+            onNodeWithTag("startup-import-comparison").assertIsNotEnabled()
+            onNodeWithText("Experiment progress (including compilation warmups): 2 / 7").assertIsDisplayed()
+        }
+
+    @Test
+    fun `phase filter resets when its only evidence leaves the run preview`() =
+        runDesktopComposeUiTest(width = 1100, height = 600) {
+            val original = startupVisualState().analysis!!.runs.first()
+            val runs =
+                StartupAnalyzer()
+                    .analyze(
+                        (1..6).map { index ->
+                            original.copy(
+                                id = "preview-$index",
+                                iteration = index,
+                                milestones =
+                                    if (index == 5) {
+                                        original.milestones
+                                    } else {
+                                        original.milestones.filter {
+                                            it.kind in
+                                                listOf(
+                                                    StartupMilestoneKind.PROCESS_START,
+                                                    StartupMilestoneKind.INITIALIZER_ENTER,
+                                                )
+                                        }
+                                    },
+                            )
+                        },
+                    ).runs
+            val selected = mutableStateOf(runs[4])
+            setContent {
+                ViewerTheme(darkTheme = true) {
+                    StartupRunsWaterfall(runs, selected.value, StartupProfilerActions(), UiLanguage.ENGLISH)
+                }
+            }
+            onNodeWithTag("startup-waterfall-phase-filter").performClick()
+            onAllNodesWithText("Activity Create").onLast().performClick()
+            onNodeWithTag("startup-waterfall-preview-1").assertContentDescriptionContains("AGENT · ")
+            runOnIdle { selected.value = runs[5] }
+            onNodeWithText("All phases").assertIsDisplayed()
+            onNodeWithTag("startup-waterfall-preview-6").assertContentDescriptionContains(
+                "Process Bootstrap",
+                substring = true,
+            )
+        }
+
+    @Test
     fun `narrow layout stacks evidence without removing content`() =
         runDesktopComposeUiTest(width = 900, height = 720) {
             setContent {
@@ -242,6 +358,103 @@ class StartupProfilerWorkspaceTest {
         assertEquals(false, evidence.copy(verified = false).hasVerifiedBaselineProfile())
         assertEquals(false, evidence.copy(failureReason = "preparation failed").hasVerifiedBaselineProfile())
         assertEquals(false, evidence.copy(requestedMode = CompilationMode.CURRENT).hasVerifiedBaselineProfile())
+    }
+
+    @Test
+    fun `profile provenance editor uses the real callback`() =
+        runDesktopComposeUiTest(width = 1336, height = 904) {
+            var artifact: String? = null
+            setContent {
+                ViewerTheme(darkTheme = false) {
+                    StartupProfilerScreen(
+                        startupVisualState(),
+                        StartupProfilerActions(onUpdateBaselineProfileArtifact = { artifact = it }),
+                        UiLanguage.ENGLISH,
+                    )
+                }
+            }
+            onNodeWithTag("startup-advanced").performClick()
+            onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("startup-profile-artifact")))
+                .performTextReplacement("sha256:build-supplied")
+            assertEquals("sha256:build-supplied", artifact)
+        }
+
+    @Test
+    fun `leaving speed profile clears mode-only provenance without throwing`() {
+        val configured =
+            startupVisualState().copy(
+                config = startupVisualState().config.copy(warmupRuns = 2, baselineProfileArtifact = "build-id"),
+            )
+        val current = configured.withCompilationMode(CompilationMode.CURRENT)
+        assertEquals(null, current.config.baselineProfileArtifact)
+        assertEquals(StartupProfileSource.UNVERIFIED, current.config.profileSource)
+        assertEquals(0, current.config.warmupRuns)
+        assertEquals(
+            "build-id",
+            configured.withCompilationMode(CompilationMode.SPEED_PROFILE).config.baselineProfileArtifact,
+        )
+    }
+
+    @Test
+    fun `comparison shows both cohorts evidence confidence threshold and real import action`() =
+        runDesktopComposeUiTest(width = 1336, height = 904) {
+            val original = startupVisualState()
+            var imports = 0
+            setContent {
+                ViewerTheme(darkTheme = true) {
+                    StartupProfilerScreen(
+                        original.copy(
+                            baseline = original.analysis,
+                            comparison =
+                                StartupComparison(
+                                    StartupComparisonStatus.NO_CHANGE,
+                                    medianDifferenceMs = 0.0,
+                                    percentDifference = 0.0,
+                                    confidenceIntervalLowMs = -10.0,
+                                    confidenceIntervalHighMs = 10.0,
+                                    practicalThresholdMs = 24.0,
+                                ),
+                        ),
+                        StartupProfilerActions(onImport = { imports++ }),
+                        UiLanguage.ENGLISH,
+                    )
+                }
+            }
+            onNodeWithTag("startup-import-comparison").performScrollTo().performClick()
+            assertEquals(1, imports)
+            onNodeWithTag("startup-main").performMouseInput { scroll(1800f) }
+            waitForIdle()
+            onNodeWithTag("startup-comparison-previous").assertIsDisplayed()
+            onNodeWithText("Previous experiment · TTID source: EVENT_LOG · Evidence: Exact · n=5 · missing=0")
+                .assertIsDisplayed()
+            onNodeWithText("TTID median change: +0.0% · practical threshold ±24.0 ms")
+                .performScrollTo()
+                .assertIsDisplayed()
+        }
+
+    @Test
+    fun `comparison evidence retains mixed confidence and unavailable sources`() {
+        val original = startupVisualState().analysis!!
+        val run = original.runs.first()
+        val mixed =
+            StartupAnalyzer().analyze(
+                listOf(
+                    run,
+                    run.copy(
+                        id = "missing",
+                        ttidEvidence =
+                            run.ttidEvidence.copy(
+                                source = null,
+                                confidence = EvidenceConfidence.UNAVAILABLE,
+                            ),
+                        platform = run.platform.copy(displayedTimeMs = null),
+                    ),
+                ),
+            )
+        assertEquals(
+            "Previous · TTID source: EVENT_LOG / Unavailable · Evidence: Exact / Unavailable · n=1 · missing=1",
+            comparisonEvidenceText("Previous", mixed, UiLanguage.ENGLISH),
+        )
     }
 
     @Test

@@ -2,6 +2,7 @@
 
 package com.androidperformancestudio.startup.analysis
 
+import com.androidperformancestudio.contracts.DeviceIdentityPseudonymizer
 import com.androidperformancestudio.startup.model.CompilationMode
 import com.androidperformancestudio.startup.model.EvidenceConfidence
 import com.androidperformancestudio.startup.model.PlatformLaunchMetrics
@@ -146,6 +147,50 @@ class StartupAnalyzerTest {
 
         assertEquals(StartupComparisonStatus.INCOMPATIBLE, analyzer.compare(analysis, analysis).status)
         assertEquals(StartupComparisonStatus.NO_CHANGE, analyzer.compare(declared, declared).status)
+    }
+
+    @Test
+    fun `comparison accepts the same device local identity without changing live context`() {
+        val analyzer = StartupAnalyzer()
+        val runs = List(3) { index -> comparableRun("identity-$index", 100L + index) }
+        val live = analyzer.analyze(runs)
+        val localId = DeviceIdentityPseudonymizer().localId("device").value
+        val imported =
+            analyzer.analyze(
+                runs.map { run -> run.copy(context = run.context?.copy(deviceSerial = localId)) },
+            )
+
+        assertEquals(StartupComparisonStatus.NO_CHANGE, analyzer.compare(live, imported).status)
+        assertEquals(
+            "device",
+            live.runs
+                .first()
+                .context
+                ?.deviceSerial,
+        )
+    }
+
+    @Test
+    fun `normalized comparison rejects other devices packages components and missing identities`() {
+        val analyzer = StartupAnalyzer()
+        val runs = List(3) { index -> comparableRun("context-$index", 100L + index) }
+        val baseline = analyzer.analyze(runs)
+        val context = requireNotNull(runs.first().context)
+        val incompatibleContexts =
+            listOf(
+                context.copy(deviceSerial = "other-device"),
+                context.copy(packageName = "dev.other"),
+                context.copy(componentName = "dev.sample/.OtherActivity"),
+                context.copy(deviceSerial = " "),
+                null,
+            )
+
+        incompatibleContexts.forEach { candidate ->
+            val comparison = analyzer.compare(analyzer.analyze(runs.map { it.copy(context = candidate) }), baseline)
+
+            assertEquals(StartupComparisonStatus.INCOMPATIBLE, comparison.status)
+            assertTrue(comparison.reasons.contains("Device or target identity differs or is missing."))
+        }
     }
 
     private fun milestone(

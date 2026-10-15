@@ -47,6 +47,7 @@ import com.androidperformancestudio.startup.model.StartupType
 import com.androidperformancestudio.startup.presentation.generated.resources.Res
 import com.androidperformancestudio.startup.presentation.generated.resources.advanced_configuration
 import com.androidperformancestudio.startup.presentation.generated.resources.application
+import com.androidperformancestudio.startup.presentation.generated.resources.baseline_profile_artifact
 import com.androidperformancestudio.startup.presentation.generated.resources.baseline_profile_status
 import com.androidperformancestudio.startup.presentation.generated.resources.cold_start_description
 import com.androidperformancestudio.startup.presentation.generated.resources.collapse_configuration
@@ -61,6 +62,7 @@ import com.androidperformancestudio.startup.presentation.generated.resources.hot
 import com.androidperformancestudio.startup.presentation.generated.resources.iterations
 import com.androidperformancestudio.startup.presentation.generated.resources.perfetto_capture
 import com.androidperformancestudio.startup.presentation.generated.resources.practical_threshold
+import com.androidperformancestudio.startup.presentation.generated.resources.profile_artifact_hint
 import com.androidperformancestudio.startup.presentation.generated.resources.profile_baseline_plugin
 import com.androidperformancestudio.startup.presentation.generated.resources.profile_build_variant
 import com.androidperformancestudio.startup.presentation.generated.resources.profile_macrobenchmark
@@ -78,11 +80,13 @@ import com.androidperformancestudio.startup.presentation.generated.resources.war
 import com.androidperformancestudio.ui.DropdownSelector
 import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.ProfilerCompactButton
+import com.androidperformancestudio.ui.ProfilerCompactTextField
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.studio.StudioPanel
 import com.androidperformancestudio.ui.studio.StudioTokens
+
 @Composable
 internal fun StartupTypeTabs(
     state: StartupProfilerState,
@@ -303,6 +307,20 @@ internal fun StartupScenarioControls(
                     Text(localizedStringResource(Res.string.perfetto_capture, language), style = MaterialTheme.typography.bodySmall)
                 }
             }
+            if (config.compilationMode == CompilationMode.SPEED_PROFILE) {
+                ProfilerCompactTextField(
+                    label = localizedStringResource(Res.string.baseline_profile_artifact, language),
+                    value = config.baselineProfileArtifact.orEmpty(),
+                    onValueChange = actions.onUpdateBaselineProfileArtifact,
+                    enabled = !state.isRunning,
+                    modifier = Modifier.fillMaxWidth().testTag("startup-profile-artifact"),
+                )
+                Text(
+                    localizedStringResource(Res.string.profile_artifact_hint, language),
+                    color = LocalViewerColors.current.secondaryText,
+                    fontSize = ViewerTypography.secondary.fontSize,
+                )
+            }
         }
     }
 }
@@ -358,12 +376,22 @@ internal fun StartupProfileSummary(
             style = MaterialTheme.typography.bodySmall,
         )
         if (evidence != null) {
-            evidence.detailRows(language).filterIndexed { index, _ -> index in listOf(2, 5, 6, 8) }.forEach { row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(row.label, Modifier.weight(0.48f), color = colors.secondaryText, fontSize = ViewerTypography.secondary.fontSize)
-                    Text(row.value, Modifier.weight(0.52f), fontSize = ViewerTypography.secondary.fontSize)
+            evidence
+                .detailRows(language)
+                .mapIndexed { index, row ->
+                    if (index == 6) row.copy(value = evidence.profileSource.localizedLabel(language)) else row
+                }.filterIndexed { index, _ -> index in listOf(2, 5, 6, 8) }
+                .forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            row.label,
+                            Modifier.weight(0.48f),
+                            color = colors.secondaryText,
+                            fontSize = ViewerTypography.secondary.fontSize,
+                        )
+                        Text(row.value, Modifier.weight(0.52f), fontSize = ViewerTypography.secondary.fontSize)
+                    }
                 }
-            }
         }
     }
 }

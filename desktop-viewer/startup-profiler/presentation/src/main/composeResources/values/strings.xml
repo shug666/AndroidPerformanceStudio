@@ -143,7 +143,7 @@
     <string name="metric_p95_description">TTID 95th Percentile</string>
     <string name="cohort_evidence">Evidence: %1$s · n=%2$s · missing=%3$s</string>
     <string name="baseline_profile_status">Baseline Profile Status</string>
-    <string name="profile_verified_status">Verified Baseline Profile evidence</string>
+    <string name="profile_verified_status">Compiler verified · Baseline Profile declared</string>
     <string name="profile_unverified_status">Baseline Profile not verified</string>
     <string name="profile_no_evidence">No measured compilation evidence</string>
     <string name="optimization_evidence">Optimization Evidence</string>
@@ -161,6 +161,22 @@
     <string name="cold_start_description">Cold Start</string>
     <string name="warm_start_description">Warm Start</string>
     <string name="hot_start_description">Hot Start (Process Alive)</string>
-    <string name="progress_runs">Measured runs: %1$s / %2$s</string>
+    <string name="progress_runs">Experiment progress (including compilation warmups): %1$s / %2$s</string>
     <string name="waterfall_platform_only">Platform duration only; no phase intervals are inferred.</string>
+    <string name="profile_artifact_hint">Optional build-supplied artifact ID or hash. This records declared provenance; it does not install a Profile or verify its contents on the device.</string>
+    <string name="add_comparison">Import Comparison</string>
+    <string name="comparison_current">Current experiment</string>
+    <string name="comparison_previous">Previous experiment</string>
+    <string name="comparison_cohort">Experiment</string>
+    <string name="comparison_samples">Samples</string>
+    <string name="comparison_evidence">%1$s · TTID source: %2$s · %3$s</string>
+    <string name="comparison_change">%1$s median change: %2$s · practical threshold ±%3$s</string>
+    <string name="comparison_incompatible">Incompatible</string>
+    <string name="comparison_insufficient">Insufficient samples</string>
+    <string name="comparison_regression">Regression</string>
+    <string name="comparison_improvement">Improvement</string>
+    <string name="comparison_no_change">No material change</string>
+    <string name="comparison_inconclusive">Inconclusive</string>
+    <string name="comparison_descriptive">Table values are descriptive. Only the TTID comparison is evaluated by the comparability checks, confidence interval and practical threshold.</string>
+    <string name="waterfall_all_phases">All phases</string>
 </resources>

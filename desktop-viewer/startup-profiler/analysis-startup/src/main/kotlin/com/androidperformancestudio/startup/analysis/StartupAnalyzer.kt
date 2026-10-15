@@ -10,11 +10,13 @@
 
 package com.androidperformancestudio.startup.analysis
 
+import com.androidperformancestudio.contracts.DeviceIdentityPseudonymizer
 import com.androidperformancestudio.startup.model.EvidenceConfidence
 import com.androidperformancestudio.startup.model.StartupMilestone
 import com.androidperformancestudio.startup.model.StartupMilestoneKind
 import com.androidperformancestudio.startup.model.StartupPhase
 import com.androidperformancestudio.startup.model.StartupRun
+import com.androidperformancestudio.startup.model.StartupRunContext
 import com.androidperformancestudio.startup.model.StartupStatistics
 import kotlin.math.ceil
 import kotlin.math.exp
@@ -60,6 +62,8 @@ public data class StartupPhaseDifference(
 )
 
 public class StartupAnalyzer {
+    private val deviceIdentity by lazy { DeviceIdentityPseudonymizer() }
+
     public fun addPhases(run: StartupRun): StartupRun = run.copy(phases = phases(run.milestones))
 
     public fun analyze(runs: List<StartupRun>): StartupAnalysisResult {
@@ -173,8 +177,9 @@ public class StartupAnalyzer {
     ): List<String> =
         buildList {
             val all = current + baseline
-            if (all.any { it.context == null } ||
-                all.map { it.context }.distinct().size != 1
+            val contexts = all.map { it.context?.comparisonIdentity() }
+            if (contexts.any { it == null } ||
+                contexts.distinct().size != 1
             ) {
                 add("Device or target identity differs or is missing.")
             }
@@ -244,6 +249,9 @@ public class StartupAnalyzer {
                 add("TTID evidence source or confidence differs or is unavailable.")
             }
         }
+
+    private fun StartupRunContext.comparisonIdentity(): StartupRunContext? =
+        runCatching { copy(deviceSerial = deviceIdentity.localId(deviceSerial).value) }.getOrNull()
 
     private fun comparablePhaseDifferences(
         current: List<StartupRun>,

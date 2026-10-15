@@ -5,11 +5,13 @@ package com.androidperformancestudio.startup.presentation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import com.androidperformancestudio.startup.analysis.StartupAnalyzer
 import com.androidperformancestudio.startup.model.CompilationMode
@@ -35,6 +37,7 @@ import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTheme
 import java.awt.image.BufferedImage
 import java.io.File
+import java.time.Instant
 import javax.imageio.ImageIO
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -97,7 +100,16 @@ internal fun startupVisualState(): StartupProfilerState {
                         profileSourceDeclared = true,
                         baselineProfileArtifact = "sha256:synthetic-visual-fixture",
                     ),
-                environmentEvidence = StartupEnvironmentEvidence("Pixel 8 Pro", 34, false, 84, false, 0),
+                environmentEvidence =
+                    StartupEnvironmentEvidence(
+                        "Pixel 8 Pro",
+                        34,
+                        false,
+                        84,
+                        false,
+                        0,
+                        Instant.parse("2026-10-15T12:00:00Z"),
+                    ),
                 traceEvidence =
                     StartupTraceEvidence(
                         file = "/synthetic/startup.perfetto-trace",
@@ -141,6 +153,33 @@ class StartupProfilerVisualCaptureTest {
     @Test
     fun `capture light English workspace`() = capture(1336, 904, false, UiLanguage.ENGLISH, "APS_STARTUP_LIGHT_SCREENSHOT")
 
+    @Test
+    fun `capture evidence aware comparison workspace`() =
+        runDesktopComposeUiTest(width = 1336, height = 904) {
+            val state = startupVisualState()
+            val baseline =
+                StartupAnalyzer().analyze(
+                    state.analysis!!.runs.map { run ->
+                        run.copy(platform = run.platform.copy(displayedTimeMs = run.platform.displayedTimeMs!! + 100))
+                    },
+                )
+            val comparisonState = state.copy(baseline = baseline, comparison = StartupAnalyzer().compare(state.analysis, baseline))
+            setContent {
+                ViewerTheme(darkTheme = true) {
+                    Box(Modifier.fillMaxSize().testTag("startup-capture")) {
+                        StartupProfilerScreen(comparisonState, StartupProfilerActions(), UiLanguage.SIMPLIFIED_CHINESE)
+                    }
+                }
+            }
+            waitForIdle()
+            onNodeWithTag("startup-main").performMouseInput {
+                moveTo(center)
+                scroll(1800f)
+            }
+            waitForIdle()
+            saveCapture(onNodeWithTag("startup-capture").captureToImage(), 1336, 904, "APS_STARTUP_COMPARISON_SCREENSHOT")
+        }
+
     private fun capture(
         width: Int,
         height: Int,
@@ -156,7 +195,15 @@ class StartupProfilerVisualCaptureTest {
             }
         }
         waitForIdle()
-        val screenshot = onNodeWithTag("startup-capture").captureToImage()
+        saveCapture(onNodeWithTag("startup-capture").captureToImage(), width, height, outputKey)
+    }
+
+    private fun saveCapture(
+        screenshot: ImageBitmap,
+        width: Int,
+        height: Int,
+        outputKey: String,
+    ) {
         assertEquals(width, screenshot.width)
         assertEquals(height, screenshot.height)
         System.getenv(outputKey)?.let { output ->

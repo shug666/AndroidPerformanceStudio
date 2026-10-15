@@ -47,6 +47,7 @@ class StartupProfilerWorkspaceSourceTest {
                 "onSelectStartupType" to "selectStartupType",
                 "onSelectCompilationMode" to "selectCompilationMode",
                 "onSelectProfileSource" to "selectProfileSource",
+                "onUpdateBaselineProfileArtifact" to "updateBaselineProfileArtifact",
                 "onUpdateCounts" to "updateCounts",
                 "onUpdateTimeout" to "updateTimeout",
                 "onSetPerfettoTraceEnabled" to "setPerfettoTraceEnabled",

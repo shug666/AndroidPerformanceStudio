@@ -144,7 +144,7 @@
     <string name="metric_p95_description">95 分位初始显示时间</string>
     <string name="cohort_evidence">证据：%1$s · n=%2$s · 缺失=%3$s</string>
     <string name="baseline_profile_status">Baseline Profile 状态</string>
-    <string name="profile_verified_status">Baseline Profile 证据已验证</string>
+    <string name="profile_verified_status">编译状态已验证 · Baseline Profile 已声明</string>
     <string name="profile_unverified_status">Baseline Profile 尚未验证</string>
     <string name="profile_no_evidence">暂无实测编译证据</string>
     <string name="optimization_evidence">启动优化证据</string>
@@ -162,6 +162,22 @@
     <string name="cold_start_description">Cold Start</string>
     <string name="warm_start_description">Warm Start</string>
     <string name="hot_start_description">Hot Start (Process Alive)</string>
-    <string name="progress_runs">测量进度：%1$s / %2$s</string>
+    <string name="progress_runs">实验进度（含编译预热）：%1$s / %2$s</string>
     <string name="waterfall_platform_only">仅有平台时长；不会据此推测连续阶段。</string>
+    <string name="profile_artifact_hint">可选：填写构建提供的制品标识或摘要。这仅记录声明来源，不会安装 Profile，也不证明设备上的制品内容已验证。</string>
+    <string name="add_comparison">导入对比项</string>
+    <string name="comparison_current">当前实验</string>
+    <string name="comparison_previous">上一次实验</string>
+    <string name="comparison_cohort">实验</string>
+    <string name="comparison_samples">样本数</string>
+    <string name="comparison_evidence">%1$s · TTID 来源：%2$s · %3$s</string>
+    <string name="comparison_change">%1$s 中位数变化：%2$s · 实际变化门槛 ±%3$s</string>
+    <string name="comparison_incompatible">不可比较</string>
+    <string name="comparison_insufficient">样本不足</string>
+    <string name="comparison_regression">发生回归</string>
+    <string name="comparison_improvement">性能改善</string>
+    <string name="comparison_no_change">无实质变化</string>
+    <string name="comparison_inconclusive">尚无定论</string>
+    <string name="comparison_descriptive">表格数值仅作描述性展示。只有 TTID 对比经过可比性检查、置信区间及实际变化门槛判定。</string>
+    <string name="waterfall_all_phases">全部阶段</string>
 </resources>

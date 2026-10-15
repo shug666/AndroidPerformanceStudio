@@ -795,3 +795,36 @@ Run from `desktop-viewer`:
 - [ ] Phase 4 panel extraction and visual redesign parity against the main plan, followed by the remaining phased migration. The other phases were not comprehensively re-audited in this batch.
 
 Do not promote local tests, source-wiring checks, archive fixtures, or app-image creation into full commercial UI or release completion.
+
+
+## 2026-10-15: Startup Profiler page 07 — functional reference completion
+
+### Scope and baseline
+
+- Branch `main`, starting HEAD `4b9ae57e45831b688e5f22992e98d5469aa200f1`; initially clean.
+- Follow page 07 and its reference image together with the current `DESIGN.md` Startup adoption contract. Keep shared theme/density and omit the decorative banner/date card.
+- Changes are scoped to Startup presentation, controller, report import and identity-based comparison. Concurrent Battery, Network, GPU and shared-icon work is not part of this batch and was preserved. No commit/push was requested.
+
+### Implemented
+
+- Kept Cold/Warm/Hot requested modes separate from observed run types; retained real TTID/TTFD/Agent First Frame/P95, sample counts, missing/confidence labels and percentile-resolution warnings.
+- Added actual waterfall phase filtering and CSV export callbacks. Filtering preserves original offsets, gaps, independent clock domains and platform totals; changing the selected five-run preview resets unavailable phase filters.
+- Added optional build-supplied Profile artifact/hash configuration and controller wiring. Switching away from Speed Profile clears mode-only provenance. UI distinguishes verified compiler state from declared Profile provenance; it does not install a Profile or verify its contents on-device.
+- Replaced the old text-only comparison with a current/previous experiment table: real device model, TTID/TTFD/Agent First Frame/P95 and sample counts, plus both TTID evidence sources/confidences, missing samples, localized outcome, percent change, 95% BCa interval, practical threshold, phase differences and incompatibility reasons. Non-TTID values remain descriptive, not separately regression-qualified.
+- Added an Import Comparison action. A successful second import retains the previous analysis as baseline; failed/stale imports preserve newer analysis and selection. Current `deviceLocalId` and legacy `deviceSerial` reports round-trip without re-exporting raw serials. Same-installation live/imported identities compare consistently; different devices/targets and invalid identities remain fail-closed.
+- Corrected progress wording to experiment progress including compilation warmups. Stop remains available while configuration/import/export are locked.
+- Preserved trace navigation and captured-file validation, correlation error bounds, scheduling/Binder/main-thread/frame slices, limitations, compilation confirmation, import/export and run selection.
+
+### Verification
+
+- Startup feature suite: **91 tests**, zero failures/errors/skips (presentation 41, app 20, analysis 10, export 9, capture 4, parser 3, storage 2, protocol 2; model has no test source).
+- Presentation/app/analysis/export ktlint passed. Changed-file Detekt passed for all 16 changed/new Kotlin files, using a bounded temporary init script.
+- Full Detekt is **not green**: 15 pre-existing presentation findings plus 1 pre-existing `StartupPerfettoEvidenceAnalyzer` long-method finding. All files containing the remaining findings are unchanged from the starting HEAD.
+- Earlier desktop integration compilation and 7 Startup-related desktop tests passed. The latest integration rerun was blocked by concurrently edited Battery sources (`session_not_found`, `session_opened`, `sessions_load_failed` resource references; implicit `maxWidth` in `BatteryRunWorkspace`). Do not treat the earlier desktop pass as acceptance of the latest whole worktree.
+- Inspected deterministic synthetic captures: dark Chinese, light English, 1280x720 content viewport, and scrolled comparison. Stacked 900px layout, running/disabled states, phase filtering/preview changes, Profile editor, real callbacks and trace-open failure are covered by Compose tests. Captures are rendering fixtures, not device measurements or packaged-GUI acceptance.
+- Evidence: `.omx/artifacts/startup-profiler-ui/2026-10-15-functional-evidence/` (captures, logs, scoped Detekt source list/init script). `git diff --check` passed for the Startup scope.
+
+### Explicit boundaries
+
+- The comparison model currently supports current versus previous experiment, not the reference image's arbitrary multi-build/device comparison list. No unavailable build versions, competitor results, optimization diagnoses or KPI improvement arrows were fabricated.
+- No real-device acquisition, packaged native-window interaction, signing or Release validation was performed in this batch. Those remain separate acceptance gates.

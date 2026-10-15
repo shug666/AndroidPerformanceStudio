@@ -3,6 +3,8 @@
 package com.androidperformancestudio.startup.export
 
 import com.androidperformancestudio.contracts.CaptureArtifactJson
+import com.androidperformancestudio.contracts.DeviceIdentityPseudonymizer
+import com.androidperformancestudio.contracts.DeviceLocalId
 import com.androidperformancestudio.startup.analysis.StartupAnalysisResult
 import com.androidperformancestudio.startup.analysis.StartupAnalyzer
 import com.androidperformancestudio.startup.model.CompilationMode
@@ -133,12 +135,22 @@ private fun legacyMetricEvidence(
 
 @Serializable
 private data class StartupRunContextDocument(
-    val deviceSerial: String,
     val packageName: String,
     val componentName: String,
+    val deviceSerial: String? = null,
+    val deviceLocalId: String? = null,
 ) {
-    fun toModel() = StartupRunContext(deviceSerial, packageName, componentName)
+    fun toModel() =
+        StartupRunContext(
+            deviceSerial =
+                deviceLocalId?.let { DeviceLocalId.fromPersisted(it).value }
+                    ?: DEVICE_IDENTITY.localId(requireNotNull(deviceSerial) { "Startup context device identity is missing." }).value,
+            packageName = packageName,
+            componentName = componentName,
+        )
 }
+
+private val DEVICE_IDENTITY by lazy { DeviceIdentityPseudonymizer() }
 
 @Serializable
 private data class StartupMetricEvidenceContainerDocument(
