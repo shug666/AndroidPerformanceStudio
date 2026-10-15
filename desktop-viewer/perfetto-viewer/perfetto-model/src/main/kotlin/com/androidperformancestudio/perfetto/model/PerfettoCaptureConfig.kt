@@ -107,6 +107,26 @@ enum class PerfettoAtraceCategory(
     }
 }
 
+/**
+ * Android log buffers selectable for the `android.log` data source, matching the official
+ * `AndroidLogId` values. [id] is the proto enum name emitted to `android_log_config.log_ids`;
+ * [displayName] is the friendly label. An empty selection (null/empty) captures all buffers
+ * (matching the official default empty `android_log_config`).
+ */
+enum class PerfettoLogBuffer(
+    val id: String,
+    val displayName: String,
+) {
+    LID_DEFAULT("LID_DEFAULT", "Main"),
+    LID_RADIO("LID_RADIO", "Radio"),
+    LID_EVENTS("LID_EVENTS", "Events"),
+    LID_SYSTEM("LID_SYSTEM", "System"),
+    LID_CRASH("LID_CRASH", "Crash"),
+    LID_STATS("LID_STATS", "Stats"),
+    LID_SECURITY("LID_SECURITY", "Security"),
+    LID_KERNEL("LID_KERNEL", "Kernel"),
+}
+
 /** Android-relevant probes exposed by Perfetto's record page. */
 enum class PerfettoProbe(
     val group: PerfettoProbeGroup,
@@ -192,7 +212,6 @@ fun PerfettoTraceTemplate.defaultProbes(): Set<PerfettoProbe> =
                 PerfettoProbe.KERNEL_MEMINFO,
                 PerfettoProbe.VMSTAT,
                 PerfettoProbe.PROCESS_STATS,
-                PerfettoProbe.PROCESS_MEMORY_POLL,
                 PerfettoProbe.FILESYSTEM_IO,
                 PerfettoProbe.PAGE_FAULTS,
                 PerfettoProbe.ART_RUNTIME,
@@ -271,6 +290,7 @@ data class PerfettoCaptureConfig(
     val androidSdk: Int = 0,
     val pollIntervals: Map<PerfettoProbe, Int>? = null,
     val atraceCategories: Set<String>? = null,
+    val logBuffers: Set<PerfettoLogBuffer>? = null,
 ) {
     init {
         require(durationSeconds in 1..600) { "durationSeconds must be in [1, 600], was $durationSeconds" }
