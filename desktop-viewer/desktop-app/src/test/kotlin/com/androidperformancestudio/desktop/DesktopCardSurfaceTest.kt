@@ -51,17 +51,12 @@ class DesktopCardSurfaceTest {
     }
 
     @Test
-    fun `home banner keeps its gradient and asymmetric padding inside a shared surface`() {
-        val hero = functionSource("AppHomePage.kt", "HomeHero")
-        assertEquals(1, Regex("StudioCard\\(").findAll(hero).count())
-        assertTrue(hero.contains("containerColor = colors.transparent"))
-        assertTrue(hero.contains("contentPadding = 0.dp"))
-        assertTrue(hero.contains("Brush.horizontalGradient("))
-        assertTrue(hero.contains("colors.accent.copy(alpha = if (colors.isDark) 0.22f else 0.12f)"))
-        assertTrue(hero.contains("padding(horizontal = 22.dp, vertical = 20.dp)"))
-        assertTrue(hero.contains("Modifier.widthIn(max = 280.dp)"))
-        assertFalse(hero.contains(".border("))
-        assertFalse(hero.contains(".clip("))
+    fun `home uses the common workspace heading instead of a decorative card`() {
+        val source = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/AppHomePage.kt"))
+        assertEquals(1, Regex("StudioWorkspaceHeader\\(").findAll(source).count())
+        assertTrue(source.contains("Res.string.android_performance_studio, language"))
+        assertFalse(source.contains("HomeHero("))
+        assertFalse(source.contains("Brush.horizontalGradient("))
     }
 
     @Test
@@ -78,7 +73,7 @@ class DesktopCardSurfaceTest {
         listOf("onRefresh", "onToggleAiUpload", "onRemove").forEach { callback ->
             assertTrue(card.contains("onClick = $callback"), callback)
         }
-        assertTrue(card.contains("contentPadding = 12.dp"))
+        assertTrue(card.contains("contentPadding = StudioTokens.compactContentPadding"))
         assertTrue(card.contains("contentSpacing = 4.dp"))
     }
 
@@ -87,7 +82,7 @@ class DesktopCardSurfaceTest {
         val card = functionSource("SourceWorkspacesPage.kt", "WorkspaceCard")
         assertEquals(1, Regex("StudioCard\\(").findAll(card).count())
         assertTrue(card.contains(".clickable(role = Role.Button, onClick = onSelect)"))
-        assertTrue(card.contains("contentPadding = 12.dp"))
+        assertTrue(card.contains("contentPadding = StudioTokens.compactContentPadding"))
         assertFalse(card.contains("Column("))
         assertTrue(
             card.contains(

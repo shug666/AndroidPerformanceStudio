@@ -52,7 +52,7 @@ class StudioCardTest {
         }
 
     @Test
-    fun `panel retains its regular inset when backed by a shared card`() =
+    fun `panel uses the Startup compact inset when backed by a shared card`() =
         runDesktopComposeUiTest {
             var density = 1f
             setContent {
@@ -66,12 +66,12 @@ class StudioCardTest {
 
             val panel = onNodeWithTag("panel").fetchSemanticsNode().boundsInRoot
             val content = onNodeWithTag("content").fetchSemanticsNode().boundsInRoot
-            assertEquals(16f * density, content.left - panel.left, 0.5f)
-            assertEquals(16f * density, content.top - panel.top, 0.5f)
+            assertEquals(8f * density, content.left - panel.left, 0.5f)
+            assertEquals(8f * density, content.top - panel.top, 0.5f)
         }
 
     @Test
-    fun `metric card retains its regular inset when backed by a shared card`() =
+    fun `metric card uses the Startup compact inset when backed by a shared card`() =
         runDesktopComposeUiTest {
             var density = 1f
             setContent {
@@ -83,8 +83,8 @@ class StudioCardTest {
 
             val metric = onNodeWithTag("metric").fetchSemanticsNode().boundsInRoot
             val label = onNodeWithText("Captured frames").fetchSemanticsNode().boundsInRoot
-            assertEquals(16f * density, label.left - metric.left, 0.5f)
-            assertEquals(16f * density, label.top - metric.top, 0.5f)
+            assertEquals(8f * density, label.left - metric.left, 0.5f)
+            assertEquals(8f * density, label.top - metric.top, 0.5f)
         }
 
     @Test

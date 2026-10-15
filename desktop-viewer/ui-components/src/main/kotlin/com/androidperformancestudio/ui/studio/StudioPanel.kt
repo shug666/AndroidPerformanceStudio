@@ -17,6 +17,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -31,7 +33,7 @@ import org.jetbrains.compose.resources.painterResource
 @Composable
 public fun StudioPanel(
     modifier: Modifier = Modifier,
-    contentPadding: Dp = StudioTokens.contentPadding,
+    contentPadding: Dp = StudioTokens.compactContentPadding,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     StudioCard(
@@ -86,14 +88,19 @@ public fun StudioMetricCard(
     supportingText: String? = null,
     icon: DrawableResource? = null,
     iconContentDescription: String? = null,
+    description: String? = null,
+    tone: Color? = null,
 ) {
     val colors = LocalViewerColors.current
+    val metricTone = tone ?: colors.accent
     StudioCard(
         modifier =
             modifier.semantics {
                 contentDescription = "$label: $value"
             },
-        contentPadding = StudioTokens.contentPadding,
+        containerColor = metricTone.copy(alpha = 0.10f).compositeOver(colors.panel),
+        borderColor = metricTone.copy(alpha = 0.5f),
+        contentSpacing = 4.dp,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -104,15 +111,19 @@ public fun StudioMetricCard(
                     painter = painterResource(it),
                     contentDescription = iconContentDescription,
                     modifier = Modifier.size(StudioTokens.navigationIconSize),
-                    tint = colors.accent,
+                    tint = metricTone,
                 )
             }
             Text(
                 text = label,
-                color = colors.secondaryText,
-                fontSize = ViewerTypography.secondary.fontSize,
-                lineHeight = ViewerTypography.secondary.lineHeight,
+                color = metricTone,
+                fontSize = ViewerTypography.subsectionTitle.fontSize,
+                lineHeight = ViewerTypography.subsectionTitle.lineHeight,
+                fontWeight = FontWeight.SemiBold,
             )
+        }
+        description?.let {
+            Text(text = it, color = colors.secondaryText, style = ViewerTypography.secondary)
         }
         Text(
             text = value,
@@ -137,7 +148,7 @@ public fun StudioDataTable(
     columns: List<StudioTableColumn>,
     modifier: Modifier = Modifier,
     title: String? = null,
-    contentPadding: Dp = StudioTokens.contentPadding,
+    contentPadding: Dp = StudioTokens.compactContentPadding,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     require(columns.isNotEmpty()) { "StudioDataTable requires at least one column" }

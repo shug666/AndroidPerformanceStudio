@@ -19,6 +19,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -53,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
@@ -152,11 +154,13 @@ import com.androidperformancestudio.ui.ProfilerCompactButton
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
+import com.androidperformancestudio.ui.studio.StudioCard
 import com.androidperformancestudio.ui.studio.StudioDataTable
 import com.androidperformancestudio.ui.studio.StudioPanel
 import com.androidperformancestudio.ui.studio.StudioPanelHeader
 import com.androidperformancestudio.ui.studio.StudioTableColumn
 import com.androidperformancestudio.ui.studio.StudioTokens
+import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 
 @Composable
 public fun FrameProfilerScreen(
@@ -166,17 +170,31 @@ public fun FrameProfilerScreen(
     operationMessage: String? = null,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier.fillMaxSize()) {
-        val analysis = state.analysis
-        if (analysis == null) {
-            EmptyState(state = state, language = language, operationMessage = operationMessage)
-        } else {
-            AnalysisContent(
-                state = state,
-                analysis = analysis,
-                actions = actions,
-                language = language,
-            )
+    BoxWithConstraints(modifier.fillMaxSize().background(LocalViewerColors.current.workspace)) {
+        val compactHeight = maxHeight < StudioTokens.workspaceCompactHeight
+        val workspaceScroll = rememberScrollState()
+        Column(
+            Modifier
+                .fillMaxSize()
+                .then(if (compactHeight) Modifier.verticalScroll(workspaceScroll) else Modifier)
+                .padding(StudioTokens.compactContentPadding),
+            verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
+        ) {
+            FrameWorkspaceHeading(state, language)
+            Box(if (compactHeight) Modifier.fillMaxWidth() else Modifier.weight(1f).fillMaxWidth()) {
+                val analysis = state.analysis
+                if (analysis == null) {
+                    EmptyState(state = state, language = language, operationMessage = operationMessage)
+                } else {
+                    AnalysisContent(
+                        state = state,
+                        analysis = analysis,
+                        actions = actions,
+                        language = language,
+                        compactHeight = compactHeight,
+                    )
+                }
+            }
         }
         if (state.isLoading) {
             Box(
@@ -229,6 +247,7 @@ private fun AnalysisContent(
     analysis: FrameAnalysisResult,
     actions: FrameProfilerActions,
     language: UiLanguage,
+    compactHeight: Boolean,
 ) {
     val sessionId =
         analysis.frames
@@ -259,8 +278,10 @@ private fun AnalysisContent(
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        FrameWorkspaceHeading(state, language)
+    Column(
+        modifier = if (compactHeight) Modifier.fillMaxWidth() else Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
+    ) {
         SummaryCards(filteredAnalysis, language)
         FrameAttributionSection(filteredAnalysis.attributions, language)
         FrameFilterControls(
@@ -302,7 +323,10 @@ private fun AnalysisContent(
                 }
             }
         }
-        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = if (compactHeight) Modifier.fillMaxWidth().height(280.dp) else Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
+        ) {
             ClusterList(
                 analysis = filteredAnalysis,
                 selectedFrameId = selected?.sample?.frameId,
@@ -346,40 +370,17 @@ private fun FrameWorkspaceHeading(
     state: FrameProfilerState,
     language: UiLanguage,
 ) {
-    Row(
-        Modifier.fillMaxWidth().testTag("frame-workspace-heading"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                localizedStringResource(Res.string.frame_profiler_title, language),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                localizedStringResource(Res.string.frame_profiler_subtitle, language),
-                style = ViewerTypography.secondary,
-                color = LocalViewerColors.current.secondaryText,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+    val captureLabel =
+        state.importedFileName ?: state.artifact?.let { artifact ->
+            "${artifact.completeness.name.lowercase()} · ${artifact.availableCapabilities.size} capabilities" +
+                if (artifact.limitations.isEmpty()) "" else " · ${artifact.limitations.size} limitation(s)"
         }
-        val captureLabel =
-            state.importedFileName ?: state.artifact?.let { artifact ->
-                "${artifact.completeness.name.lowercase()} · ${artifact.availableCapabilities.size} capabilities" +
-                    if (artifact.limitations.isEmpty()) "" else " · ${artifact.limitations.size} limitation(s)"
-            }
-        captureLabel?.let {
-            Text(
-                it,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
+    StudioWorkspaceHeader(
+        title = localizedStringResource(Res.string.frame_profiler_title, language),
+        subtitle = localizedStringResource(Res.string.frame_profiler_subtitle, language),
+        supportingText = captureLabel,
+        modifier = Modifier.testTag("frame-workspace-heading"),
+    )
 }
 
 @Composable
@@ -450,7 +451,7 @@ private fun SummaryCards(
             1 -> "%.0f Hz".format(refreshRates.single())
             else -> "%.0f–%.0f Hz".format(refreshRates.first(), refreshRates.last())
         }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(StudioTokens.panelGap)) {
         FrameMetricCard(
             localizedStringResource(Res.string.frames, language),
             summary.totalFrames.toString(),
@@ -548,13 +549,18 @@ private fun FrameMetricCard(
     metricId: String,
 ) {
     val colors = LocalViewerColors.current
-    StudioPanel(modifier) {
+    StudioCard(
+        modifier = modifier,
+        containerColor = color.copy(alpha = 0.10f).compositeOver(colors.panel),
+        borderColor = color.copy(alpha = 0.5f),
+        contentSpacing = 4.dp,
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.width(3.dp).height(40.dp).background(color))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     label,
-                    color = colors.secondaryText,
+                    color = color,
                     style = ViewerTypography.secondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -819,7 +825,7 @@ private fun FrameDetail(
     var copySucceeded by remember(frame?.sample?.sessionId, frame?.sample?.frameId) { mutableStateOf<Boolean?>(null) }
     StudioPanel(modifier = modifier) {
         Column(
-            Modifier.fillMaxSize().padding(8.dp),
+            Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {

@@ -3,8 +3,11 @@ package com.androidperformancestudio.presentation
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
@@ -56,6 +59,8 @@ class CpuProfilerProcessSelectionLayoutTest {
                         }
                     }
                     val selectorDescriptions = selectorDescriptions(language)
+                    onAllNodesWithTag("cpu-workspace-header").assertCountEquals(1)
+                    val headerBeforeSelection = onNodeWithTag("cpu-workspace-header").fetchSemanticsNode().boundsInRoot
                     val before =
                         selectorDescriptions.associateWith { description ->
                             onNodeWithContentDescription(description).fetchSemanticsNode().boundsInRoot
@@ -65,6 +70,10 @@ class CpuProfilerProcessSelectionLayoutTest {
                     onNodeWithText(PROCESS_NAME).performClick()
                     onNodeWithText(localizedStringResource(SimpleperfViewerRes.sp_target_refreshing, language))
                         .assertExists()
+                    assertEquals(
+                        headerBeforeSelection,
+                        onNodeWithTag("cpu-workspace-header").fetchSemanticsNode().boundsInRoot,
+                    )
                     selectorDescriptions.forEach { description ->
                         val selector = onNodeWithContentDescription(description)
                         selector.assertIsNotEnabled()

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="sp_cpu_profiler">CPU Profiler</string>
     <string name="sp_target_device_target">Device &amp; Target</string>
     <string name="sp_target_selection_description">Select an Android device and a profile target.</string>
     <string name="sp_target_open_session">Open Session</string>

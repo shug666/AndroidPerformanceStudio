@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -46,6 +47,7 @@ import com.androidperformancestudio.ui.studio.StudioPanelHeader
 import com.androidperformancestudio.ui.studio.StudioStatusChip
 import com.androidperformancestudio.ui.studio.StudioStatusTone
 import com.androidperformancestudio.ui.studio.StudioTokens
+import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 
 internal enum class BatteryNetworkTab {
     BATTERY,
@@ -84,7 +86,7 @@ internal fun BatteryNetworkWorkspace(
     var selectedTab by remember { mutableStateOf(BatteryNetworkTab.BATTERY) }
 
     Column(
-        modifier = Modifier.fillMaxSize().testTag("battery-network-workspace"),
+        modifier = Modifier.fillMaxSize().background(LocalViewerColors.current.workspace).testTag("battery-network-workspace"),
     ) {
         BatteryNetworkWorkspaceHeader(
             selectedTab = selectedTab,
@@ -123,45 +125,29 @@ private fun BatteryNetworkWorkspaceHeader(
     onSelectedTabChanged: (BatteryNetworkTab) -> Unit,
     language: UiLanguage,
 ) {
-    val colors = LocalViewerColors.current
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .background(colors.panel)
-                .padding(horizontal = StudioTokens.contentPadding, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
-        verticalAlignment = Alignment.CenterVertically,
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(StudioTokens.compactContentPadding),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
     ) {
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+        StudioWorkspaceHeader(
+            title = localizedStringResource(Res.string.battery_network, language),
+            supportingText = localizedStringResource(Res.string.independent_analyzers, language),
+            titleModifier = Modifier.testTag("battery-network-title"),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
         ) {
-            Text(
-                text = localizedStringResource(Res.string.battery_network, language),
-                color = colors.primaryText,
-                style = ViewerTypography.pageTitle,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = localizedStringResource(Res.string.battery_network_subtitle, language),
-                color = colors.secondaryText,
-                style = ViewerTypography.secondary,
+            SegmentedSelector(
+                items = BatteryNetworkTab.entries,
+                selectedItem = selectedTab,
+                onItemSelected = onSelectedTabChanged,
+                itemLabel = { tab -> tab.label(language) },
+                modifier = Modifier.widthIn(max = 360.dp).fillMaxWidth().testTag("battery-network-tabs"),
+                equalWidthItems = true,
+                selectorDescription = localizedStringResource(Res.string.battery_network, language),
             )
         }
-        StudioStatusChip(
-            label = localizedStringResource(Res.string.independent_analyzers, language),
-            tone = StudioStatusTone.INFO,
-        )
-        SegmentedSelector(
-            items = BatteryNetworkTab.entries,
-            selectedItem = selectedTab,
-            onItemSelected = onSelectedTabChanged,
-            itemLabel = { tab -> tab.label(language) },
-            modifier = Modifier.width(360.dp).testTag("battery-network-tabs"),
-            equalWidthItems = true,
-            selectorDescription = localizedStringResource(Res.string.battery_network, language),
-        )
     }
 }
 
@@ -193,19 +179,23 @@ private fun BatteryNetworkRetainedLayer(
 private fun CorrelationUnavailablePage(language: UiLanguage) {
     val colors = LocalViewerColors.current
     Box(
-        modifier = Modifier.fillMaxSize().padding(StudioTokens.contentPadding),
+        modifier = Modifier.fillMaxSize().padding(StudioTokens.compactContentPadding),
         contentAlignment = Alignment.Center,
     ) {
-        StudioPanel(modifier = Modifier.fillMaxWidth().padding(horizontal = 96.dp)) {
+        StudioPanel(modifier = Modifier.widthIn(max = 720.dp).fillMaxWidth()) {
             StudioPanelHeader(
                 title = localizedStringResource(Res.string.correlation_unavailable, language),
-                subtitle = localizedStringResource(Res.string.correlation_unavailable_message, language),
             ) {
                 StudioStatusChip(
                     label = localizedStringResource(Res.string.correlation_unavailable, language),
                     tone = StudioStatusTone.WARNING,
                 )
             }
+            Text(
+                text = localizedStringResource(Res.string.correlation_unavailable_message, language),
+                color = colors.secondaryText,
+                style = ViewerTypography.bodyCompact,
+            )
             Text(
                 text = localizedStringResource(Res.string.correlation_requirements, language),
                 color = colors.primaryText,

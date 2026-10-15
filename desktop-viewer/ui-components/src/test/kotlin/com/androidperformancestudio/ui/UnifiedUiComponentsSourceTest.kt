@@ -7,6 +7,7 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class UnifiedUiComponentsSourceTest {
@@ -35,7 +36,7 @@ class UnifiedUiComponentsSourceTest {
 
         assertTrue(textButton.contains("val content = if (primary) style.accentText else style.accent"))
         assertTrue(textButton.contains("style.accent,"))
-        assertTrue(homeButton.contains("val outline = accent"))
+        assertTrue(homeButton.contains(".border(ViewerDimensions.hairline, accent, shape)"))
         assertTrue(settingsButton.contains("colors?.accent ?: LocalViewerColors.current.accent"))
         assertTrue(choiceChip.contains("val content = if (selected) style.accentText else style.accent"))
         assertTrue(selector.contains(".border(1.dp, colors.accent, shape)"))
@@ -55,14 +56,15 @@ class UnifiedUiComponentsSourceTest {
     }
 
     @Test
-    fun `shared theme uses the macOS light and dark palettes`() {
+    fun `shared theme preserves macOS chrome and adopts Startup dark workspace surfaces`() {
         val light = viewerColors(darkTheme = false)
         val dark = viewerColors(darkTheme = true)
 
         assertEquals(Color(0xFFECECEC), light.workspace)
         assertEquals(Color(0xFFFAFAFB), light.toolbar)
         assertEquals(Color(0xFFB8B8BD), light.strongBorder)
-        assertEquals(Color(0xFF1E1E1E), dark.workspace)
+        assertEquals(Color(0xFF1E1E1E), dark.canvasBackground)
+        assertNotEquals(dark.canvasBackground, dark.workspace)
         assertEquals(Color(0xFF29292B), dark.toolbar)
         assertEquals(Color(0xFF636366), dark.strongBorder)
     }

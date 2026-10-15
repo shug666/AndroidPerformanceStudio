@@ -65,6 +65,8 @@ import com.androidperformancestudio.ui.ViewerThemeContext
 import com.androidperformancestudio.ui.viewerOutlinedTextFieldColors
 import com.androidperformancestudio.ui.studio.StudioCard
 import com.androidperformancestudio.ui.studio.StudioPanel
+import com.androidperformancestudio.ui.studio.StudioTokens
+import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 import com.androidperformancestudio.ui.switch.MacOSSwitch
 import com.androidperformancestudio.ui.DropdownSelector
 import com.androidperformancestudio.ui_components.generated.resources.Res as UiComponentsRes
@@ -122,7 +124,10 @@ internal fun DesktopAppSettingsPage(
                         onPageSelected = onPageSelected,
                     )
                     VerticalDivider(color = MaterialTheme.colorScheme.outline)
-                    Column(Modifier.weight(1f).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(
+                        Modifier.weight(1f).padding(StudioTokens.compactContentPadding),
+                        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
+                    ) {
                         if (persistenceErrorPage != null) {
                             Text(
                                 localizedStringResource(
@@ -205,13 +210,9 @@ private fun SettingsPageTitle(
 
 @Composable
 private fun SettingsPageHeader(language: UiLanguage) {
-    val colors = LocalViewerColors.current
-    Text(
-        text = localizedStringResource(Res.string.settings, language),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        color = colors.primaryText,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.SemiBold,
+    StudioWorkspaceHeader(
+        title = localizedStringResource(Res.string.settings, language),
+        modifier = Modifier.padding(StudioTokens.compactContentPadding),
     )
 }
 
@@ -292,7 +293,7 @@ private fun AiSettingsContent(
 
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
     ) {
         SettingsPageTitle(
             text = localizedStringResource(Res.string.source_ai_settings, language),
@@ -487,7 +488,7 @@ private fun GeneralSettingsContent(
 ) {
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
     ) {
         SettingsPageTitle(localizedStringResource(Res.string.general, language))
         SettingsChoice(
@@ -539,7 +540,7 @@ private fun ConfigurationSettingsContent(
 ) {
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
     ) {
         SettingsPageTitle(localizedStringResource(Res.string.configuration, language))
         SettingsPageTitle(
@@ -734,7 +735,7 @@ private fun AboutSettingsContent(
 ) {
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
     ) {
         SettingsPageTitle(
             text = localizedStringResource(Res.string.about, language),
@@ -866,7 +867,7 @@ private fun CompleteSimpleperfSettingsContent(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth().weight(1f),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
         ) {
             items(CaptureSettingsSection.entries, key = CaptureSettingsSection::name) { section ->
                 StudioPanel(modifier = Modifier.fillMaxWidth()) {

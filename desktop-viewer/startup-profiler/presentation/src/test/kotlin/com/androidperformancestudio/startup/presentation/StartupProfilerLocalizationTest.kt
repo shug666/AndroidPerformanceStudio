@@ -92,6 +92,23 @@ class StartupProfilerLocalizationTest {
     }
 
     @Test
+    fun `Startup consumes shared workspace styling without applying a second local palette`() {
+        val controls =
+            Files.readString(
+                Path.of("src/main/kotlin/com/androidperformancestudio/startup/presentation/StartupWorkspaceControls.kt"),
+            )
+        val metrics =
+            Files.readString(
+                Path.of("src/main/kotlin/com/androidperformancestudio/startup/presentation/StartupWorkspaceMetrics.kt"),
+            )
+
+        assertTrue(controls.contains("StudioWorkspaceHeader("))
+        assertTrue(metrics.contains("StudioMetricCard("))
+        assertFalse(source.contains("startupWorkspaceColors"))
+        assertFalse(controls.contains("startupWorkspaceColors"))
+    }
+
+    @Test
     fun `operation messages errors and progress follow the analysis cards and baseline comparison`() {
         val workspace =
             source

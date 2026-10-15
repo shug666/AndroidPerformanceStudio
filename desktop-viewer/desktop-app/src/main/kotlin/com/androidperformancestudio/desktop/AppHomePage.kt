@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -36,9 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.desktop.dashboard.DeviceOverviewSource
@@ -68,6 +65,7 @@ import com.androidperformancestudio.ui.studio.StudioStatusChip
 import com.androidperformancestudio.ui.studio.StudioStatusTone
 import com.androidperformancestudio.ui.studio.StudioTableColumn
 import com.androidperformancestudio.ui.studio.StudioTokens
+import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 import com.androidperformancestudio.ui_components.generated.resources.Res as UiComponentsRes
 import com.androidperformancestudio.ui_components.generated.resources.ic_action_import
 import com.androidperformancestudio.ui_components.generated.resources.ic_action_play
@@ -286,19 +284,23 @@ internal fun AppHomePage(
         )
 
     val colors = LocalViewerColors.current
-    Surface(modifier = Modifier.fillMaxSize(), color = colors.canvasBackground) {
+    Surface(modifier = Modifier.fillMaxSize(), color = colors.workspace) {
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 22.dp),
+                    .padding(StudioTokens.compactContentPadding),
+            verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
         ) {
+            StudioWorkspaceHeader(
+                title = localizedStringResource(Res.string.android_performance_studio, language),
+            )
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 if (maxWidth.value >= HOME_TWO_COLUMN_MIN_WIDTH_DP) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
+                        horizontalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
                         verticalAlignment = Alignment.Top,
                     ) {
                         HomeMainColumn(
@@ -321,7 +323,7 @@ internal fun AppHomePage(
                 } else {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
+                        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
                     ) {
                         HomeMainColumn(
                             entries = entries,
@@ -359,9 +361,8 @@ private fun HomeMainColumn(
 ) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
     ) {
-        HomeHero(language)
         HomeMetrics(
             deviceOverview = deviceOverview,
             recentSnapshot = recentSnapshot,
@@ -392,7 +393,7 @@ private fun HomeRailColumn(
 ) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
     ) {
         HomeDateCard(language)
         HomeDeviceSummary(
@@ -404,67 +405,13 @@ private fun HomeRailColumn(
 }
 
 @Composable
-private fun HomeHero(language: UiLanguage) {
-    val colors = LocalViewerColors.current
-    StudioCard(
-        modifier = Modifier.fillMaxWidth(),
-        containerColor = colors.transparent,
-        contentPadding = 0.dp,
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(
-                                colors.accent.copy(alpha = if (colors.isDark) 0.22f else 0.12f),
-                                colors.panel,
-                            ),
-                        ),
-                    ).padding(horizontal = 22.dp, vertical = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    text = localizedStringResource(Res.string.home_hero_title, language),
-                    color = colors.primaryText,
-                    fontSize = ViewerTypography.pageTitle.fontSize,
-                    lineHeight = ViewerTypography.pageTitle.lineHeight,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = localizedStringResource(Res.string.home_hero_subtitle, language),
-                    color = colors.secondaryText,
-                    fontSize = ViewerTypography.body.fontSize,
-                    lineHeight = ViewerTypography.body.lineHeight,
-                )
-            }
-            Text(
-                text = localizedStringResource(Res.string.home_hero_quote, language),
-                modifier = Modifier.widthIn(max = 280.dp),
-                color = colors.secondaryText,
-                fontSize = ViewerTypography.secondary.fontSize,
-                lineHeight = ViewerTypography.secondary.lineHeight,
-                textAlign = TextAlign.End,
-            )
-        }
-    }
-}
-
-@Composable
 private fun HomeMetrics(
     deviceOverview: StudioDeviceOverview?,
     recentSnapshot: WorkspaceOverviewSnapshot?,
     loadingRecentItems: Boolean,
     language: UiLanguage,
 ) {
+    val colors = LocalViewerColors.current
     val devicesValue = (deviceOverview as? StudioDeviceOverview.Available)?.connectedCount?.toString() ?: "—"
     val recentValue =
         recentSnapshot
@@ -475,13 +422,14 @@ private fun HomeMetrics(
             ?: "—"
     Row(
         modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
-        horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
+        horizontalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
     ) {
         StudioMetricCard(
             label = localizedStringResource(Res.string.connected_devices, language),
             value = devicesValue,
             modifier = Modifier.weight(1f).fillMaxHeight(),
             icon = UiComponentsRes.drawable.ic_stat_device,
+            tone = colors.info,
         )
         StudioMetricCard(
             label = localizedStringResource(Res.string.recent_artifacts_shown, language),
@@ -489,6 +437,7 @@ private fun HomeMetrics(
             supportingText = localizedStringResource(Res.string.recent_artifacts_scope, language),
             modifier = Modifier.weight(1f).fillMaxHeight(),
             icon = UiComponentsRes.drawable.ic_stat_history,
+            tone = colors.accent,
         )
     }
 }
@@ -515,11 +464,11 @@ private fun HomeSection(
 private fun HomeQuickActionGrid(actions: List<HomeQuickAction>) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val columnCount = homeQuickActionColumnCount(maxWidth.value.toInt())
-        Column(verticalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap)) {
+        Column(verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding)) {
             actions.chunked(columnCount).forEach { rowActions ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
+                    horizontalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
                 ) {
                     rowActions.forEach { action ->
                         QuickActionCard(action = action, modifier = Modifier.weight(1f))
@@ -540,11 +489,11 @@ private fun HomeModuleGrid(
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val columnCount = homeGridColumnCount(maxWidth.value.toInt())
-        Column(verticalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap)) {
+        Column(verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding)) {
             entries.chunked(columnCount).forEach { rowEntries ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
+                    horizontalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
                 ) {
                     rowEntries.forEach { entry ->
                         FeatureEntryCard(entry = entry, modifier = Modifier.weight(1f))

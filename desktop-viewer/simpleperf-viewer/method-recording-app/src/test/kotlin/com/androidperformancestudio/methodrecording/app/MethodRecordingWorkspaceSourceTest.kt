@@ -3,6 +3,7 @@ package com.androidperformancestudio.methodrecording.app
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -32,5 +33,31 @@ class MethodRecordingWorkspaceSourceTest {
         assertTrue(source.contains("Res.string.device_connected"))
         assertTrue(source.contains("Res.string.device_offline"))
         assertTrue(source.contains("Res.string.devices_connected"))
+    }
+
+    @Test
+    fun `trace content has one localized workspace heading before all content states`() {
+        val screen = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/methodrecording/app/MethodRecordingScreen.kt"))
+        assertEquals(1, Regex("StudioWorkspaceHeader\\(").findAll(screen).count())
+        assertTrue(screen.contains("title = localizedStringResource(Res.string.method_recording, language)"))
+        assertTrue(screen.contains(".testTag(\"method-recording-workspace-header\")"))
+        assertTrue(screen.indexOf("StudioWorkspaceHeader(") < screen.indexOf("state.error?.let"))
+        assertTrue(screen.indexOf("StudioWorkspaceHeader(") < screen.indexOf("if (analysis == null)"))
+        assertTrue(screen.contains("StudioTokens.compactContentPadding"))
+        assertFalse(source.contains("StudioWorkspaceHeader("))
+    }
+
+    @Test
+    fun `trace table uses shared panel without changing fields or flame graph`() {
+        val screen = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/methodrecording/app/MethodRecordingScreen.kt"))
+        val table = screen.substringAfter("private fun MethodTopMethodsTable(").substringBefore("private fun TableHeader(")
+        assertTrue(table.contains("StudioPanel("))
+        assertTrue(table.contains("LazyColumn(Modifier.heightIn(max = 220.dp))"))
+        listOf("symbolName", "selfMicros", "totalMicros", "callCount").forEach { field ->
+            assertTrue(table.contains("method.$field"), field)
+        }
+        assertTrue(screen.contains("FlameGraphPanel("))
+        assertTrue(screen.contains("snapshot = snapshot"))
+        assertTrue(screen.contains("actions = noopReportActions()"))
     }
 }

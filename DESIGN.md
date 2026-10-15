@@ -201,3 +201,24 @@
 - [ ] 选中节点被隐藏时，Canvas 是否完全不显示选中边框，还是用低透明虚线提示？建议首版不显示，后续根据用户反馈增加“显示隐藏层级边框”选项。
 - [ ] 隐藏状态在手动刷新成功后是完全清空，还是保留仍存在的 nodeId？建议首版刷新/切换窗口清空，避免误判新快照。
 
+## Startup Style Adoption (2026-10-15)
+
+The implemented Startup Profiler is the visual baseline for all other desktop workspaces. This changes visual language and shared component usage, not feature behavior or the Inspector interaction contract above.
+
+Evidence reviewed:
+- `desktop-viewer/startup-profiler/presentation/.../StartupWorkspaceControls.kt`, `StartupWorkspaceMetrics.kt` and `StartupProfilerScreen.kt`.
+- `.omx/artifacts/shared-card-migration/startup-1280.png`.
+- `desktop-viewer/ui-components/.../ViewerTheme.kt`, `studio/StudioTokens.kt`, `StudioCard.kt` and `StudioPanel.kt`.
+- `desktop-viewer/docs/aps-commercial-ui-implementation/00-shared-foundation-and-delivery.md` and `07-startup-profiler.md`.
+
+Adoption contract:
+- Every active `AppDestination` has one `StudioWorkspaceHeader` owner; nested Battery/Network content remains header-free.
+- `StudioPanel`, `StudioDataTable`, `StudioMetricCard` and `ProfilerMetricCard` use the compact Startup density by default. Explicit chart gutters, splitters, table rows and virtualization contracts remain feature-owned.
+- `ViewerTheme` owns the promoted Startup dark workspace/panel/border palette and Material surface roles exactly once. Feature screens do not install replacement themes or local palette transforms.
+- `StudioWorkspaceHeader` has a 94dp minimum at normal scale, grows for wrapped titles/subtitles and enlarged fonts, hides only nonessential supporting text below 600dp, and keeps title semantics/accessibility.
+- Repeated cards use `StudioCard`; structural panes, tables, toolbars, canvas surfaces and Inspector hierarchy rows do not become decorative nested cards.
+- Existing capture, import, device, trace, source-resolution, selection, error, loading, unavailable and recovery behavior remains unchanged. No missing metric or evidence is fabricated.
+- Minimum validation includes 1280x720 and narrower stacked windows, English/Chinese, light/dark themes, fontScale 1.5 header overflow checks, shared color/inset tests, affected module tests, integration compilation and automated screenshots. Native packaged-app and real-device acceptance remain separate gates.
+
+Implementation plan and evidence are kept under `.omx/artifacts/startup-style-adoption/plan.md` and `.omx/artifacts/startup-style-adoption/evidence.md`.
+

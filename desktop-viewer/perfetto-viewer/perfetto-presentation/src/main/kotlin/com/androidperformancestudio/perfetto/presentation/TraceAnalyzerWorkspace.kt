@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,10 +71,14 @@ import com.androidperformancestudio.perfetto_presentation.generated.resources.tr
 import com.androidperformancestudio.perfetto_presentation.generated.resources.trace_workspace_title
 import com.androidperformancestudio.perfetto_presentation.generated.resources.trace_workspace_unavailable
 import com.androidperformancestudio.perfetto_presentation.generated.resources.trace_workspace_viewer
+import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.studio.StudioCard
+import com.androidperformancestudio.ui.studio.StudioPanelHeader
+import com.androidperformancestudio.ui.studio.StudioTokens
+import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 
 private const val WIDE_WORKSPACE_BREAKPOINT_DP = 1100
 
@@ -248,14 +253,14 @@ private fun WideTraceWorkspace(
     captureContent: (@Composable () -> Unit)?,
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(10.dp).testTag("trace-analyzer-wide"),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxSize().padding(StudioTokens.compactContentPadding).testTag("trace-analyzer-wide"),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
     ) {
         TraceWorkspaceBanner(language)
         TraceSummaryGrid(summaries, language, wide = true)
         Row(
             modifier = Modifier.fillMaxWidth().weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
         ) {
             TraceSessionsPanel(
                 state = state,
@@ -297,9 +302,9 @@ private fun NarrowTraceWorkspace(
             Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(10.dp)
+                .padding(StudioTokens.compactContentPadding)
                 .testTag("trace-analyzer-narrow"),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
     ) {
         TraceWorkspaceBanner(language)
         TraceSummaryGrid(summaries, language, wide = false)
@@ -330,46 +335,13 @@ private fun NarrowTraceWorkspace(
 @Composable
 @Suppress("ktlint:standard:function-naming")
 private fun TraceWorkspaceBanner(language: UiLanguage) {
-    val shape = RoundedCornerShape(8.dp)
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(shape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f), shape)
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-                .testTag("trace-analyzer-banner"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(
-                text = localizedStringResource(Res.string.trace_workspace_title, language),
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = MaterialTheme.typography.headlineSmall.fontSize,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.testTag("trace-analyzer-title"),
-            )
-            Text(
-                text = localizedStringResource(Res.string.trace_workspace_subtitle, language),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = ViewerTypography.bodyCompact.fontSize,
-                lineHeight = ViewerTypography.bodyCompact.lineHeight,
-            )
-        }
-        Text(
-            text = localizedStringResource(Res.string.trace_workspace_system_visibility, language),
-            color = MaterialTheme.colorScheme.primary,
-            fontSize = ViewerTypography.secondary.fontSize,
-            fontWeight = FontWeight.SemiBold,
-            modifier =
-                Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-        )
-    }
+    StudioWorkspaceHeader(
+        title = localizedStringResource(Res.string.trace_workspace_title, language),
+        subtitle = localizedStringResource(Res.string.trace_workspace_subtitle, language),
+        supportingText = localizedStringResource(Res.string.trace_workspace_system_visibility, language),
+        modifier = Modifier.testTag("trace-analyzer-banner"),
+        titleModifier = Modifier.testTag("trace-analyzer-title"),
+    )
 }
 
 @Composable
@@ -411,7 +383,8 @@ private fun TraceSummaryCard(
     language: UiLanguage,
     modifier: Modifier,
 ) {
-    val accent = summary.severity?.color() ?: MaterialTheme.colorScheme.outline
+    val colors = LocalViewerColors.current
+    val accent = summary.severity?.color() ?: colors.secondaryText
     val label =
         when (summary.category) {
             TraceInsightCategory.FRAME -> localizedStringResource(Res.string.trace_workspace_summary_frames, language)
@@ -426,13 +399,13 @@ private fun TraceSummaryCard(
             modifier
                 .height(72.dp)
                 .testTag("trace-summary-${summary.category.name.lowercase()}"),
-        containerColor = MaterialTheme.colorScheme.surface,
-        borderColor = accent.copy(alpha = 0.7f),
+        containerColor = if (summary.severity == null) colors.panel else accent.copy(alpha = 0.10f).compositeOver(colors.panel),
+        borderColor = if (summary.severity == null) colors.border else accent.copy(alpha = 0.5f),
         contentPadding = 0.dp,
         contentSpacing = 0.dp,
     ) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 9.dp),
+            modifier = Modifier.fillMaxSize().padding(StudioTokens.compactContentPadding),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
@@ -632,8 +605,8 @@ private fun TraceViewerPanel(
             }
         } else {
             Column(
-                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(StudioTokens.compactContentPadding),
+                verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
             ) {
                 Text(
                     text = artifact.displayName,
@@ -842,28 +815,11 @@ private fun WorkspaceCard(
         contentPadding = 0.dp,
         contentSpacing = 0.dp,
     ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(
-                        34.dp,
-                    ).background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(horizontal = 9.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = title,
-                modifier = Modifier.weight(1f),
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = ViewerTypography.secondary.fontSize,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            action()
-        }
+        StudioPanelHeader(
+            title = title,
+            modifier = Modifier.padding(horizontal = StudioTokens.compactContentPadding),
+            actions = { action() },
+        )
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         Box(modifier = Modifier.fillMaxSize()) { content() }
     }

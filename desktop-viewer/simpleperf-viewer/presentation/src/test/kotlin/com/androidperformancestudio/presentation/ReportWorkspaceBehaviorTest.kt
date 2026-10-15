@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -13,6 +14,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
@@ -206,8 +208,9 @@ class ReportWorkspaceBehaviorTest {
             onNodeWithText("Gallery capture").assertExists()
             onNodeWithText("sessions/gallery-capture").assertExists()
             onNodeWithContentDescription("Overview").assertIsSelected()
-            onNodeWithText("Top threads").assertExists()
             onNodeWithTag("report-timeline").assertExists()
+            onNodeWithTag("overview-report-list").performScrollToNode(hasText("Top threads"))
+            onNodeWithText("Top threads").assertExists()
 
             onNodeWithContentDescription("Stack chart").performClick()
             onNodeWithContentDescription("Stack chart").assertIsSelected()

@@ -5,6 +5,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -13,10 +14,10 @@ class AppHomePageLayoutTest {
         get() = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/AppHomePage.kt"))
 
     @Test
-    fun `home dashboard renders on the shell canvas background`() {
-        assertTrue(source.contains("color = colors.canvasBackground"))
+    fun `home dashboard renders on the shared Startup workspace background`() {
+        assertTrue(source.contains("color = colors.workspace"))
         assertEquals(viewerColors(darkTheme = false).canvasBackground, viewerColors(darkTheme = false).workspace)
-        assertEquals(viewerColors(darkTheme = true).canvasBackground, viewerColors(darkTheme = true).workspace)
+        assertNotEquals(viewerColors(darkTheme = true).canvasBackground, viewerColors(darkTheme = true).workspace)
     }
 
     @Test

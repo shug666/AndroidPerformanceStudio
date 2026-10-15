@@ -76,6 +76,7 @@ import com.androidperformancestudio.ui.studio.StudioCard
 import com.androidperformancestudio.ui.studio.StudioDataTable
 import com.androidperformancestudio.ui.studio.StudioMetricCard
 import com.androidperformancestudio.ui.studio.StudioTableColumn
+import com.androidperformancestudio.ui.studio.StudioTokens
 import com.androidperformancestudio.visualization.NavigationAction
 import org.jetbrains.compose.resources.StringResource
 import androidx.compose.material3.Text as MaterialText
@@ -178,9 +179,10 @@ private fun ReportStatus(
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
 ) {
-    Column(
-        Modifier.fillMaxSize().background(style.panel, RoundedCornerShape(10.dp)).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    StudioCard(
+        modifier = Modifier.fillMaxSize(),
+        containerColor = style.panel,
+        borderColor = style.border,
     ) {
         Text(message, color = style.text, fontSize = ViewerTypography.body.fontSize)
         if (actionLabel != null && onAction != null) {
@@ -225,7 +227,7 @@ internal fun OverviewReport(
     style: ViewerColors,
 ) {
     val language = currentSimpleperfLanguage()
-    LazyColumn(modifier = Modifier.testTag("overview-report-list"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyColumn(modifier = Modifier.testTag("overview-report-list"), verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap)) {
         item {
             val metrics =
                 listOf(
@@ -236,9 +238,9 @@ internal fun OverviewReport(
                 )
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val columns = overviewMetricColumns(maxWidth.value.toInt())
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap)) {
                     metrics.chunked(columns).forEach { rowMetrics ->
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(StudioTokens.panelGap)) {
                             rowMetrics.forEach { (title, value) ->
                                 MetricCard(title, value, Modifier.weight(1f))
                             }

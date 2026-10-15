@@ -10,6 +10,8 @@ import org.jetbrains.compose.resources.StringResource
 @OptIn(InternalResourceApi::class)
 @Suppress("LargeClass")
 object SimpleperfViewerRes {
+    val sp_cpu_profiler: StringResource
+        get() = Res.string.sp_cpu_profiler
     val sp_target_device_target: StringResource
         get() = Res.string.sp_target_device_target
     val sp_target_selection_description: StringResource

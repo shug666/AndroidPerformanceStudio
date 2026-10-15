@@ -2,6 +2,8 @@ package com.androidperformancestudio.desktop
 
 import com.androidperformancestudio.ui.ViewerDimensions
 import com.androidperformancestudio.ui.ViewerTypography
+import com.androidperformancestudio.ui.studio.StudioTokens
+import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.HorizontalScrollbar
@@ -72,6 +74,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.focus.FocusRequester
@@ -1176,6 +1179,10 @@ fun FrameWindowScope.LayoutInspectorMainPage(
                     onClick = { performAction(ViewerAction.TOGGLE_DETAILS) },
                 )
             }
+            StudioWorkspaceHeader(
+                title = localizedStringResource(Res.string.layout_inspector, uiLanguage),
+                modifier = Modifier.padding(StudioTokens.compactContentPadding).testTag("inspector-workspace-header"),
+            )
             correlationHint?.let { hint ->
                 CorrelationBanner(
                     hint = hint,
@@ -1183,7 +1190,14 @@ fun FrameWindowScope.LayoutInspectorMainPage(
                 )
             }
             HorizontalDivider(color = colors.border)
-            BoxWithConstraints(modifier = Modifier.weight(1f)) {
+            BoxWithConstraints(
+                modifier =
+                    Modifier.weight(1f).padding(
+                        start = StudioTokens.compactContentPadding,
+                        end = StudioTokens.compactContentPadding,
+                        bottom = StudioTokens.compactContentPadding,
+                    ),
+            ) {
                 val availableHeightDp = maxHeight.value
                 val normalizedFindingsHeight = FindingsLayout.fit(findingsHeightDp, availableHeightDp)
                 Column(modifier = Modifier.fillMaxSize()) {

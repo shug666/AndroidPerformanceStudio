@@ -18,28 +18,24 @@ class BatteryProfilerLocalizationSourceTest {
                 source.indexOf("private fun EmptyPane("),
                 source.indexOf("private fun ResultsPane("),
             )
-        val analysisDescription =
-            "analyze_wakelocks_alarms_jobs_" +
-                "network_sensors_and_system_energy_estima"
-
         assertTrue(
             Regex(
-                """localizedStringResource\(\s*Res\.string\.battery_energy_profiler,\s*language,?\s*\)""",
+                """localizedStringResource\(\s*Res\.string\.energy_evidence,\s*language,?\s*\)""",
             ).containsMatchIn(emptyPane),
         )
-        assertTrue(emptyPane.contains("Res.string.$analysisDescription"))
-        assertTrue(emptyPane.substringAfter("Res.string.$analysisDescription").contains("language"))
+        assertTrue(emptyPane.contains("Res.string.no_delta_or_unavailable, language"))
+        assertFalse(emptyPane.contains("Res.string.battery_energy_profiler"))
         assertFalse(emptyPane.contains("stringResource("))
     }
 
     @Test
-    fun `chinese resources translate the empty pane title and description`() {
+    fun `chinese resources translate the empty evidence state`() {
         val resources =
             Files.readString(
                 Path.of("src/main/composeResources/values-zh/strings.xml"),
             )
 
-        assertTrue(resources.contains("""<string name="battery_energy_profiler">电池 / 能耗分析器</string>"""))
-        assertTrue(resources.contains("通过前后快照差分分析"))
+        assertTrue(resources.contains("""<string name="energy_evidence">能耗证据</string>"""))
+        assertTrue(resources.contains("""<string name="no_delta_or_unavailable">无增量或设备未提供</string>"""))
     }
 }

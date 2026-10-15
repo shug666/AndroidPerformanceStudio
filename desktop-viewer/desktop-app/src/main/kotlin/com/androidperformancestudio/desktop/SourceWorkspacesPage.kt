@@ -81,6 +81,8 @@ import com.androidperformancestudio.ui.button.MacOSTextButton
 import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.search.CompactSearchField
 import com.androidperformancestudio.ui.studio.StudioCard
+import com.androidperformancestudio.ui.studio.StudioTokens
+import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 import com.androidperformancestudio.ui.viewerOutlinedTextFieldColors
 import java.awt.Cursor
 import java.awt.Desktop
@@ -148,11 +150,6 @@ internal fun SourceWorkspacesPage(
                     contentDescription = localizedStringResource(Res.string.home, language),
                     onClick = onNavigateHome,
                 )
-                Text(
-                    text = localizedStringResource(Res.string.source_workspaces, language),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                )
                 Spacer(Modifier.weight(1f))
                 MacOSTextButton(
                     localizedStringResource(Res.string.source_add_local, language),
@@ -187,6 +184,10 @@ internal fun SourceWorkspacesPage(
                 )
             }
             HorizontalDivider()
+            StudioWorkspaceHeader(
+                title = localizedStringResource(Res.string.source_workspaces, language),
+                modifier = Modifier.padding(StudioTokens.compactContentPadding),
+            )
             pageError?.let { message ->
                 Text(
                     localizedStringResource(Res.string.source_operation_failed, language, message),
@@ -653,7 +654,7 @@ private fun WorkspaceCard(
         modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onSelect),
         containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
         contentColor = contentColor,
-        contentPadding = 12.dp,
+        contentPadding = StudioTokens.compactContentPadding,
         contentSpacing = 4.dp,
     ) {
         Text(

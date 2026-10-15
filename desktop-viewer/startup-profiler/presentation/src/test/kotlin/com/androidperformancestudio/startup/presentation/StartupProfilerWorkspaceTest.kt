@@ -2,11 +2,13 @@
 
 package com.androidperformancestudio.startup.presentation
 
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -22,12 +24,26 @@ import com.androidperformancestudio.startup.model.StartupProfileSource
 import com.androidperformancestudio.startup.model.StartupType
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTheme
+import com.androidperformancestudio.ui.viewerColors
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class StartupProfilerWorkspaceTest {
+    @Test
+    fun `Startup evidence panel uses the shared palette without a second surface tint`() =
+        runDesktopComposeUiTest(width = 1280, height = 720) {
+            setContent {
+                ViewerTheme(darkTheme = true) {
+                    StartupProfilerScreen(StartupProfilerState(), StartupProfilerActions(), UiLanguage.ENGLISH)
+                }
+            }
+
+            val panel = onNodeWithTag("startup-profile-status").captureToImage().toPixelMap()
+            assertEquals(viewerColors(true).panel, panel[3, panel.height / 2])
+        }
+
     @Test
     fun `empty workspace keeps scenario controls and type tabs available`() =
         runDesktopComposeUiTest(width = 1280, height = 720) {

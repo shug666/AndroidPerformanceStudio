@@ -16,6 +16,9 @@ public object StudioTokens {
     public val navigationCollapsedWidth: Dp = 54.dp
     public val globalStatusBarHeight: Dp = 28.dp
     public val panelHeaderHeight: Dp = 36.dp
+    public val workspaceHeaderMinHeight: Dp = 94.dp
+    public val workspaceHeaderSupportingMinWidth: Dp = 600.dp
+    public val workspaceCompactHeight: Dp = 720.dp
     public val navigationItemHeight: Dp = 36.dp
     public val navigationIconSize: Dp = 18.dp
     public val navigationIconGap: Dp = 10.dp

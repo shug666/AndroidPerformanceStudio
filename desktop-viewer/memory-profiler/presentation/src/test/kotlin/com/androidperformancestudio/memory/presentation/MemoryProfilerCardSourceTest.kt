@@ -12,7 +12,6 @@ class MemoryProfilerCardSourceTest {
         mapOf(
             "MemoryProfilerScreen.kt" to
                 listOf(
-                    "MetricCard",
                     "LeakSuspectsPhaseTwo",
                     "ActivityLeakSection",
                     "NativeHeapSummarySection",
@@ -31,6 +30,12 @@ class MemoryProfilerCardSourceTest {
                 assertFalse(body.contains(".border("), "$name must not draw a duplicate border")
             }
         }
+        val metric = functionSource(source("MemoryProfilerScreen.kt"), "MetricCard")
+        assertTrue(metric.contains("StudioMetricCard("))
+        assertTrue(metric.contains("label = label"))
+        assertTrue(metric.contains("value = value"))
+        assertTrue(metric.contains("modifier = modifier"))
+        assertFalse(metric.contains(".padding("))
     }
 
     @Test

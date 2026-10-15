@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,6 +57,8 @@ import com.androidperformancestudio.ui.ViewerDimensions
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.button.MacOSTextButton
 import com.androidperformancestudio.ui.localizedStringResource
+import com.androidperformancestudio.ui.studio.StudioTokens
+import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 
 @Composable
 @Suppress("FunctionName", "LongMethod", "ktlint:standard:function-naming")
@@ -126,11 +129,20 @@ internal fun DeviceTargetPage(
             HeaderSpacer()
             CapabilityPopupButton(state.selection, style)
         }
+        StudioWorkspaceHeader(
+            title = localizedStringResource(SimpleperfViewerRes.sp_cpu_profiler, currentSimpleperfLanguage()),
+            modifier = Modifier.padding(StudioTokens.compactContentPadding).testTag("cpu-workspace-header"),
+        )
         ReportWorkspace(
             state = reportState,
             actions = reportActions,
             style = style,
-            modifier = Modifier.weight(1f),
+            modifier =
+                Modifier.weight(1f).padding(
+                    start = StudioTokens.compactContentPadding,
+                    end = StudioTokens.compactContentPadding,
+                    bottom = StudioTokens.compactContentPadding,
+                ),
             flameTooltipMode = flameTooltipMode,
             onRunAiAnalysis = onRunAiAnalysis,
         )

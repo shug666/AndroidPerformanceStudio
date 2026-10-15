@@ -10,17 +10,13 @@
 
 package com.androidperformancestudio.startup.presentation
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -40,13 +36,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.startup.model.CompilationMode
 import com.androidperformancestudio.startup.model.StartupProfileSource
@@ -90,61 +82,20 @@ import com.androidperformancestudio.ui.DropdownSelector
 import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.ProfilerCompactButton
 import com.androidperformancestudio.ui.UiLanguage
-import com.androidperformancestudio.ui.ViewerColors
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.studio.StudioPanel
 import com.androidperformancestudio.ui.studio.StudioTokens
+import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 
 @Composable
 internal fun StartupWorkspaceHero(language: UiLanguage) {
-    val colors = LocalViewerColors.current
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(94.dp)
-            .testTag("startup-hero")
-            .clip(RoundedCornerShape(StudioTokens.heroCardRadius))
-            .background(Brush.horizontalGradient(listOf(colors.panel, colors.accent.copy(alpha = 0.22f))))
-            .border(StudioTokens.borderWidth, colors.border, RoundedCornerShape(StudioTokens.heroCardRadius)),
-    ) {
-        Canvas(Modifier.align(Alignment.CenterEnd).width(240.dp).fillMaxHeight()) {
-            val mountain =
-                Path().apply {
-                    moveTo(0f, size.height)
-                    lineTo(size.width * 0.40f, size.height * 0.42f)
-                    lineTo(size.width * 0.55f, size.height * 0.70f)
-                    lineTo(size.width * 0.78f, size.height * 0.16f)
-                    lineTo(size.width, size.height * 0.63f)
-                    lineTo(size.width, size.height)
-                    close()
-                }
-            drawPath(mountain, colors.accent.copy(alpha = 0.20f))
-        }
-        Row(Modifier.fillMaxSize().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    localizedStringResource(Res.string.startup_workspace_title, language),
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.headlineMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    localizedStringResource(Res.string.startup_workspace_subtitle, language),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.secondaryText,
-                    maxLines = 2,
-                )
-            }
-            Text(
-                localizedStringResource(Res.string.startup_workspace_quote, language),
-                Modifier.width(190.dp).padding(start = 20.dp),
-                color = colors.secondaryText,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-    }
+    StudioWorkspaceHeader(
+        title = localizedStringResource(Res.string.startup_workspace_title, language),
+        subtitle = localizedStringResource(Res.string.startup_workspace_subtitle, language),
+        supportingText = localizedStringResource(Res.string.startup_workspace_quote, language),
+        modifier = Modifier.testTag("startup-hero"),
+    )
 }
 
 @Composable
@@ -464,22 +415,3 @@ internal fun com.androidperformancestudio.startup.model.StartupCompilationEviden
         compilerFilterAfter == "speed-profile" &&
         !baselineProfileArtifact.isNullOrBlank() &&
         failureReason.isNullOrBlank()
-
-/** Reference-inspired surfaces derived from the shared theme; other workspaces are unaffected. */
-internal fun ViewerColors.startupWorkspaceColors(): ViewerColors {
-    if (!isDark) return this
-    val base =
-        canvasBackground.copy(
-            red = canvasBackground.red * 0.45f,
-            green = canvasBackground.green * 0.45f,
-            blue =
-                canvasBackground.blue * 0.45f,
-        )
-    val surface = accent.copy(alpha = 0.08f).compositeOver(base)
-    return copy(
-        panel = surface,
-        workspace = accent.copy(alpha = 0.035f).compositeOver(base),
-        border = accent.copy(alpha = 0.22f).compositeOver(surface),
-        sectionBackground = accent.copy(alpha = 0.06f).compositeOver(surface),
-    )
-}

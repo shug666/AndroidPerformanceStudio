@@ -3,7 +3,9 @@
 package com.androidperformancestudio.memory.presentation
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -27,6 +29,8 @@ import com.androidperformancestudio.memory.model.NativeHeapAnalysis
 import com.androidperformancestudio.memory.model.NativeHeapSample
 import com.androidperformancestudio.memory.model.NativeHeapTrace
 import com.androidperformancestudio.memory.model.ObjectReference
+import com.androidperformancestudio.ui.UiLanguage
+import com.androidperformancestudio.ui.ViewerTheme
 import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.Test
@@ -35,6 +39,33 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class MemoryProfilerScreenTest {
+    @Test
+    fun `memory modes keep a single workspace heading and a border footer in both themes`() {
+        listOf(UiLanguage.ENGLISH, UiLanguage.SIMPLIFIED_CHINESE).forEach { language ->
+            listOf(false, true).forEach { darkTheme ->
+                MemoryProfilerViewMode.entries.forEach { viewMode ->
+                    runDesktopComposeUiTest(width = 1000, height = 760) {
+                        setContent {
+                            ViewerTheme(darkTheme = darkTheme) {
+                                MemoryProfilerScreen(
+                                    state = MemoryProfilerState(viewMode = viewMode),
+                                    actions = MemoryProfilerActions(),
+                                    language = language,
+                                )
+                            }
+                        }
+                        onAllNodesWithTag("memory-workspace-header").assertCountEquals(1)
+                        val header = onNodeWithTag("memory-workspace-header").fetchSemanticsNode().boundsInRoot
+                        val footer = onNodeWithTag("memory-profiler-status-bar").fetchSemanticsNode().boundsInRoot
+                        val root = onRoot().fetchSemanticsNode().boundsInRoot
+                        assertTrue(header.bottom < footer.top)
+                        assertEquals(root.bottom, footer.bottom)
+                    }
+                }
+            }
+        }
+    }
+
     @Test
     fun `content does not duplicate toolbar or file actions`() =
         runDesktopComposeUiTest(width = 1000, height = 700) {

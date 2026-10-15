@@ -16,20 +16,26 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -37,15 +43,12 @@ import com.androidperformancestudio.battery.analysis.BatteryAnalysisResult
 import com.androidperformancestudio.battery.battery_app.generated.resources.Res
 import com.androidperformancestudio.battery.battery_app.generated.resources.alarm
 import com.androidperformancestudio.battery.battery_app.generated.resources.alarms
-import com.androidperformancestudio.battery.battery_app.generated.resources.analyze_wakelocks_alarms_jobs_network_sensors_and_system_energy_estima
-import com.androidperformancestudio.battery.battery_app.generated.resources.battery_energy_profiler
 import com.androidperformancestudio.battery.battery_app.generated.resources.capability_attribution_uid
 import com.androidperformancestudio.battery.battery_app.generated.resources.diagnostics_and_warnings
 import com.androidperformancestudio.battery.battery_app.generated.resources.duration
 import com.androidperformancestudio.battery.battery_app.generated.resources.energy
 import com.androidperformancestudio.battery.battery_app.generated.resources.energy_evidence
 import com.androidperformancestudio.battery.battery_app.generated.resources.energy_evidence_detail
-import com.androidperformancestudio.battery.battery_app.generated.resources.every_energy_value_exposes_its_source_scope_and_confidence_global
 import com.androidperformancestudio.battery.battery_app.generated.resources.experiment_runs
 import com.androidperformancestudio.battery.battery_app.generated.resources.history_event_detail
 import com.androidperformancestudio.battery.battery_app.generated.resources.history_timeline_events
@@ -76,10 +79,15 @@ import com.androidperformancestudio.battery.model.BatteryRunDelta
 import com.androidperformancestudio.battery.model.BatteryStatistics
 import com.androidperformancestudio.battery.model.ResourceTimer
 import com.androidperformancestudio.ui.LocalViewerColors
-import com.androidperformancestudio.ui.ProfilerMetricCard
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.studio.StudioCard
+import com.androidperformancestudio.ui.studio.StudioDataTable
+import com.androidperformancestudio.ui.studio.StudioMetricCard
+import com.androidperformancestudio.ui.studio.StudioPanel
+import com.androidperformancestudio.ui.studio.StudioPanelHeader
+import com.androidperformancestudio.ui.studio.StudioTableColumn
+import com.androidperformancestudio.ui.studio.StudioTokens
 import java.util.Locale
 
 @Composable
@@ -90,13 +98,18 @@ public fun BatteryProfilerScreen(
     modifier: Modifier = Modifier,
 ) {
     val analysis = state.analysis
+    val workspaceModifier =
+        modifier
+            .fillMaxSize()
+            .background(LocalViewerColors.current.workspace)
+            .padding(StudioTokens.compactContentPadding)
     when {
         state.errorMessage != null && analysis == null ->
-            Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(workspaceModifier, contentAlignment = Alignment.Center) {
                 Text(state.errorMessage, color = MaterialTheme.colorScheme.error)
             }
-        analysis == null -> EmptyPane(state, language, modifier)
-        else -> ResultsPane(state, analysis, actions, language, modifier)
+        analysis == null -> EmptyPane(state, language, workspaceModifier)
+        else -> ResultsPane(state, analysis, actions, language, workspaceModifier)
     }
 }
 
@@ -107,37 +120,24 @@ private fun EmptyPane(
     modifier: Modifier,
 ) {
     Column(
-        modifier.fillMaxSize().padding(32.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
     ) {
-        Text(
-            localizedStringResource(Res.string.battery_energy_profiler, language),
-            style = MaterialTheme.typography.headlineMedium,
-        )
-        Text(
-            localizedStringResource(
-                Res.string.analyze_wakelocks_alarms_jobs_network_sensors_and_system_energy_estima,
-                language,
-            ),
-        )
-        Text(
-            localizedStringResource(
-                Res.string.every_energy_value_exposes_its_source_scope_and_confidence_global,
-                language,
-            ),
-        )
-        state.operationMessage?.let { Text(it) }
-        state.artifact?.let { artifact ->
-            Text(
-                "Artifact: ${artifact.completeness.name.lowercase()} · " +
-                    "${artifact.availableCapabilities.size} capabilities" +
-                    if (artifact.limitations.isEmpty()) "" else " · ${artifact.limitations.size} limitation(s)",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        StudioPanel(Modifier.fillMaxWidth()) {
+            StudioPanelHeader(localizedStringResource(Res.string.energy_evidence, language))
+            Text(localizedStringResource(Res.string.no_delta_or_unavailable, language))
+            state.operationMessage?.let { Text(it) }
+            state.artifact?.let { artifact ->
+                Text(
+                    "Artifact: ${artifact.completeness.name.lowercase()} · " +
+                        "${artifact.availableCapabilities.size} capabilities" +
+                        if (artifact.limitations.isEmpty()) "" else " · ${artifact.limitations.size} limitation(s)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            state.warnings.forEach { Text(it, color = MaterialTheme.colorScheme.tertiary) }
         }
-        state.warnings.forEach { Text(it, color = MaterialTheme.colorScheme.tertiary) }
     }
 }
 
@@ -150,19 +150,79 @@ private fun ResultsPane(
     modifier: Modifier,
 ) {
     val selected = analysis.runs.firstOrNull { it.runId == state.selectedRunId } ?: analysis.runs.first()
+    val colors = LocalViewerColors.current
     Column(
-        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 6.dp, horizontal = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            MetricCard(localizedStringResource(Res.string.median_wakelock, language), analysis.wakelockDurationMs, "ms", language)
-            MetricCard(localizedStringResource(Res.string.median_wakeup_alarms, language), analysis.wakeupAlarmCount, "", language)
-            MetricCard(localizedStringResource(Res.string.median_network, language), analysis.networkBytes, "B", language)
-            if (analysis.energyMah.count > 0) {
-                MetricCard(localizedStringResource(Res.string.modeled_energy, language), analysis.energyMah, "mAh", language)
+        val metrics =
+            buildList {
+                add(
+                    BatteryMetric(
+                        localizedStringResource(Res.string.median_wakelock, language),
+                        analysis.wakelockDurationMs,
+                        "ms",
+                        colors.warning,
+                    ),
+                )
+                add(
+                    BatteryMetric(
+                        localizedStringResource(Res.string.median_wakeup_alarms, language),
+                        analysis.wakeupAlarmCount,
+                        "",
+                        colors.accent,
+                    ),
+                )
+                add(
+                    BatteryMetric(
+                        localizedStringResource(Res.string.median_network, language),
+                        analysis.networkBytes,
+                        "B",
+                        colors.info,
+                    ),
+                )
+                if (analysis.energyMah.count > 0) {
+                    add(
+                        BatteryMetric(
+                            localizedStringResource(Res.string.modeled_energy, language),
+                            analysis.energyMah,
+                            "mAh",
+                            colors.accent,
+                        ),
+                    )
+                }
+                add(
+                    BatteryMetric(
+                        localizedStringResource(Res.string.peak_temperature, language),
+                        analysis.peakTemperatureCelsius,
+                        "°C",
+                        colors.warning,
+                    ),
+                )
+                add(
+                    BatteryMetric(
+                        localizedStringResource(Res.string.thermal_status, language),
+                        analysis.thermalStatus,
+                        "",
+                        colors.info,
+                    ),
+                )
             }
-            MetricCard(localizedStringResource(Res.string.peak_temperature, language), analysis.peakTemperatureCelsius, "°C", language)
-            MetricCard(localizedStringResource(Res.string.thermal_status, language), analysis.thermalStatus, "", language)
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val columnCount = ((maxWidth.value + 8) / 176).toInt().coerceIn(1, metrics.size)
+            Column(verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding)) {
+                metrics.chunked(columnCount).forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
+                        horizontalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
+                    ) {
+                        row.forEach { (title, statistics, unit, tone) ->
+                            MetricCard(title, statistics, unit, language, tone, Modifier.weight(1f).fillMaxHeight())
+                        }
+                        repeat(columnCount - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
+            }
         }
         val session = state.experiment?.session
         session?.let {
@@ -184,40 +244,50 @@ private fun ResultsPane(
             }
         }
         state.baseline?.let { baseline -> BaselineComparison(analysis, baseline, language) }
-        Text(
-            localizedStringResource(Res.string.experiment_runs, language),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Column(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-            Row(Modifier.background(MaterialTheme.colorScheme.surfaceVariant).padding(vertical = 6.dp, horizontal = 8.dp)) {
-                Cell(localizedStringResource(Res.string.runs, language), 70)
-                Cell(localizedStringResource(Res.string.duration, language), 100)
-                Cell(localizedStringResource(Res.string.wakelock, language), 110)
-                Cell(localizedStringResource(Res.string.alarm, language), 90)
-                Cell(localizedStringResource(Res.string.network, language), 110)
-                Cell(localizedStringResource(Res.string.energy, language), 100)
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val tableWidth = maxWidth.coerceAtLeast(580.dp)
+            Column(Modifier.horizontalScroll(rememberScrollState())) {
+                StudioDataTable(
+                    columns =
+                        listOf(
+                            StudioTableColumn(localizedStringResource(Res.string.runs, language), 70f),
+                            StudioTableColumn(localizedStringResource(Res.string.duration, language), 100f),
+                            StudioTableColumn(localizedStringResource(Res.string.wakelock, language), 110f),
+                            StudioTableColumn(localizedStringResource(Res.string.alarm, language), 90f),
+                            StudioTableColumn(localizedStringResource(Res.string.network, language), 110f),
+                            StudioTableColumn(localizedStringResource(Res.string.energy, language), 100f),
+                        ),
+                    title = localizedStringResource(Res.string.experiment_runs, language),
+                    modifier = Modifier.width(tableWidth),
+                ) {
+                    analysis.runs.forEach { run -> RunRow(run, run.runId == selected.runId, actions.onSelectRun, language) }
+                }
             }
-            analysis.runs.forEach { run -> RunRow(run, run.runId == selected.runId, actions.onSelectRun, language) }
         }
-        HorizontalDivider()
-        RunDetail(selected, language)
+        StudioPanel(Modifier.fillMaxWidth()) {
+            RunDetail(selected, language)
+        }
         if (analysis.warnings.isNotEmpty()) {
-            Text(
-                localizedStringResource(Res.string.diagnostics_and_warnings, language),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            analysis.warnings.forEach {
-                Text(
-                    localizedStringResource(Res.string.text, language, it),
-                    color = MaterialTheme.colorScheme.tertiary,
-                )
+            StudioPanel(Modifier.fillMaxWidth()) {
+                StudioPanelHeader(localizedStringResource(Res.string.diagnostics_and_warnings, language))
+                analysis.warnings.forEach {
+                    Text(
+                        localizedStringResource(Res.string.text, language, it),
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
             }
         }
         state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     }
 }
+
+private data class BatteryMetric(
+    val title: String,
+    val statistics: BatteryStatistics,
+    val unit: String,
+    val tone: Color,
+)
 
 @Composable
 private fun MetricCard(
@@ -225,14 +295,15 @@ private fun MetricCard(
     statistics: BatteryStatistics,
     unit: String,
     language: UiLanguage,
+    tone: Color,
+    modifier: Modifier,
 ) {
-    ProfilerMetricCard(
+    StudioMetricCard(
         label = title,
         value = statistics.median.format(unit),
-        modifier = Modifier.width(168.dp),
-        supportingText = listOf(localizedStringResource(Res.string.p90_n, language, statistics.p90.format(unit), statistics.count)),
-        prominent = true,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = modifier,
+        supportingText = localizedStringResource(Res.string.p90_n, language, statistics.p90.format(unit), statistics.count),
+        tone = tone,
     )
 }
 
@@ -278,22 +349,23 @@ private fun RunRow(
 ) {
     Row(
         Modifier
+            .fillMaxWidth()
             .background(if (selected) MaterialTheme.colorScheme.primaryContainer else LocalViewerColors.current.transparent)
             .clickable {
                 onSelect(run.runId)
             }.padding(vertical = 6.dp, horizontal = 8.dp),
     ) {
-        Cell(run.iteration.toString(), 70)
-        Cell(localizedStringResource(Res.string.s, language, run.durationMs / 1000), 100)
-        Cell(run.wakelocks.sumOf(ResourceTimer::durationMs).toString(), 110)
-        Cell(run.alarms.sumOf(ResourceTimer::count).toString(), 90)
-        Cell(run.network.totalBytes.toString(), 110)
+        Cell(run.iteration.toString(), 70f)
+        Cell(localizedStringResource(Res.string.s, language, run.durationMs / 1000), 100f)
+        Cell(run.wakelocks.sumOf(ResourceTimer::durationMs).toString(), 110f)
+        Cell(run.alarms.sumOf(ResourceTimer::count).toString(), 90f)
+        Cell(run.network.totalBytes.toString(), 110f)
         Cell(
             run.energy
                 .sumOf { it.energyMah ?: 0.0 }
                 .takeIf { it > 0.0 }
                 .format("mAh"),
-            100,
+            100f,
         )
     }
 }
@@ -303,10 +375,8 @@ private fun RunDetail(
     run: BatteryRunDelta,
     language: UiLanguage,
 ) {
-    Text(
+    StudioPanelHeader(
         localizedStringResource(Res.string.run_resource_details, language, run.iteration),
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
     )
     ResourceSection(localizedStringResource(Res.string.wakelocks, language), run.wakelocks, language)
     ResourceSection(localizedStringResource(Res.string.alarms, language), run.alarms, language)
@@ -411,11 +481,11 @@ private fun ResourceSection(
 }
 
 @Composable
-private fun Cell(
+private fun RowScope.Cell(
     text: String,
-    width: Int,
+    weight: Float,
 ) {
-    Text(text, modifier = Modifier.width(width.dp), maxLines = 1)
+    Text(text, modifier = Modifier.weight(weight), maxLines = 1)
 }
 
 private fun Number?.format(unit: String): String =

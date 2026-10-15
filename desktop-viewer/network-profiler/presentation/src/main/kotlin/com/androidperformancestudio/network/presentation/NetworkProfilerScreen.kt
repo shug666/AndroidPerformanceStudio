@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -68,6 +69,7 @@ import com.androidperformancestudio.ui.studio.StudioPanelHeader
 import com.androidperformancestudio.ui.studio.StudioStatusChip
 import com.androidperformancestudio.ui.studio.StudioStatusTone
 import com.androidperformancestudio.ui.studio.StudioTableColumn
+import com.androidperformancestudio.ui.studio.StudioTokens
 
 public data class NetworkProfilerState(
     val deviceSerial: String = "",
@@ -100,9 +102,9 @@ public fun NetworkProfilerScreen(
             modifier
                 .fillMaxSize()
                 .background(colors.workspace)
-                .padding(12.dp)
+                .padding(StudioTokens.compactContentPadding)
                 .testTag("network-profiler-workspace"),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
     ) {
         SummaryCards(state, language)
         EvidenceCoverage(state, language)
@@ -110,7 +112,7 @@ public fun NetworkProfilerScreen(
         state.error?.let { MessageStrip(it, StudioStatusTone.ERROR) }
         Row(
             modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
         ) {
             RequestTable(
                 calls = state.result?.calls.orEmpty(),
@@ -130,22 +132,25 @@ public fun NetworkProfilerScreen(
 
 @Composable
 private fun SummaryCards(state: NetworkProfilerState, language: UiLanguage) {
+    val colors = LocalViewerColors.current
     val summary = state.summary
     val completeness = state.result?.session?.completeness
     Row(
-        modifier = Modifier.fillMaxWidth().height(108.dp),
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         StudioMetricCard(
             label = localizedStringResource(Res.string.calls, language),
             value = summary?.callCount?.toString() ?: "—",
             modifier = Modifier.weight(0.72f).fillMaxHeight(),
+            tone = colors.info,
         )
         StudioMetricCard(
             label = localizedStringResource(Res.string.failures, language),
             value = summary?.failureCount?.toString() ?: "—",
             modifier = Modifier.weight(0.72f).fillMaxHeight(),
             supportingText = if ((summary?.failureCount ?: 0) > 0) localizedStringResource(Res.string.failure_attention, language) else null,
+            tone = if ((summary?.failureCount ?: 0) > 0) colors.warning else colors.info,
         )
         StudioMetricCard(
             label = localizedStringResource(Res.string.transferred_bytes, language),
@@ -160,12 +165,14 @@ private fun SummaryCards(state: NetworkProfilerState, language: UiLanguage) {
                     )
                 },
             modifier = Modifier.weight(1.05f).fillMaxHeight(),
+            tone = colors.accent,
         )
         StudioMetricCard(
             label = localizedStringResource(Res.string.median_slow_request, language),
             value = summary?.let { "${formatDurationMs(it.medianDurationMs)} / ${formatDurationMs(it.p95DurationMs)}" } ?: "—",
             supportingText = localizedStringResource(Res.string.median_p95_support, language),
             modifier = Modifier.weight(1.18f).fillMaxHeight(),
+            tone = colors.warning,
         )
         StudioMetricCard(
             label = localizedStringResource(Res.string.evidence_completeness, language),
@@ -181,6 +188,12 @@ private fun SummaryCards(state: NetworkProfilerState, language: UiLanguage) {
                     )
                 },
             modifier = Modifier.weight(1.2f).fillMaxHeight(),
+            tone =
+                when (completeness?.status) {
+                    EvidenceCompleteness.COMPLETE -> colors.success
+                    null -> colors.info
+                    else -> colors.warning
+                },
         )
     }
 }

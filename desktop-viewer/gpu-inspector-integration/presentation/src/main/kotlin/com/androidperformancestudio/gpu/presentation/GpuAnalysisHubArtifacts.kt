@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -33,6 +32,8 @@ import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
+import com.androidperformancestudio.ui.studio.StudioPanel
+import com.androidperformancestudio.ui.studio.StudioPanelHeader
 
 @Composable
 internal fun ArtifactWorkspace(
@@ -43,14 +44,15 @@ internal fun ArtifactWorkspace(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalViewerColors.current
-    Column(modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            SectionTitle(localizedStringResource(Res.string.gpu_artifacts, language))
-            Spacer(Modifier.weight(1f))
-            OutlinedButton(onClick = actions.onOpenTraceAnalyzer) {
-                Text(localizedStringResource(Res.string.open_trace_analyzer, language))
-            }
-        }
+    StudioPanel(modifier.fillMaxWidth()) {
+        StudioPanelHeader(
+            title = localizedStringResource(Res.string.gpu_artifacts, language),
+            actions = {
+                OutlinedButton(onClick = actions.onOpenTraceAnalyzer) {
+                    Text(localizedStringResource(Res.string.open_trace_analyzer, language))
+                }
+            },
+        )
         ArtifactTableHeader(language)
         if (state.artifacts.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {

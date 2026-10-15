@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.application.FlameGraphPanelState
@@ -26,6 +27,7 @@ import com.androidperformancestudio.arttrace.MethodTopMethod
 import com.androidperformancestudio.methodrecording.app.generated.resources.Res
 import com.androidperformancestudio.methodrecording.app.generated.resources.calls
 import com.androidperformancestudio.methodrecording.app.generated.resources.function
+import com.androidperformancestudio.methodrecording.app.generated.resources.method_recording
 import com.androidperformancestudio.methodrecording.app.generated.resources.no_trace_loaded
 import com.androidperformancestudio.methodrecording.app.generated.resources.self_time
 import com.androidperformancestudio.methodrecording.app.generated.resources.total_time
@@ -45,6 +47,9 @@ import com.androidperformancestudio.storage.ProfileMarkerId
 import com.androidperformancestudio.storage.TopFunctionSort
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.localizedStringResource
+import com.androidperformancestudio.ui.studio.StudioPanel
+import com.androidperformancestudio.ui.studio.StudioTokens
+import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 
 /** The method-recording workspace body: top-methods table plus the shared flame graph. */
 @Suppress("FunctionName", "LongMethod", "ktlint:standard:function-naming")
@@ -55,9 +60,13 @@ fun MethodRecordingScreen(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.fillMaxSize().padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier.fillMaxSize().padding(StudioTokens.compactContentPadding),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
     ) {
+        StudioWorkspaceHeader(
+            title = localizedStringResource(Res.string.method_recording, language),
+            modifier = Modifier.testTag("method-recording-workspace-header"),
+        )
         state.error?.let { message ->
             Text(
                 text = message,
@@ -133,13 +142,7 @@ private fun MethodTopMethodsTable(
     language: UiLanguage,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier =
-            modifier
-                .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(4.dp))
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
+    StudioPanel(modifier = modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             TableHeader(localizedStringResource(Res.string.function, language), Modifier.weight(3f))
             TableHeader(localizedStringResource(Res.string.self_time, language), Modifier.weight(1f))

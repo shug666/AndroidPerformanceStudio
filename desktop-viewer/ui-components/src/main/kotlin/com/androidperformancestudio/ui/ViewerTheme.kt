@@ -18,6 +18,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Density
@@ -103,6 +104,8 @@ public object ViewerTypography {
     public val flameGraphLabelPixels: Float = 10f
     public val homeHero: TextStyle = TextStyle(fontSize = 30.sp, lineHeight = 36.sp)
     public val pageTitle: TextStyle = TextStyle(fontSize = 18.sp, lineHeight = 22.sp)
+    public val workspaceTitle: TextStyle = TextStyle(fontSize = 18.sp, lineHeight = 28.sp)
+    public val workspaceSubtitle: TextStyle = TextStyle(fontSize = 12.sp, lineHeight = 18.sp)
     public val sectionTitle: TextStyle = TextStyle(fontSize = 16.sp, lineHeight = 20.sp)
     public val cardTitle: TextStyle = TextStyle(fontSize = 15.sp, lineHeight = 19.sp)
     public val subsectionTitle: TextStyle = TextStyle(fontSize = 13.sp, lineHeight = 17.sp)
@@ -454,44 +457,62 @@ public fun scaledViewerDensity(density: Density, displayScale: Float): Density =
 public fun viewerColors(
     darkTheme: Boolean,
     accentColor: Color = DefaultViewerAccent,
-): ViewerColors = ViewerPalettes.forDark(darkTheme, accentColor)
+): ViewerColors = ViewerPalettes.forDark(darkTheme, accentColor).withWorkspaceStyle()
+
+private fun ViewerColors.withWorkspaceStyle(): ViewerColors {
+    if (!isDark) return this
+    val base =
+        canvasBackground.copy(
+            red = canvasBackground.red * 0.45f,
+            green = canvasBackground.green * 0.45f,
+            blue = canvasBackground.blue * 0.45f,
+        )
+    val surface = accent.copy(alpha = 0.08f).compositeOver(base)
+    return copy(
+        panel = surface,
+        workspace = accent.copy(alpha = 0.035f).compositeOver(base),
+        border = accent.copy(alpha = 0.22f).compositeOver(surface),
+        sectionBackground = accent.copy(alpha = 0.06f).compositeOver(surface),
+    )
+}
 
 public fun viewerMaterialColorScheme(
     darkTheme: Boolean,
     accentColor: Color = DefaultViewerAccent,
 ): ColorScheme {
     val colors = viewerColors(darkTheme, accentColor)
-    return if (darkTheme) {
-        darkColorScheme(
-            primary = colors.accent,
-            onPrimary = colors.accentText,
-            background = colors.canvasBackground,
-            surface = colors.panel,
-            surfaceVariant = colors.detailRowDeep,
-            primaryContainer = colors.selectedRow,
-            onPrimaryContainer = colors.primaryText,
-            secondaryContainer = colors.sectionBackground,
-            outline = colors.border,
-            onBackground = colors.primaryText,
-            onSurface = colors.primaryText,
-            onSurfaceVariant = colors.secondaryText,
-            error = colors.error,
-        )
-    } else {
-        lightColorScheme(
-            primary = colors.accent,
-            onPrimary = colors.accentText,
-            background = colors.canvasBackground,
-            surface = colors.panel,
-            surfaceVariant = colors.detailRowDeep,
-            primaryContainer = colors.selectedRow,
-            onPrimaryContainer = colors.primaryText,
-            secondaryContainer = colors.sectionBackground,
-            outline = colors.border,
-            onBackground = colors.primaryText,
-            onSurface = colors.primaryText,
-            onSurfaceVariant = colors.secondaryText,
-            error = colors.error,
-        )
-    }
+    val base = if (darkTheme) darkColorScheme() else lightColorScheme()
+    return base.copy(
+        primary = colors.accent,
+        onPrimary = colors.accentText,
+        secondary = colors.success,
+        onSecondary = colors.success.contentColor(),
+        tertiary = colors.warning,
+        onTertiary = colors.warning.contentColor(),
+        background = colors.workspace,
+        surface = colors.panel,
+        surfaceDim = colors.workspace,
+        surfaceBright = colors.sectionBackground,
+        surfaceContainerLowest = colors.workspace,
+        surfaceContainerLow = colors.panel,
+        surfaceContainer = colors.panel,
+        surfaceContainerHigh = colors.sectionBackground,
+        surfaceContainerHighest = colors.sectionBackground,
+        surfaceVariant = colors.sectionBackground,
+        surfaceTint = colors.accent,
+        primaryContainer = colors.selectedRow,
+        onPrimaryContainer = colors.primaryText,
+        secondaryContainer = colors.sectionBackground,
+        onSecondaryContainer = colors.primaryText,
+        tertiaryContainer = colors.riskSectionBackground,
+        onTertiaryContainer = colors.primaryText,
+        outline = colors.border,
+        outlineVariant = colors.border,
+        onBackground = colors.primaryText,
+        onSurface = colors.primaryText,
+        onSurfaceVariant = colors.secondaryText,
+        error = colors.error,
+        errorContainer = colors.error.copy(alpha = 0.12f).compositeOver(colors.panel),
+        onErrorContainer = colors.error,
+    )
 }

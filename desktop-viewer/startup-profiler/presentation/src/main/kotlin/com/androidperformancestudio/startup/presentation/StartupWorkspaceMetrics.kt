@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -40,7 +39,7 @@ import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerAccentPalette
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
-import com.androidperformancestudio.ui.studio.StudioCard
+import com.androidperformancestudio.ui.studio.StudioMetricCard
 import com.androidperformancestudio.ui.studio.StudioPanel
 import com.androidperformancestudio.ui.studio.StudioTokens
 
@@ -132,16 +131,14 @@ private fun StartupMetricCard(
     evidence: String,
     modifier: Modifier,
 ) {
-    StudioCard(
+    StudioMetricCard(
+        label = title,
+        value = value,
         modifier = modifier.testTag("startup-metric-$id"),
-        containerColor = tone.copy(alpha = 0.10f),
-        borderColor = tone.copy(alpha = 0.5f),
-    ) {
-        Text(title, color = tone, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
-        Text(description, color = LocalViewerColors.current.secondaryText, fontSize = ViewerTypography.secondary.fontSize)
-        Text(value, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
-        Text(evidence, color = LocalViewerColors.current.secondaryText, fontSize = ViewerTypography.secondary.fontSize)
-    }
+        description = description,
+        supportingText = evidence,
+        tone = tone,
+    )
 }
 
 internal fun metricEvidenceText(

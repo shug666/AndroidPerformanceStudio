@@ -5,13 +5,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
+import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.gpu.model.AgiCapability
 import com.androidperformancestudio.gpu.model.AgiLaunchMode
 import com.androidperformancestudio.gpu.model.ArtifactLocationStatus
@@ -27,6 +32,56 @@ import kotlin.test.assertEquals
 
 @OptIn(ExperimentalTestApi::class)
 class GpuAnalysisHubScreenTest {
+    @Test
+    fun `short native content viewport keeps artifact recovery actions reachable`() =
+        runDesktopComposeUiTest(width = 1064, height = 560) {
+            val artifact = artifact()
+            val device = GpuDeviceContext("fixture-serial", "Fixture Phone", 34, "Fixture Vendor", "Fixture Renderer", "Fixture Driver")
+            val state =
+                artifactState(artifact, ArtifactPrimaryAction.OPEN_PERFETTO).copy(
+                    devices = listOf(device),
+                    selectedDeviceSerial = device.serial,
+                    capability = artifactState(artifact, ArtifactPrimaryAction.OPEN_PERFETTO).capability?.copy(
+                        warnings = listOf("Fixture: AGI automation unavailable", "Fixture: artifact viewer unverified"),
+                    ),
+                )
+            var relocated = 0
+            setContent {
+                ViewerTheme(darkTheme = true) {
+                    GpuAnalysisHubScreen(
+                        state,
+                        GpuIntegrationActions({}, {}, {}, { relocated++ }),
+                        UiLanguage.ENGLISH,
+                    )
+                }
+            }
+
+            onNodeWithTag("gpu-workspace-heading").assertIsDisplayed()
+            onNodeWithText("Fixture Vendor").assertIsDisplayed()
+            onNodeWithText("Relocate").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
+            assertEquals(1, relocated)
+            onNodeWithText("Show in Files").assertIsDisplayed().assertIsEnabled()
+        }
+
+    @Test
+    fun `hub keeps a single shared heading and artifact count in a compact light workspace`() =
+        runDesktopComposeUiTest(width = 1000, height = 800) {
+            setContent {
+                ViewerTheme(darkTheme = false) {
+                    GpuAnalysisHubScreen(
+                        state = GpuIntegrationState(),
+                        actions = GpuIntegrationActions({}, {}, {}, {}),
+                        language = UiLanguage.ENGLISH,
+                    )
+                }
+            }
+
+            onAllNodesWithText("GPU Analysis Hub").assertCountEquals(1)
+            onNodeWithTag("gpu-workspace-heading").assertHeightIsAtLeast(94.dp)
+            onNodeWithText("0 artifacts").assertExists()
+            onNodeWithText("Open Trace Analyzer").assertIsEnabled()
+        }
+
     @Test
     fun `selecting a connected device dispatches its serial`() = runDesktopComposeUiTest(width = 1200, height = 800) {
         var selectedSerial by mutableStateOf<String?>(null)

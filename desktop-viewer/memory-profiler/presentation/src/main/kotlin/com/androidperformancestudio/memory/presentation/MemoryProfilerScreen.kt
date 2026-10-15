@@ -93,6 +93,7 @@ import com.androidperformancestudio.memory.presentation.generated.resources.leak
 import com.androidperformancestudio.memory.presentation.generated.resources.leak_suspects
 import com.androidperformancestudio.memory.presentation.generated.resources.manual_verification
 import com.androidperformancestudio.memory.presentation.generated.resources.mapping_loaded_note
+import com.androidperformancestudio.memory.presentation.generated.resources.memory_profiler
 import com.androidperformancestudio.memory.presentation.generated.resources.native_heap
 import com.androidperformancestudio.memory.presentation.generated.resources.open_native_heap
 import com.androidperformancestudio.memory.presentation.generated.resources.native_heap_total
@@ -115,6 +116,9 @@ import com.androidperformancestudio.memory.presentation.generated.resources.warn
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.studio.StudioCard
+import com.androidperformancestudio.ui.studio.StudioMetricCard
+import com.androidperformancestudio.ui.studio.StudioTokens
+import com.androidperformancestudio.ui.studio.StudioWorkspaceHeader
 
 @Composable
 public fun MemoryProfilerScreen(
@@ -131,6 +135,10 @@ public fun MemoryProfilerScreen(
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background),
         ) {
+            StudioWorkspaceHeader(
+                title = localizedStringResource(Res.string.memory_profiler, language),
+                modifier = Modifier.padding(StudioTokens.compactContentPadding).testTag("memory-workspace-header"),
+            )
             if (presentedState.snapshotSummary != null || presentedState.artifact != null || presentedState.mappingLoaded) {
                 Column(
                     modifier =
@@ -247,7 +255,7 @@ public fun MemoryProfilerScreen(
                         Modifier
                             .fillMaxWidth()
                             .weight(1f)
-                            .padding(8.dp)
+                            .padding(StudioTokens.compactContentPadding)
                             .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
@@ -553,15 +561,7 @@ private fun MetricCard(
     value: String,
     modifier: Modifier,
 ) {
-    StudioCard(
-        modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        borderColor = MaterialTheme.colorScheme.outlineVariant,
-        contentSpacing = 0.dp,
-    ) {
-        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, fontWeight = FontWeight.Bold)
-    }
+    StudioMetricCard(label = label, value = value, modifier = modifier)
 }
 
 @Composable

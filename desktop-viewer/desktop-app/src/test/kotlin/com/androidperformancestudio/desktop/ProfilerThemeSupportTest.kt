@@ -66,8 +66,8 @@ class ProfilerThemeSupportTest {
         profilerPresentationSources().forEach { source ->
             val content = Files.readString(source)
             assertTrue(
-                content.contains("MaterialTheme.colorScheme"),
-                "$source must consume the active Material color scheme",
+                content.contains("MaterialTheme.colorScheme") || content.contains("LocalViewerColors.current"),
+                "$source must consume active Material or shared Viewer theme roles",
             )
             assertFalse(
                 FIXED_HEX_COLOR.containsMatchIn(content),

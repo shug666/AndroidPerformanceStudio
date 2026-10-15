@@ -2,15 +2,13 @@
 
 package com.androidperformancestudio.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.ui.studio.StudioCard
@@ -23,31 +21,25 @@ public fun ProfilerMetricCard(
     supportingText: List<String> = emptyList(),
     prominent: Boolean = false,
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
+    tone: Color? = null,
 ) {
+    val colors = LocalViewerColors.current
+    val metricTone = tone ?: colors.accent
     StudioCard(
         modifier = modifier,
-        containerColor = containerColor,
+        containerColor = metricTone.copy(alpha = 0.10f).compositeOver(containerColor),
+        borderColor = metricTone.copy(alpha = 0.5f),
         contentColor = contentColorFor(containerColor),
-        contentPadding = 0.dp,
-        contentSpacing = 0.dp,
+        contentSpacing = 4.dp,
     ) {
-        Column(
-            Modifier.padding(horizontal = 8.dp, vertical = if (prominent) 6.dp else 8.dp),
-            verticalArrangement = Arrangement.spacedBy(if (prominent) 4.dp else 0.dp),
-        ) {
-            Text(
-                label,
-                style = if (prominent) MaterialTheme.typography.labelLarge else MaterialTheme.typography.labelMedium,
-                color = if (prominent) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                value,
-                style = if (prominent) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            supportingText.forEach { text ->
-                Text(text, style = MaterialTheme.typography.bodySmall)
-            }
+        Text(label, style = ViewerTypography.subsectionTitle, color = metricTone, fontWeight = FontWeight.SemiBold)
+        Text(
+            value,
+            style = ViewerTypography.metric,
+            fontWeight = if (prominent) FontWeight.Bold else FontWeight.SemiBold,
+        )
+        supportingText.forEach { text ->
+            Text(text, style = ViewerTypography.secondary, color = colors.secondaryText)
         }
     }
 }

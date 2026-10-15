@@ -165,38 +165,34 @@ public fun StartupProfilerScreen(
     language: UiLanguage,
     modifier: Modifier = Modifier,
 ) {
-    val originalColors = LocalViewerColors.current
-    val workspaceColors = remember(originalColors) { originalColors.startupWorkspaceColors() }
-    CompositionLocalProvider(LocalViewerColors provides workspaceColors) {
-        val selected = state.analysis?.runs?.let { runs -> runs.firstOrNull { it.id == state.selectedRunId } ?: runs.firstOrNull() }
-        val colors = LocalViewerColors.current
-        BoxWithConstraints(modifier.fillMaxSize().background(colors.workspace).padding(8.dp)) {
-            if (maxWidth >= 1100.dp) {
-                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column(
-                        Modifier.weight(1f).testTag("startup-main").verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        StartupMainWorkspace(state, selected, actions, language)
-                    }
-                    Column(
-                        Modifier.width(300.dp).testTag("startup-evidence-rail").verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        StartupEvidenceRail(state, selected, actions, language)
-                    }
-                }
-            } else {
+    val selected = state.analysis?.runs?.let { runs -> runs.firstOrNull { it.id == state.selectedRunId } ?: runs.firstOrNull() }
+    val colors = LocalViewerColors.current
+    BoxWithConstraints(modifier.fillMaxSize().background(colors.workspace).padding(8.dp)) {
+        if (maxWidth >= 1100.dp) {
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column(
-                    Modifier.fillMaxSize().testTag("startup-stacked-workspace").verticalScroll(rememberScrollState()),
+                    Modifier.weight(1f).testTag("startup-main").verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Column(Modifier.fillMaxWidth().testTag("startup-main"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        StartupMainWorkspace(state, selected, actions, language)
-                    }
-                    Column(Modifier.fillMaxWidth().testTag("startup-evidence-rail"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        StartupEvidenceRail(state, selected, actions, language)
-                    }
+                    StartupMainWorkspace(state, selected, actions, language)
+                }
+                Column(
+                    Modifier.width(300.dp).testTag("startup-evidence-rail").verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    StartupEvidenceRail(state, selected, actions, language)
+                }
+            }
+        } else {
+            Column(
+                Modifier.fillMaxSize().testTag("startup-stacked-workspace").verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Column(Modifier.fillMaxWidth().testTag("startup-main"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StartupMainWorkspace(state, selected, actions, language)
+                }
+                Column(Modifier.fillMaxWidth().testTag("startup-evidence-rail"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StartupEvidenceRail(state, selected, actions, language)
                 }
             }
         }
