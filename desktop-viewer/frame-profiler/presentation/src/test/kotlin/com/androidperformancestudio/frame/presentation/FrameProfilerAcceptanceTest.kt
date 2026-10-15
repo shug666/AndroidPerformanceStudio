@@ -205,7 +205,10 @@ class FrameProfilerAcceptanceTest {
         runDesktopComposeUiTest(width = 1280, height = 820) {
             val analysis =
                 FrameJankAnalyzer().analyze(
-                    listOf(sample(1, 8_000_000L), sample(2, 24_000_000L).copy(platformJank = true)),
+                    listOf(
+                        sample(1, 8_000_000L).copy(platformJank = false, refreshRateHz = 60.0),
+                        sample(2, 24_000_000L).copy(platformJank = true, refreshRateHz = 120.0),
+                    ),
                 )
             setContent {
                 ViewerTheme(darkTheme = false) {
@@ -222,6 +225,14 @@ class FrameProfilerAcceptanceTest {
             onNodeWithTag("frame-metric-p50").assertTextContains("8.00 ms", substring = true)
             onNodeWithTag("frame-metric-p95").assertTextContains("24.00 ms", substring = true)
             onNodeWithTag("frame-metric-worst").assertTextContains("24.00 ms", substring = true)
+            onNodeWithTag("frame-metric-platform-jank").assertTextEquals("50.0%")
+            onNodeWithTag("frame-metric-refresh-rate").assertTextEquals("60–120 Hz")
+            val metricBounds =
+                listOf("frames", "deadline", "p50", "p95", "worst", "platform-jank", "refresh-rate").map {
+                    onNodeWithTag("frame-metric-$it").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+                }
+            assertTrue(metricBounds.all { it.top == metricBounds.first().top }, "All summary metrics must share a row")
+            assertTrue(metricBounds.zipWithNext().all { (left, right) -> left.right < right.left })
             onNodeWithTag("frame-attribution-entry-0").assertDoesNotExist()
             onNodeWithTag("frame-attribution-toggle").performClick()
             onNodeWithTag("frame-attribution-entry-0").assertTextContains("GalleryActivity", substring = true)

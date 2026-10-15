@@ -492,14 +492,23 @@ private fun SummaryCards(
             Modifier.weight(1f),
             "worst",
         )
+        FrameMetricCard(
+            localizedStringResource(Res.string.platform_jank_rate, language),
+            summary.platformJankRate?.let { "%.1f%%".format(it * 100.0) } ?: "—",
+            emptyList(),
+            MaterialTheme.colorScheme.error,
+            Modifier.weight(1f),
+            "platform-jank",
+        )
+        FrameMetricCard(
+            localizedStringResource(Res.string.refresh_rate, language),
+            refreshRateText,
+            emptyList(),
+            MaterialTheme.colorScheme.secondary,
+            Modifier.weight(1f),
+            "refresh-rate",
+        )
     }
-    Text(
-        "${localizedStringResource(Res.string.platform_jank_rate, language)}: " +
-            (summary.platformJankRate?.let { "%.1f%%".format(it * 100.0) } ?: "—") +
-            " · ${localizedStringResource(Res.string.refresh_rate, language)}: $refreshRateText",
-        style = ViewerTypography.secondary,
-        color = LocalViewerColors.current.secondaryText,
-    )
 }
 
 @Composable

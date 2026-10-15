@@ -44,6 +44,16 @@ class FrameWorkspaceStyleTest {
     }
 
     @Test
+    fun `all seven summary metrics use the shared metric card in one row`() {
+        val summary = source.substringAfter("private fun SummaryCards(").substringBefore("private fun FrameAttributionSection(")
+        assertTrue(Regex("FrameMetricCard\\(").findAll(summary).count() == 7)
+        assertTrue(Regex("Modifier\\.weight\\(1f\\)").findAll(summary).count() == 7)
+        assertTrue(summary.contains("Res.string.platform_jank_rate"))
+        assertTrue(summary.contains("Res.string.refresh_rate"))
+        assertFalse(Regex("\\bText\\(").containsMatchIn(summary))
+    }
+
+    @Test
     fun `metric tones use the shared card without introducing a page theme`() {
         val metric = source.substringAfter("private fun FrameMetricCard(").substringBefore("private fun MetricSparkline(")
         assertTrue(metric.contains("StudioCard("))
