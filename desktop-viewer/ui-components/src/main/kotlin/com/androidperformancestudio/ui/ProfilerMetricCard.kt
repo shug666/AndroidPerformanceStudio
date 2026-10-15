@@ -5,15 +5,15 @@ package com.androidperformancestudio.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.androidperformancestudio.ui.studio.StudioCard
 
 @Composable
 public fun ProfilerMetricCard(
@@ -24,9 +24,12 @@ public fun ProfilerMetricCard(
     prominent: Boolean = false,
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
 ) {
-    Card(
+    StudioCard(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = containerColor),
+        containerColor = containerColor,
+        contentColor = contentColorFor(containerColor),
+        contentPadding = 0.dp,
+        contentSpacing = 0.dp,
     ) {
         Column(
             Modifier.padding(horizontal = 8.dp, vertical = if (prominent) 6.dp else 8.dp),

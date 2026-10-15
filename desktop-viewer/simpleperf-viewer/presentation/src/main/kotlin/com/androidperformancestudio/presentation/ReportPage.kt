@@ -72,6 +72,7 @@ import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.button.MacOSTextButton
 import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.radiobutton.MacOSChoiceChip
+import com.androidperformancestudio.ui.studio.StudioCard
 import com.androidperformancestudio.ui.studio.StudioDataTable
 import com.androidperformancestudio.ui.studio.StudioMetricCard
 import com.androidperformancestudio.ui.studio.StudioTableColumn
@@ -248,7 +249,11 @@ internal fun OverviewReport(
             }
         }
         item {
-            MacOsPanel(Modifier.fillMaxWidth(), style) {
+            StudioCard(
+                modifier = Modifier.fillMaxWidth(),
+                containerColor = style.panel,
+                borderColor = style.border,
+            ) {
                 Text(
                     localizedStringResource(SimpleperfViewerRes.sp_report_data_quality, language),
                     color = style.text,
@@ -835,17 +840,16 @@ private fun DiagnosticCard(
             DiagnosticSeverity.CRITICAL -> style.error
         }
     val navigation = finding.navigation(actions)
-    Column(
+    StudioCard(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .background(style.panel, RoundedCornerShape(9.dp))
-                .border(ViewerDimensions.hairline, accent, RoundedCornerShape(9.dp))
                 .clickable {
                     actions.onSelectOverviewFinding(finding.ruleId)
                     navigation?.invoke()
-                }.padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+                },
+        containerColor = style.panel,
+        borderColor = accent,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(

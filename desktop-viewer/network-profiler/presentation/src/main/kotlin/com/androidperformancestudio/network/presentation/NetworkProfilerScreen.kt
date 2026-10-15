@@ -20,11 +20,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +58,7 @@ import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
+import com.androidperformancestudio.ui.studio.StudioCard
 import com.androidperformancestudio.ui.studio.StudioDataTable
 import com.androidperformancestudio.ui.studio.StudioEvidence
 import com.androidperformancestudio.ui.studio.StudioEvidenceBadge
@@ -413,9 +413,11 @@ private fun RequestDetail(
 
 @Composable
 private fun ExchangeDetail(exchange: HttpExchange, index: Int, language: UiLanguage) {
-    Card(
+    StudioCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = LocalViewerColors.current.sectionBackground),
+        containerColor = LocalViewerColors.current.sectionBackground,
+        contentColor = contentColorFor(LocalViewerColors.current.sectionBackground),
+        contentPadding = 0.dp,
     ) {
         Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(

@@ -36,7 +36,7 @@ class AppHomePageLayoutTest {
         assertEquals(2, homeGridColumnCount(600))
         assertEquals(1, homeGridColumnCount(420))
         assertTrue(HOME_MODULE_CARD_HEIGHT_DP < 120)
-        assertEquals(10, HOME_CARD_CORNER_RADIUS_DP)
+        assertTrue(source.contains("RoundedCornerShape(StudioTokens.cardRadius)"))
         assertTrue(source.contains("entries.chunked(columnCount)"))
         assertTrue(source.contains("height(HOME_MODULE_CARD_HEIGHT_DP.dp)"))
         assertTrue(source.contains("entry.destination.navigationIconResource"))

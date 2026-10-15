@@ -1,7 +1,6 @@
 package com.androidperformancestudio.desktop
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -57,6 +56,7 @@ import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
+import com.androidperformancestudio.ui.studio.StudioCard
 import com.androidperformancestudio.ui.studio.StudioDataTable
 import com.androidperformancestudio.ui.studio.StudioEmptyState
 import com.androidperformancestudio.ui.studio.StudioErrorState
@@ -85,7 +85,6 @@ import org.jetbrains.compose.resources.painterResource
 
 internal const val HOME_MODULE_CARD_HEIGHT_DP = 78
 internal const val HOME_QUICK_ACTION_HEIGHT_DP = 92
-internal const val HOME_CARD_CORNER_RADIUS_DP = 10
 internal const val HOME_RAIL_WIDTH_DP = 320
 internal const val HOME_TWO_COLUMN_MIN_WIDTH_DP = 900
 
@@ -407,25 +406,23 @@ private fun HomeRailColumn(
 @Composable
 private fun HomeHero(language: UiLanguage) {
     val colors = LocalViewerColors.current
-    val shape = RoundedCornerShape(StudioTokens.cardRadius)
-    Box(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(shape)
-                .background(
-                    Brush.horizontalGradient(
-                        listOf(
-                            colors.accent.copy(alpha = if (colors.isDark) 0.22f else 0.12f),
-                            colors.panel,
-                        ),
-                    ),
-                )
-                .border(StudioTokens.borderWidth, colors.border, shape)
-                .padding(horizontal = 22.dp, vertical = 20.dp),
+    StudioCard(
+        modifier = Modifier.fillMaxWidth(),
+        containerColor = colors.transparent,
+        contentPadding = 0.dp,
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                colors.accent.copy(alpha = if (colors.isDark) 0.22f else 0.12f),
+                                colors.panel,
+                            ),
+                        ),
+                    ).padding(horizontal = 22.dp, vertical = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
         ) {
@@ -823,62 +820,61 @@ private fun QuickActionCard(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalViewerColors.current
-    val shape = RoundedCornerShape(HOME_CARD_CORNER_RADIUS_DP.dp)
+    val shape = RoundedCornerShape(StudioTokens.cardRadius)
     val interactionSource = remember { MutableInteractionSource() }
     val hovered by interactionSource.collectIsHoveredAsState()
-    Row(
+    StudioCard(
         modifier =
             modifier
                 .height(HOME_QUICK_ACTION_HEIGHT_DP.dp)
                 .shadow(elevation = if (hovered) 6.dp else 1.dp, shape = shape, clip = false)
-                .clip(shape)
-                .background(if (hovered) colors.selectedRow else colors.panel)
-                .border(
-                    StudioTokens.borderWidth,
-                    if (hovered) colors.accent.copy(alpha = 0.42f) else colors.border.copy(alpha = 0.72f),
-                    shape,
-                )
-                .clickable(interactionSource = interactionSource, indication = null, onClick = action.onClick)
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
+                .clickable(interactionSource = interactionSource, indication = null, onClick = action.onClick),
+        containerColor = if (hovered) colors.selectedRow else colors.panel,
+        borderColor = if (hovered) colors.accent.copy(alpha = 0.42f) else colors.border.copy(alpha = 0.72f),
+        contentPadding = 0.dp,
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(colors.accent.copy(alpha = if (colors.isDark) 0.24f else 0.12f)),
-            contentAlignment = Alignment.Center,
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
         ) {
-            Icon(
-                painter = painterResource(action.icon),
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = colors.accent,
-            )
-        }
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
-        ) {
-            Text(
-                text = action.label,
-                color = colors.primaryText,
-                fontSize = ViewerTypography.cardTitle.fontSize,
-                lineHeight = ViewerTypography.cardTitle.lineHeight,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = action.description,
-                color = colors.secondaryText,
-                fontSize = ViewerTypography.secondary.fontSize,
-                lineHeight = ViewerTypography.secondary.lineHeight,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Box(
+                modifier =
+                    Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.accent.copy(alpha = if (colors.isDark) 0.24f else 0.12f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(action.icon),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = colors.accent,
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text(
+                    text = action.label,
+                    color = colors.primaryText,
+                    fontSize = ViewerTypography.cardTitle.fontSize,
+                    lineHeight = ViewerTypography.cardTitle.lineHeight,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = action.description,
+                    color = colors.secondaryText,
+                    fontSize = ViewerTypography.secondary.fontSize,
+                    lineHeight = ViewerTypography.secondary.lineHeight,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
@@ -889,62 +885,61 @@ private fun FeatureEntryCard(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalViewerColors.current
-    val shape = RoundedCornerShape(HOME_CARD_CORNER_RADIUS_DP.dp)
+    val shape = RoundedCornerShape(StudioTokens.cardRadius)
     val interactionSource = remember { MutableInteractionSource() }
     val hovered by interactionSource.collectIsHoveredAsState()
-    Row(
+    StudioCard(
         modifier =
             modifier
                 .height(HOME_MODULE_CARD_HEIGHT_DP.dp)
                 .shadow(elevation = if (hovered) 6.dp else 1.dp, shape = shape, clip = false)
-                .clip(shape)
-                .background(if (hovered) colors.selectedRow else colors.panel)
-                .border(
-                    StudioTokens.borderWidth,
-                    if (hovered) colors.accent.copy(alpha = 0.42f) else colors.border.copy(alpha = 0.72f),
-                    shape,
-                )
-                .clickable(interactionSource = interactionSource, indication = null, onClick = entry.onClick)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(11.dp),
+                .clickable(interactionSource = interactionSource, indication = null, onClick = entry.onClick),
+        containerColor = if (hovered) colors.selectedRow else colors.panel,
+        borderColor = if (hovered) colors.accent.copy(alpha = 0.42f) else colors.border.copy(alpha = 0.72f),
+        contentPadding = 0.dp,
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(34.dp)
-                    .clip(RoundedCornerShape(9.dp))
-                    .background(colors.accent.copy(alpha = if (colors.isDark) 0.22f else 0.12f)),
-            contentAlignment = Alignment.Center,
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(11.dp),
         ) {
-            Icon(
-                painter = painterResource(entry.destination.navigationIconResource),
-                contentDescription = null,
-                modifier = Modifier.size(StudioTokens.navigationIconSize),
-                tint = colors.accent,
-            )
-        }
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                text = entry.title,
-                color = colors.primaryText,
-                fontSize = ViewerTypography.cardTitle.fontSize,
-                lineHeight = ViewerTypography.cardTitle.lineHeight,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = entry.description,
-                color = colors.secondaryText,
-                fontSize = ViewerTypography.secondary.fontSize,
-                lineHeight = ViewerTypography.secondary.lineHeight,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Box(
+                modifier =
+                    Modifier
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(colors.accent.copy(alpha = if (colors.isDark) 0.22f else 0.12f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(entry.destination.navigationIconResource),
+                    contentDescription = null,
+                    modifier = Modifier.size(StudioTokens.navigationIconSize),
+                    tint = colors.accent,
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = entry.title,
+                    color = colors.primaryText,
+                    fontSize = ViewerTypography.cardTitle.fontSize,
+                    lineHeight = ViewerTypography.cardTitle.lineHeight,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = entry.description,
+                    color = colors.secondaryText,
+                    fontSize = ViewerTypography.secondary.fontSize,
+                    lineHeight = ViewerTypography.secondary.lineHeight,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

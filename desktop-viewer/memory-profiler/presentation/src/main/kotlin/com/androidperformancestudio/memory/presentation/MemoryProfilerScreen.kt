@@ -114,6 +114,7 @@ import com.androidperformancestudio.memory.presentation.generated.resources.unav
 import com.androidperformancestudio.memory.presentation.generated.resources.warning
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.localizedStringResource
+import com.androidperformancestudio.ui.studio.StudioCard
 
 @Composable
 public fun MemoryProfilerScreen(
@@ -552,12 +553,11 @@ private fun MetricCard(
     value: String,
     modifier: Modifier,
 ) {
-    Column(
-        modifier =
-            modifier
-                .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(4.dp))
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(4.dp))
-                .padding(8.dp),
+    StudioCard(
+        modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        borderColor = MaterialTheme.colorScheme.outlineVariant,
+        contentSpacing = 0.dp,
     ) {
         Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, fontWeight = FontWeight.Bold)
@@ -696,7 +696,6 @@ private fun LeakSuspectsPhaseTwo(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(4.dp))
                 .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -706,16 +705,15 @@ private fun LeakSuspectsPhaseTwo(
         } else {
             state.leakSuspects.forEach { suspect ->
                 var expanded by remember(suspect) { mutableStateOf(false) }
-                Column(
+                StudioCard(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .background(
-                                MaterialTheme.colorScheme.surface,
-                                RoundedCornerShape(3.dp),
-                            ).clickable { expanded = !expanded }
-                            .padding(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                            .clickable { expanded = !expanded },
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    borderColor = LocalViewerColors.current.transparent,
+                    contentPadding = 6.dp,
+                    contentSpacing = 2.dp,
                 ) {
                     Text(
                         localizedStringResource(
@@ -769,13 +767,11 @@ private fun ActivityLeakSection(
     leaks: List<ActivityLeakEntry>,
     language: UiLanguage,
 ) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(4.dp))
-                .padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
+    StudioCard(
+        modifier = Modifier.fillMaxWidth(),
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        borderColor = LocalViewerColors.current.transparent,
+        contentSpacing = 3.dp,
     ) {
         Text(localizedStringResource(Res.string.activity_leaks, language), fontWeight = FontWeight.Bold)
         if (leaks.isEmpty()) {
@@ -804,9 +800,11 @@ private fun NativeHeapSummarySection(
     language: UiLanguage,
     onOpen: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(4.dp)).padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+    StudioCard(
+        modifier = Modifier.fillMaxWidth(),
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        borderColor = LocalViewerColors.current.transparent,
+        contentSpacing = 4.dp,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(localizedStringResource(Res.string.native_heap, language), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
@@ -850,9 +848,11 @@ private fun HeapDiffSection(
 ) {
     if (diff == null) return
     val changedEntries = diff.entries.filter { it.countDelta != 0 || it.shallowSizeDelta != 0L }
-    Column(
-        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(4.dp)).padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
+    StudioCard(
+        modifier = Modifier.fillMaxWidth(),
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        borderColor = LocalViewerColors.current.transparent,
+        contentSpacing = 3.dp,
     ) {
         Text(localizedStringResource(Res.string.heap_diff, language), fontWeight = FontWeight.Bold)
         if (changedEntries.isEmpty()) {
@@ -881,9 +881,11 @@ private fun BitmapSection(
     language: UiLanguage,
 ) {
     if (bitmaps.isEmpty()) return
-    Column(
-        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(4.dp)).padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
+    StudioCard(
+        modifier = Modifier.fillMaxWidth(),
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        borderColor = LocalViewerColors.current.transparent,
+        contentSpacing = 3.dp,
     ) {
         Text(localizedStringResource(Res.string.bitmap_analysis, language), fontWeight = FontWeight.Bold)
         bitmaps.take(8).forEach { bitmap ->

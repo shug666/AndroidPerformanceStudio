@@ -333,7 +333,10 @@ private fun BaselineComparison(
     comparison: StartupComparison,
     language: UiLanguage,
 ) {
-    StudioCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
+    StudioCard(
+        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+    ) {
         Column(Modifier.padding(vertical = 6.dp, horizontal = 8.dp)) {
             Text(
                 localizedStringResource(

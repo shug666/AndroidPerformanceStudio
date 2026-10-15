@@ -7,7 +7,6 @@ import com.androidperformancestudio.presentation.generated.resources.*
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.localizedStringResource
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.viewerOutlinedTextFieldColors
 import com.androidperformancestudio.ui.radiobutton.MacOSChoiceChip
+import com.androidperformancestudio.ui.studio.StudioCard
 import com.androidperformancestudio.ui.switch.MacOSSwitch
 import kotlin.math.roundToInt
 
@@ -188,15 +188,11 @@ private fun SettingsSection(
     content: @Composable () -> Unit,
 ) {
     val colors = LocalViewerColors.current
-    val shape = RoundedCornerShape(7.dp)
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .background(colors.sectionBackground, shape)
-                .border(1.dp, colors.accent.copy(alpha = SETTINGS_SECTION_ACCENT_ALPHA), shape)
-                .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(7.dp),
+    StudioCard(
+        modifier = Modifier.fillMaxWidth(),
+        containerColor = colors.sectionBackground,
+        borderColor = colors.accent.copy(alpha = SETTINGS_SECTION_ACCENT_ALPHA),
+        contentSpacing = 7.dp,
     ) {
         Text(
             text = title,

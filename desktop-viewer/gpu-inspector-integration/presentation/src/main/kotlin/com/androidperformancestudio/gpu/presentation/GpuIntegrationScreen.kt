@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -26,6 +25,7 @@ import com.androidperformancestudio.gpu.presentation.generated.resources.*
 import com.androidperformancestudio.gpu.presentation.generated.resources.Res
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.localizedStringResource
+import com.androidperformancestudio.ui.studio.StudioCard
 import java.nio.file.Path
 
 public enum class ArtifactPrimaryAction { OPEN_AGI, LAUNCH_AGI, OPEN_PERFETTO, OPEN_DESKTOP, NONE }
@@ -63,7 +63,7 @@ public fun GpuIntegrationScreen(
         modifier.fillMaxSize().padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Card(Modifier.fillMaxWidth()) {
+        StudioCard(Modifier.fillMaxWidth(), contentPadding = 0.dp) {
             Column(
                 Modifier.padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -109,7 +109,7 @@ public fun GpuIntegrationScreen(
         LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             items(state.artifacts) { artifact ->
                 val availability = state.availabilityByArtifactId[artifact.id]
-                Card(Modifier.fillMaxWidth()) {
+                StudioCard(Modifier.fillMaxWidth(), contentPadding = 0.dp) {
                     Row(
                         Modifier.fillMaxWidth().padding(8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,

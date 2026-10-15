@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import com.androidperformancestudio.memory.model.BitmapDumpImage
 import com.androidperformancestudio.memory.model.BitmapDumpSession
@@ -251,6 +252,33 @@ class MemoryProfilerScreenTest {
             }
 
             onNodeWithText("retained 2.0 KB · confidence 85%").assertExists()
+        }
+
+    @Test
+    fun `leak suspect card expands and collapses its reference chain`() =
+        runDesktopComposeUiTest(width = 1000, height = 700) {
+            setContent {
+                MemoryProfilerScreen(
+                    state =
+                        loadedState().copy(
+                            leakSuspects =
+                                listOf(
+                                    LeakSuspect(
+                                        className = "com.example.LeakingActivity",
+                                        reason = "Retained by singleton",
+                                        referenceChain = listOf(ObjectReference("owner", 42L, "com.example.Singleton")),
+                                    ),
+                                ),
+                        ),
+                    actions = MemoryProfilerActions(),
+                )
+            }
+
+            onNodeWithText("owner", substring = true).assertDoesNotExist()
+            onNodeWithText("Retained by singleton", substring = true).performScrollTo().performClick()
+            onNodeWithText("owner", substring = true).assertExists()
+            onNodeWithText("Retained by singleton", substring = true).performScrollTo().performClick()
+            onNodeWithText("owner", substring = true).assertDoesNotExist()
         }
 
     @Test

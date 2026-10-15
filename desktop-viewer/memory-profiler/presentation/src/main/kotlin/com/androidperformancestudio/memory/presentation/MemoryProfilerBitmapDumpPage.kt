@@ -56,6 +56,7 @@ import com.androidperformancestudio.memory.presentation.generated.resources.bitm
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
+import com.androidperformancestudio.ui.studio.StudioCard
 import java.nio.file.Files
 import org.jetbrains.skia.Image as SkiaImage
 
@@ -264,14 +265,11 @@ private fun BitmapSummaryMetricCard(
     label: String,
     value: String,
 ) {
-    Column(
-        modifier =
-            Modifier
-                .width(150.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp))
-                .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(6.dp))
-                .padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+    StudioCard(
+        modifier = Modifier.width(150.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        borderColor = MaterialTheme.colorScheme.primary,
+        contentSpacing = 2.dp,
     ) {
         androidx.compose.material3.Text(
             label,
@@ -296,15 +294,14 @@ private fun BitmapDumpImageCard(
                 SkiaImage.makeFromEncoded(Files.readAllBytes(bitmap.file)).toComposeImageBitmap()
             }.getOrNull()
         }
-    Column(
+    StudioCard(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .testTag("bitmap-dump-image-card-${bitmap.recordIndex}")
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp))
-                .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(6.dp))
-                .padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+                .testTag("bitmap-dump-image-card-${bitmap.recordIndex}"),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        borderColor = MaterialTheme.colorScheme.primary,
+        contentSpacing = 4.dp,
     ) {
         if (image != null) {
             Image(

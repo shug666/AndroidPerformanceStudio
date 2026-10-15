@@ -67,7 +67,10 @@ class CaptureConfigurationWorkspaceTest {
         val source = source("CaptureSettingsSection.kt")
 
         assertTrue(source.contains("CaptureSettingsDialog("))
-        assertTrue(source.contains("MacOsPanel("))
+        assertTrue(source.contains("StudioCard("))
+        assertFalse(source.contains("MacOsPanel("))
+        assertTrue(source.contains("containerColor = style.panel"))
+        assertTrue(source.contains("borderColor = style.border"))
         assertTrue(source.contains("MacOsTextField("))
         assertTrue(source.contains("MacOSChoiceChip("))
         assertFalse(source.contains("MaterialTheme.typography.titleLarge"))

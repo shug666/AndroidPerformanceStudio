@@ -24,8 +24,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -81,6 +79,7 @@ import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.ProfilerMetricCard
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.localizedStringResource
+import com.androidperformancestudio.ui.studio.StudioCard
 import java.util.Locale
 
 @Composable
@@ -167,7 +166,11 @@ private fun ResultsPane(
         }
         val session = state.experiment?.session
         session?.let {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+            StudioCard(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                contentPadding = 0.dp,
+            ) {
                 Text(
                     localizedStringResource(
                         Res.string.capability_attribution_uid,
@@ -250,7 +253,11 @@ private fun BaselineComparison(
         } else {
             null
         }
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+    StudioCard(
+        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        contentPadding = 0.dp,
+    ) {
         Text(
             localizedStringResource(
                 Res.string.network_use_vs_previous_compatible_experiment_difference_only,
