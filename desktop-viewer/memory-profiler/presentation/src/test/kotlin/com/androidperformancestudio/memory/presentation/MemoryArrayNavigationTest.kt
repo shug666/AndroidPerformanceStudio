@@ -1,6 +1,7 @@
 package com.androidperformancestudio.memory.presentation
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
@@ -45,8 +46,8 @@ class MemoryArrayNavigationTest {
             }
 
             onNodeWithText("Elements 201–400 of 450").assertExists()
-            onNodeWithText("Previous elements").performClick()
-            onNodeWithText("Next elements").performClick()
+            onNodeWithContentDescription("Previous elements").performClick()
+            onNodeWithContentDescription("Next elements").performClick()
             assertEquals(listOf(1L to 0, 1L to 400), loadedRanges)
         }
 

@@ -1,17 +1,19 @@
 @file:Suppress("ktlint:standard:function-naming")
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 
 package com.androidperformancestudio.memory.presentation
 
+import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.memory.model.HeapSnapshotSummary
 import com.androidperformancestudio.memory.presentation.generated.resources.Res
 import com.androidperformancestudio.memory.presentation.generated.resources.close_snapshot
+import com.androidperformancestudio.memory.presentation.generated.resources.memory_add_snapshot
 import com.androidperformancestudio.memory.presentation.generated.resources.snapshot_tab_capabilities
 import com.androidperformancestudio.memory.presentation.generated.resources.snapshot_tab_counts
 import com.androidperformancestudio.memory.presentation.generated.resources.snapshot_tab_loaded
@@ -37,7 +40,6 @@ import com.androidperformancestudio.memory.presentation.generated.resources.snap
 import com.androidperformancestudio.memory.presentation.generated.resources.snapshots
 import com.androidperformancestudio.memory.presentation.generated.resources.unavailable
 import com.androidperformancestudio.memory.presentation.generated.resources.unknown_snapshot
-import com.androidperformancestudio.ui.ProfilerCompactButton
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.localizedStringResource
 import java.time.Instant
@@ -49,20 +51,22 @@ public fun MemoryProfilerSnapshotTabs(
     onSelectSnapshot: (String) -> Unit,
     onCloseSnapshot: (String) -> Unit,
     language: UiLanguage,
+    onAddSnapshot: (() -> Unit)? = null,
 ) {
-    if (state.snapshotSummaries.isEmpty()) return
+    if (state.snapshotSummaries.isEmpty() && onAddSnapshot == null) return
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
                 .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .height(42.dp)
+                .padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             localizedStringResource(Res.string.snapshots, language),
-            modifier = Modifier.padding(top = 8.dp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         state.snapshotSummaries.forEach { snapshot ->
@@ -72,6 +76,14 @@ public fun MemoryProfilerSnapshotTabs(
                 selected = snapshot.id == state.activeSnapshotId,
                 onSelectSnapshot = onSelectSnapshot,
                 onCloseSnapshot = onCloseSnapshot,
+            )
+        }
+        onAddSnapshot?.let { add ->
+            MemoryToolButton(
+                "+",
+                localizedStringResource(Res.string.memory_add_snapshot, language),
+                !state.isDumping,
+                onClick = add,
             )
         }
     }
@@ -86,43 +98,37 @@ private fun SnapshotTabCard(
     onSelectSnapshot: (String) -> Unit,
     onCloseSnapshot: (String) -> Unit,
 ) {
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(0.dp)
     val containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
-    Column(
-        modifier =
-            Modifier
-                .width(320.dp)
-                .clip(shape)
-                .background(containerColor)
-                .border(1.dp, MaterialTheme.colorScheme.outline, shape)
-                .clickable(role = Role.Tab) { onSelectSnapshot(snapshot.id) }
-                .semantics {
-                    contentDescription = evidence.accessibilityLabel
-                    this.selected = selected
-                }.padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    TooltipArea(tooltip = {
+        androidx.compose.material3.Surface(shadowElevation = 4.dp) {
+            Text(evidence.accessibilityLabel, Modifier.widthIn(max = 500.dp).padding(10.dp))
+        }
+    }) {
+        Row(
+            modifier =
+                Modifier
+                    .widthIn(min = 120.dp, max = 260.dp)
+                    .height(40.dp)
+                    .clip(shape)
+                    .background(containerColor)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, shape)
+                    .clickable(role = Role.Tab) { onSelectSnapshot(snapshot.id) }
+                    .semantics {
+                        contentDescription = evidence.accessibilityLabel
+                        this.selected = selected
+                    }.padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(
                 evidence.name,
                 modifier = Modifier.weight(1f),
                 fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            ProfilerCompactButton(
-                text = "×",
-                modifier =
-                    Modifier.semantics {
-                        contentDescription = evidence.closeLabel
-                    },
-                onClick = { onCloseSnapshot(snapshot.id) },
-            )
+            MemoryToolButton("\u00D7", evidence.closeLabel) { onCloseSnapshot(snapshot.id) }
         }
-        Text(evidence.source, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(evidence.loaded, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(evidence.counts, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(evidence.capabilities, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

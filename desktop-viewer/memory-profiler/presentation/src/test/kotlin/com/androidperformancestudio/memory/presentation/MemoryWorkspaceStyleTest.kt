@@ -19,13 +19,18 @@ class MemoryWorkspaceStyleTest {
 
     @Test
     fun `nested views retain evidence without duplicating workspace headers`() {
-        listOf("MemoryProfilerBitmapDumpPage.kt", "MemoryProfilerNativeHeapPage.kt", "MemoryProfilerLeakCanaryPage.kt").forEach { file ->
+        listOf(
+            "MemoryProfilerBitmapDumpPage.kt",
+            "MemoryProfilerNativeHeapPage.kt",
+            "MemoryProfilerLeakCanaryPage.kt",
+        ).forEach { file ->
             assertFalse(source(file).contains("StudioWorkspaceHeader("), file)
         }
         val source = source("MemoryProfilerScreen.kt")
-        assertTrue(source.contains("MemoryProfilerClassListPane("))
+        assertTrue(source.contains("MemoryInvestigationWorkspace("))
+        assertTrue(source.contains("MemoryClassesPane("))
         assertTrue(source.contains("MemoryProfilerDominatorPane("))
-        assertTrue(source.contains("MemoryProfilerDiffPane("))
+        assertTrue(source.contains("MemorySnapshotComparison("))
         assertTrue(source.contains("MemoryProfilerBitmapDumpPage("))
         assertTrue(source.contains("MemoryProfilerNativeHeapPage("))
         assertTrue(source.contains("MemoryProfilerLeakCanaryPage("))

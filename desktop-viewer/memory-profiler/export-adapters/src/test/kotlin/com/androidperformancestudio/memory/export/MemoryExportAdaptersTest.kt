@@ -8,6 +8,7 @@ import com.androidperformancestudio.memory.model.HeapHistogram
 import com.androidperformancestudio.memory.model.HeapInstance
 import com.androidperformancestudio.memory.model.HeapObjectFieldEvidence
 import com.androidperformancestudio.memory.model.HeapObjectInvestigation
+import com.androidperformancestudio.memory.model.HeapSnapshotSummary
 import java.nio.file.Files
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
@@ -59,20 +60,29 @@ class MemoryExportAdaptersTest {
             HeapDiff(
                 entries =
                     listOf(
-                        HeapDiffEntry("com.example.Item", 1, 3, 2, 16, 48, 32),
+                        HeapDiffEntry(
+                            "com.example.Item",
+                            1,
+                            3,
+                            2,
+                            16,
+                            48,
+                            32,
+                            beforeRetainedSize = 100,
+                            afterRetainedSize = 300,
+                        ),
                     ),
+                beforeSnapshot = HeapSnapshotSummary("A", sourceFileDigest = "hash-a", mappingDigest = "map-a"),
+                afterSnapshot = HeapSnapshotSummary("B", sourceFileDigest = "hash-b", mappingDigest = "map-b"),
             ),
             output,
         )
 
-        assertEquals(
-            listOf(
-                "className,beforeCount,afterCount,countDelta," +
-                    "beforeShallowSizeBytes,afterShallowSizeBytes,shallowSizeDeltaBytes",
-                "com.example.Item,1,3,2,16,48,32",
-            ),
-            Files.readAllLines(output),
-        )
+        val lines = Files.readAllLines(output)
+        assertTrue(lines.first().contains("beforeRetainedSizeBytes,afterRetainedSizeBytes,retainedSizeDeltaBytes"))
+        assertTrue(lines[1].startsWith("com.example.Item,1,3,2,16,48,32,100,300,200,A,B,hash-a,hash-b,map-a,map-b,"))
+        assertTrue(lines[1].contains("offline-hprof-viewer-v1"))
+        assertTrue(lines[1].contains("no cross-dump object identity"))
     }
 
     @Test

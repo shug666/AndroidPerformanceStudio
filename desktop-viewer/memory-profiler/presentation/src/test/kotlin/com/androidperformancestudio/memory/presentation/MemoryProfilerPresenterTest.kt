@@ -249,6 +249,38 @@ class MemoryProfilerPresenterTest {
     }
 
     @Test
+    fun `native histogram evidence is not counted again from the same bitmap evidence`() {
+        val state =
+            MemoryProfilerState(
+                heapBaseClasses =
+                    listOf(
+                        ClassStats("android.graphics.Bitmap", instanceCount = 1, nativeSize = 40_000L),
+                    ),
+                bitmapInstances = listOf(bitmap(1, nativeSizeBytes = 40_000L)),
+            )
+        assertEquals(
+            40_000L,
+            MemoryProfilerPresenter
+                .present(state)
+                .displayedClasses
+                .single()
+                .nativeSize,
+        )
+        assertEquals(
+            null,
+            MemoryProfilerPresenter
+                .present(
+                    state.copy(
+                        heapFilter = "Zygote",
+                        heapBaseClasses = listOf(ClassStats("android.graphics.Bitmap", instanceCount = 1)),
+                    ),
+                ).displayedClasses
+                .single()
+                .nativeSize,
+        )
+    }
+
+    @Test
     fun `native size is enriched per class from bitmap instances`() {
         val presented =
             MemoryProfilerPresenter.present(

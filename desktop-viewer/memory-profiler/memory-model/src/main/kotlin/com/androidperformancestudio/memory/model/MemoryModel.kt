@@ -177,6 +177,7 @@ data class HeapObjectInvestigation(
     val referenceChain: List<ObjectReference> = emptyList(),
     val shallowSizeKnown: Boolean = true,
     val nativeSize: Long? = null,
+    val snapshotSummary: HeapSnapshotSummary? = null,
 )
 
 data class HeapInstance(
@@ -291,6 +292,7 @@ data class ClassStats(
     val allocationMethod: String? = null,
     val allocationCallstack: List<String> = emptyList(),
     val totalCount: Long? = null,
+    val heapNames: Set<String> = emptySet(),
 ) {
     /** Deobfuscated display name; keeps the obfuscated name in parens when a mapping was applied. */
     val displayClassName: String
@@ -369,10 +371,17 @@ data class HeapDiffEntry(
     val shallowSizeDelta: Long,
     val matchedBy: HeapDiffMatchMode = HeapDiffMatchMode.CLASS_NAME,
     val hierarchyDepth: Int? = null,
-)
+    val beforeRetainedSize: Long? = null,
+    val afterRetainedSize: Long? = null,
+) {
+    val retainedSizeDelta: Long?
+        get() = beforeRetainedSize?.let { before -> afterRetainedSize?.minus(before) }
+}
 
 data class HeapDiff(
     val entries: List<HeapDiffEntry> = emptyList(),
+    val beforeSnapshot: HeapSnapshotSummary? = null,
+    val afterSnapshot: HeapSnapshotSummary? = null,
 ) {
     val added: List<HeapDiffEntry>
         get() = entries.filter { it.beforeCount == 0 && it.afterCount > 0 }

@@ -374,10 +374,16 @@ class MemoryProfilerScreenTest {
 
             onNodeWithTag("memory-profiler-status-bar").assertExists()
             onNodeWithText("Capture failed:", useUnmergedTree = true).assertExists()
-            onNodeWithText("Target app may not be debuggable or permission was denied.", useUnmergedTree = true).assertExists()
+            onNodeWithText(
+                "Target app may not be debuggable or permission was denied.",
+                useUnmergedTree = true,
+            ).assertExists()
             onNodeWithText("Cleanup warning:", useUnmergedTree = true).assertExists()
             onNodeWithText("Warning:", useUnmergedTree = true).assertExists()
-            onNodeWithText("Install SDK Platform Tools to enable standard HPROF conversion.", useUnmergedTree = true).assertExists()
+            onNodeWithText(
+                "Install SDK Platform Tools to enable standard HPROF conversion.",
+                useUnmergedTree = true,
+            ).assertExists()
             onNodeWithText(
                 "Could not remove /data/local/tmp/heap-1.hprof; local analysis is still available.",
                 useUnmergedTree = true,
@@ -439,6 +445,7 @@ class MemoryProfilerScreenTest {
 
             onNodeWithText("Dominator tree").assertExists()
             onNodeWithText("0x2a · com.example.Root").performClick()
+            onNodeWithText("▸").performClick()
             onNodeWithText("0x2b · com.example.Child").assertExists()
             onNodeWithText("▾").performClick()
             onNodeWithText("0x2b · com.example.Child").assertDoesNotExist()
@@ -519,10 +526,12 @@ class MemoryProfilerScreenTest {
             }
 
             onNodeWithText("com.example.Child #2", useUnmergedTree = true).performClick()
-            onNodeWithText("owner ← com.example.Owner #3", useUnmergedTree = true).performClick()
-            onAllNodesWithText("↳ root → com.example.RootKeeper", useUnmergedTree = true)[1].performClick()
-            onNodeWithText("Back").assertExists()
-            onNodeWithText("Forward").assertExists()
+            onNodeWithText("Inbound references").performClick()
+            onNodeWithText("com.example.Owner #3", useUnmergedTree = true).performClick()
+            onNodeWithText("GC Root path").performClick()
+            onNodeWithText("1. com.example.RootKeeper", useUnmergedTree = true).performClick()
+            onNodeWithContentDescription("Back").assertExists()
+            onNodeWithContentDescription("Forward").assertExists()
             onNodeWithText("Pin object").performClick()
 
             assertEquals(listOf(2L, 3L, 4L), followed)
@@ -580,6 +589,7 @@ class MemoryProfilerScreenTest {
 
     private fun loadedState(): MemoryProfilerState =
         MemoryProfilerState(
+            viewMode = MemoryProfilerViewMode.Dashboard,
             devices = listOf(MemoryDeviceOption("emulator-5554", "Pixel 8")),
             selectedDeviceSerial = "emulator-5554",
             processes = listOf(MemoryProcessOption(pid = 42, name = "com.example")),

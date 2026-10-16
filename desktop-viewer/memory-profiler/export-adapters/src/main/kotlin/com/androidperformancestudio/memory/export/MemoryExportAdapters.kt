@@ -87,6 +87,17 @@ class MemoryExportAdapters {
                 "beforeShallowSizeBytes",
                 "afterShallowSizeBytes",
                 "shallowSizeDeltaBytes",
+                "beforeRetainedSizeBytes",
+                "afterRetainedSizeBytes",
+                "retainedSizeDeltaBytes",
+                "beforeSnapshotId",
+                "afterSnapshotId",
+                "beforeSourceHash",
+                "afterSourceHash",
+                "beforeMappingHash",
+                "afterMappingHash",
+                "analysisVersion",
+                "limitation",
             )
             diff.entries.forEach { entry ->
                 writer.writeRow(
@@ -97,6 +108,17 @@ class MemoryExportAdapters {
                     entry.beforeShallowSize.toString(),
                     entry.afterShallowSize.toString(),
                     entry.shallowSizeDelta.toString(),
+                    entry.beforeRetainedSize?.toString().orEmpty(),
+                    entry.afterRetainedSize?.toString().orEmpty(),
+                    entry.retainedSizeDelta?.toString().orEmpty(),
+                    diff.beforeSnapshot?.id.orEmpty(),
+                    diff.afterSnapshot?.id.orEmpty(),
+                    diff.beforeSnapshot?.sourceFileDigest.orEmpty(),
+                    diff.afterSnapshot?.sourceFileDigest.orEmpty(),
+                    diff.beforeSnapshot?.mappingDigest.orEmpty(),
+                    diff.afterSnapshot?.mappingDigest.orEmpty(),
+                    ANALYSIS_VERSION,
+                    "class-name matching only; no cross-dump object identity; ClassLoader identity unavailable",
                 )
             }
         }
@@ -109,9 +131,22 @@ class MemoryExportAdapters {
             writer.write(
                 buildString {
                     appendLine("{")
+                    appendLine("  \"analysisVersion\": ${ANALYSIS_VERSION.jsonString()},")
+                    appendLine("  \"snapshotId\": ${investigation.snapshotSummary?.id.jsonString()},")
+                    appendLine(
+                        "  \"sourceFileDigest\": ${investigation.snapshotSummary?.sourceFileDigest.jsonString()},",
+                    )
+                    appendLine("  \"mappingDigest\": ${investigation.snapshotSummary?.mappingDigest.jsonString()},")
+                    appendLine(
+                        "  \"limitation\": \"Object identity is local to this snapshot; retention is not proof of a leak.\",",
+                    )
                     appendLine("  \"objectId\": ${investigation.objectId},")
                     appendLine("  \"className\": ${investigation.className.jsonString()},")
-                    appendLine("  \"shallowSize\": ${investigation.shallowSize.takeIf { investigation.shallowSizeKnown } ?: "null"},")
+                    appendLine(
+                        "  \"shallowSize\": ${investigation.shallowSize.takeIf {
+                            investigation.shallowSizeKnown
+                        } ?: "null"},",
+                    )
                     appendLine("  \"nativeSize\": ${investigation.nativeSize ?: "null"},")
                     appendLine("  \"retainedSize\": ${investigation.retainedSize ?: "null"},")
                     appendLine("  \"depth\": ${investigation.depth ?: "null"},")
@@ -138,6 +173,9 @@ class MemoryExportAdapters {
                     appendLine("  \"analysisVersion\": ${ANALYSIS_VERSION.jsonString()},")
                     appendLine("  \"sourceFileDigest\": ${snapshotSummary?.sourceFileDigest.jsonString()},")
                     appendLine("  \"mappingDigest\": ${snapshotSummary?.mappingDigest.jsonString()},")
+                    appendLine(
+                        "  \"limitation\": \"Point-in-time heap evidence; no allocation timeline or cross-dump object identity. Class retained sizes may overlap.\",",
+                    )
                     appendLine("  \"exportedAt\": ${exportContext?.exportedAt?.toString().jsonString()},")
                     appendLine("  \"filters\": ${exportContext?.filters?.toJsonObject() ?: "{}"},")
                     appendLine(
@@ -187,7 +225,9 @@ class MemoryExportAdapters {
             writer.appendLine("- Exported at: `${exportContext?.exportedAt ?: java.time.Instant.now()}`")
             writer.appendLine("- Snapshot ID: `${exportContext?.snapshotId ?: snapshotSummary?.id ?: "unknown"}`")
             writer.appendLine(
-                "- Selected object IDs: `${exportContext?.selectedObjectIds?.joinToString().orEmpty().ifBlank { "none" }}`",
+                "- Selected object IDs: `${exportContext?.selectedObjectIds?.joinToString().orEmpty().ifBlank {
+                    "none"
+                }}`",
             )
             if (exportContext?.filters?.isNotEmpty() == true) {
                 writer.appendLine(
@@ -214,25 +254,27 @@ class MemoryExportAdapters {
                 writer.appendLine("## Warnings")
                 heapDump.warnings.forEach { warning -> writer.appendLine("- ${warning.message}") }
             }
-            diff?.let {
-                writer.appendLine()
-                writer.appendLine("## Class-level heap diff")
-                writer.appendLine()
-                writer.appendLine(
-                    "The diff is class-level; it does not establish stable object identity " +
-                        "across snapshots.",
-                )
-                writer.appendLine()
-                writer.appendLine("| Class | Before | After | Delta |")
-                writer.appendLine("| --- | ---: | ---: | ---: |")
-                it.entries.take(50).forEach { entry ->
-                    val escapedClassName = entry.className.replace("|", "\\|")
-                    writer.appendLine(
-                        "| $escapedClassName | ${entry.beforeCount} | ${entry.afterCount} | " +
-                            "${entry.countDelta} |",
-                    )
-                }
-            }
+            diff?.let { writer.writeClassDiff(it) }
+        }
+    }
+
+    private fun BufferedWriter.writeClassDiff(diff: HeapDiff) {
+        appendLine()
+        appendLine("## Class-level heap diff")
+        listOf("A" to diff.beforeSnapshot, "B" to diff.afterSnapshot).forEach { (label, snapshot) ->
+            appendLine(
+                "- Snapshot $label: `${snapshot?.id ?: "unknown"}`; " +
+                    "source `${snapshot?.sourceFileDigest ?: "unknown"}`; mapping `${snapshot?.mappingDigest ?: "not loaded"}`",
+            )
+        }
+        appendLine()
+        appendLine("The diff is class-level; it does not establish stable object identity across snapshots.")
+        appendLine()
+        appendLine("| Class | Before | After | Delta |")
+        appendLine("| --- | ---: | ---: | ---: |")
+        diff.entries.take(50).forEach { entry ->
+            val escaped = entry.className.replace("|", "\\|")
+            appendLine("| $escaped | ${entry.beforeCount} | ${entry.afterCount} | ${entry.countDelta} |")
         }
     }
 

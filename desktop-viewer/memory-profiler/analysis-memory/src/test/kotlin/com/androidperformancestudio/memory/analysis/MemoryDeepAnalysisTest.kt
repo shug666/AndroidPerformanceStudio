@@ -15,6 +15,16 @@ import kotlin.test.assertTrue
 
 class MemoryDeepAnalysisTest {
     @Test
+    fun `class comparison includes retained only changes without turning unknown into zero`() {
+        val before = listOf(ClassStats("Retained", 2, 16, 100), ClassStats("Unknown", 2, 16, null))
+        val after = listOf(ClassStats("Retained", 2, 16, 200), ClassStats("Unknown", 2, 16, 32))
+        val entries = HeapDiffAnalyzer().diff(before, after).entries.associateBy { it.className }
+        assertEquals(100L, entries.getValue("Retained").retainedSizeDelta)
+        assertEquals(null, entries.getValue("Unknown").retainedSizeDelta)
+        assertEquals(0, entries.getValue("Retained").countDelta)
+    }
+
+    @Test
     fun `lengauer tarjan computes immediate dominators and retained sizes for a diamond`() {
         val result =
             DominatorTreeAnalyzer().analyze(

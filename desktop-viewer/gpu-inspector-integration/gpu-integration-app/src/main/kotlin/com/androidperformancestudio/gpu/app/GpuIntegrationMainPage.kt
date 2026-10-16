@@ -110,6 +110,25 @@ public fun FrameWindowScope.GpuIntegrationMainPage(
         }
     }
 
+    // AGI launch and GPU artifact import live on the hub analysis toolbar (page 09 §14.2 Actions).
+    fun launchAgi() {
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO) { locator.launch(requireNotNull(state.capability)) }
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (failure: Exception) {
+                controller.reportError(failure)
+            }
+        }
+    }
+
+    fun importArtifact() {
+        chooseArtifact(window, language)?.let { file ->
+            scope.launch { controller.importArtifact(file.toPath(), localizedStringResource(Res.string.imported_file, language, file.name)) }
+        }
+    }
+
     Column(Modifier.fillMaxSize()) {
         HeaderToolbar(language = language, onNavigateHome = onBack, onNavigateSettings = null) {
             ProfilerCompactButton(
@@ -124,32 +143,6 @@ public fun FrameWindowScope.GpuIntegrationMainPage(
                 onClick = {
                     chooseExecutable(window, language)?.let { file ->
                         scope.launch { controller.refreshAgi(file.toPath(), localizedStringResource(Res.string.configured_file, language, file.name)) }
-                    }
-                },
-            )
-            HeaderSpacer()
-            ProfilerCompactButton(
-                text = localizedStringResource(Res.string.launch_agi, language),
-                enabled = !state.isBusy && state.capability?.launchSupported == true,
-                onClick = {
-                    scope.launch {
-                        try {
-                            withContext(Dispatchers.IO) { locator.launch(requireNotNull(state.capability)) }
-                        } catch (failure: CancellationException) {
-                            throw failure
-                        } catch (failure: Exception) {
-                            controller.reportError(failure)
-                        }
-                    }
-                },
-            )
-            HeaderSpacer()
-            ProfilerCompactButton(
-                text = localizedStringResource(Res.string.import_artifact, language),
-                enabled = !state.isBusy,
-                onClick = {
-                    chooseArtifact(window, language)?.let { file ->
-                        scope.launch { controller.importArtifact(file.toPath(), localizedStringResource(Res.string.imported_file, language, file.name)) }
                     }
                 },
             )
@@ -179,6 +172,10 @@ public fun FrameWindowScope.GpuIntegrationMainPage(
                 },
                 onSelectArtifact = controller.selectArtifact,
                 onOpenTraceAnalyzer = onOpenTraceAnalyzer,
+                onSelectHubTab = controller.selectHubTab,
+                onFilterArtifacts = controller.filterArtifacts,
+                onLaunchAgi = ::launchAgi,
+                onImportArtifact = ::importArtifact,
             ),
             language,
             Modifier.weight(1f),

@@ -8,6 +8,7 @@ import com.androidperformancestudio.gpu.model.GpuArtifact
 import com.androidperformancestudio.gpu.model.GpuDeviceContext
 import com.androidperformancestudio.gpu.presentation.ArtifactPrimaryAction
 import com.androidperformancestudio.gpu.presentation.GpuArtifactAvailability
+import com.androidperformancestudio.gpu.presentation.GpuHubTab
 import com.androidperformancestudio.gpu.presentation.GpuIntegrationState
 import com.androidperformancestudio.gpu.toolchain.AgiExecutablePreferenceStore
 import com.androidperformancestudio.gpu.toolchain.AgiLocator
@@ -142,6 +143,11 @@ internal class GpuIntegrationController(
     val selectArtifact: (String) -> Unit = { id ->
         if (state.value.artifacts.any { it.id == id }) mutableState.update { it.copy(selectedArtifactId = id) }
     }
+
+    /** Hub tab and rail search are presentation state; they never re-index or re-verify artifacts. */
+    val selectHubTab: (GpuHubTab) -> Unit = { tab -> mutableState.update { it.copy(hubTab = tab) } }
+
+    val filterArtifacts: (String) -> Unit = { query -> mutableState.update { it.copy(artifactFilter = query) } }
 
     fun selectDevice(serial: String) {
         if (state.value.devices.none { it.serial == serial }) return

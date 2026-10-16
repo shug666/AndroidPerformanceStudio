@@ -2,6 +2,64 @@
 
 This is a continuation checkpoint for the [phased implementation plan](README.md), not an assertion that the full commercial UI is finished.
 
+## 2026-10-15: GPU Analysis Hub reference workspace (page 09)
+
+### Implemented
+
+- The hub now keeps the reference dashboard structure: an analysis toolbar, a four-card summary row,
+  an artifact rail, a tabbed analysis center and two insight rails. The device/graphics-context panel
+  and the documented artifact table (Kind | File | Device | Package | API | Captured | Status |
+  Action) stay intact; the table renders through the shared `StudioDataTable`.
+- Page 09 §14.4 keeps the reference frame-profile panels closed, so their regions render the
+  documented replacements instead of fabricated metrics: artifact preview/metadata, related analysis,
+  external tool capability and open-with-AGI. The tool-capability view names the five closed panels
+  and points at AGI/Perfetto; no GPU counter, frame time, shader hotspot, render pass, draw call or
+  overdraw value is invented.
+- Summary cards count only local index facts: indexed artifacts with a kind breakdown, verified
+  available, needs attention and the probed AGI capability. Availability still requires matching size
+  and SHA-256, and opening still revalidates the authoritative indexed artifact.
+- New: a hub tab/filter state model, `GpuHubModel.kt` derivations (summary, related-by-identity
+  grouping, case-insensitive identity search, size/timestamp formatting) and four shared status
+  vectors (`ic_stat_artifact`, `ic_stat_verified`, `ic_stat_attention`, `ic_stat_capability`).
+- Launch AGI and Import GPU Trace moved from the shell header toolbar into the page analysis toolbar,
+  matching page 09 §14.2 "Actions"; Refresh/Configure AGI remain in the header. `GpuIntegrationScreen`
+  is retained only for its localization contract and is documented as superseded.
+- Responsive: three panes at ≥1100dp with the analysis panel owning the remaining height and
+  scrolling its own body; below that the rail and rails stack inside the page scroll, and the summary
+  row wraps to two rows below 900dp. Verified at 1440x900, 1440x620, 1280x720, 1064x560.
+- 46 EN/ZH strings added (76 → 122 keys); both bundles are key-parity tested.
+
+### Fresh validation and evidence
+
+- GPU module `checkAll` (test + ktlint + detekt for all five subprojects) passes. GPU presentation
+  **37 tests**, GPU app **26 tests**, model/index/toolchain suites unchanged and green.
+- New/updated suites: `GpuAnalysisHubScreenTest` (13 Compose cases: pane ordering, toolbar dispatch,
+  index-only summary, rail search, rail selection, tab switching, recovery actions, device errors,
+  device selection, stacked layout, short viewport, expanded panel, unavailable capability),
+  `GpuHubModelTest` (9 derivations), `GpuWorkspaceStyleTest` (8 source contracts),
+  `GpuIntegrationLocalizationTest` (5 including bundle key parity),
+  `GpuAnalysisHubVisualCaptureTest` (2 renders, PNG only when `APS_GPU_HUB_SCREENSHOT` /
+  `APS_GPU_HUB_SCREENSHOT_COMPACT` is exported).
+- Automated renders reviewed against the reference: 1360x900 dark/Chinese and 1280x720 light/English.
+  Evidence: `/tmp/aps-gpu-hub-dark.png`, `/tmp/aps-gpu-hub-compact.png`. This is not pixel-equivalence
+  or native-window acceptance.
+
+### Open gates
+
+- `:desktop-app:test` could not run in this worktree: `battery-profiler/battery-app` has concurrent
+  uncommitted changes that fail to compile (`Unresolved reference 'BatteryRunWorkspace'`) and blocks
+  the desktop-app compile. The desktop-app GPU source contracts were checked by reading the assertions
+  instead: `StartupStyleAdoptionTest` (no `StudioWorkspaceHeader(`/`startupWorkspaceColors(`/
+  `ViewerTheme(` in `GpuAnalysisHubScreen.kt`), `ProfilerThemeSupportTest` (`HeaderToolbar(`,
+  `LocalViewerColors.current`, no fixed hex colours) and `UnifiedDesktopShellTest` route wiring all hold.
+- `ui-components:test` has one pre-existing failure unrelated to this slice:
+  `UnifiedUiComponentsSourceTest` reports raw colour literals in five untouched `desktop-app` files.
+  The new vectors pass `StudioIconRenderingTest`.
+- No external AGI launch, artifact open, reveal or relocate was exercised against a real installation,
+  and no real device graphics context was read. The reference's GPU counter, frame-timeline,
+  render-pass, draw-call and overdraw panels remain intentionally unimplemented per page 09 §14.4.
+- Changes remain uncommitted; this records verified local progress, not completion of the plan.
+
 ## 2026-10-14: Startup Profiler reference workspace — no date row
 
 ### Implemented

@@ -80,7 +80,7 @@ class MemoryProfilerWorkspaceSourceTest {
         assertTrue(primaryViewSelector.contains("selectedItem = state.viewMode.takeIf"))
         assertTrue(primaryViewSelector.contains("style = SegmentedSelectorStyle.COMPACT_OUTLINED"))
         assertTrue(toolbar.contains("onDumpHeap = {"))
-        assertTrue(toolbar.contains("controller.changeViewMode(MemoryProfilerViewMode.Dashboard)"))
+        assertTrue(toolbar.contains("controller.changeViewMode(MemoryProfilerViewMode.ClassList)"))
         assertTrue(toolbar.contains("onDumpBitmaps = {"))
         assertTrue(toolbar.contains("controller.changeViewMode(MemoryProfilerViewMode.BitmapDump)"))
         assertTrue(toolbar.contains("onCaptureNativeHeap = {"))
@@ -98,5 +98,8 @@ class MemoryProfilerWorkspaceSourceTest {
         assertFalse(workspace.contains("text = localizedStringResource(Res.string.export_raw_hprof"))
         assertFalse(workspace.contains("text = localizedStringResource(Res.string.export_standard_hprof"))
         assertFalse(workspace.contains("text = localizedStringResource(Res.string.export_csv"))
+        assertTrue(workspace.contains("MemoryWorkspaceActions("))
+        assertTrue(workspace.contains("onCompareSnapshots = controller::compareSnapshots"))
+        assertTrue(workspace.contains("onAddSnapshot = { showHprofFileDialog = true }"))
     }
 }

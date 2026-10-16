@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.gpu.model.AgiCapability
 import com.androidperformancestudio.gpu.model.AgiLaunchMode
 import com.androidperformancestudio.gpu.model.ArtifactLocationStatus
+import com.androidperformancestudio.gpu.model.ArtifactOpenRoute
 import com.androidperformancestudio.gpu.model.GpuArtifact
 import com.androidperformancestudio.gpu.model.GpuArtifactKind
 import com.androidperformancestudio.gpu.model.GpuDeviceContext
@@ -53,6 +54,8 @@ public data class GpuIntegrationState(
     val message: String? = null,
     val error: String? = null,
     val deviceError: String? = null,
+    val hubTab: GpuHubTab = GpuHubTab.OVERVIEW,
+    val artifactFilter: String = "",
 )
 
 public data class GpuIntegrationActions(
@@ -64,8 +67,17 @@ public data class GpuIntegrationActions(
     val onSelectDevice: (String) -> Unit = {},
     val onSelectArtifact: (String) -> Unit = {},
     val onOpenTraceAnalyzer: () -> Unit = {},
+    val onSelectHubTab: (GpuHubTab) -> Unit = {},
+    val onFilterArtifacts: (String) -> Unit = {},
+    val onLaunchAgi: () -> Unit = {},
+    val onImportArtifact: () -> Unit = {},
 )
 
+/**
+ * Legacy single-column GPU integration screen. The desktop application renders
+ * [GpuAnalysisHubScreen] instead; this composable is retained only for its localization contract,
+ * while the state and action model below is shared by both surfaces.
+ */
 @Composable
 public fun GpuIntegrationScreen(
     state: GpuIntegrationState,
@@ -203,6 +215,17 @@ public fun GpuIntegrationScreen(
     }
 }
 
+internal fun GpuHubTab.displayName(language: UiLanguage): String =
+    localizedStringResource(
+        when (this) {
+            GpuHubTab.OVERVIEW -> Res.string.tab_overview
+            GpuHubTab.ARTIFACTS -> Res.string.tab_artifacts
+            GpuHubTab.RELATED_EVIDENCE -> Res.string.tab_related_evidence
+            GpuHubTab.TOOL_CAPABILITY -> Res.string.tab_tool_capability
+        },
+        language,
+    )
+
 internal fun GpuArtifactKind.displayName(language: UiLanguage): String =
     localizedStringResource(
         when (this) {
@@ -234,6 +257,17 @@ internal fun ArtifactPrimaryAction.displayName(language: UiLanguage): String =
             ArtifactPrimaryAction.OPEN_PERFETTO -> Res.string.open_in_perfetto
             ArtifactPrimaryAction.OPEN_DESKTOP -> Res.string.open_with_desktop
             ArtifactPrimaryAction.NONE -> Res.string.unavailable
+        },
+        language,
+    )
+
+internal fun ArtifactOpenRoute.displayName(language: UiLanguage): String =
+    localizedStringResource(
+        when (this) {
+            ArtifactOpenRoute.AGI -> Res.string.open_in_agi
+            ArtifactOpenRoute.PERFETTO -> Res.string.open_in_perfetto
+            ArtifactOpenRoute.DESKTOP -> Res.string.open_with_desktop
+            ArtifactOpenRoute.NONE -> Res.string.unavailable
         },
         language,
     )

@@ -79,6 +79,8 @@ public enum class MemoryClassifierColumn {
 
 public enum class MemorySortDirection { ASCENDING, DESCENDING }
 
+public enum class MemoryWorkspaceExport { REPORT, SNAPSHOT, HISTOGRAM, DIFF, OBJECT }
+
 /** One node in the classifier tree shown by the class list. Leaf nodes represent classes. */
 public data class MemoryClassifierRow(
     val id: String,
@@ -96,6 +98,7 @@ public data class MemoryClassifierRow(
     val shallowSizeChange: Long? = null,
     val depth: Int = 0,
     val children: List<MemoryClassifierRow> = emptyList(),
+    val heapNames: Set<String> = emptySet(),
 ) {
     val isLeaf: Boolean get() = children.isEmpty()
 }
@@ -203,7 +206,7 @@ public data class MemoryProfilerState(
     val nativeHeapTrace: NativeHeapTrace? = null,
     val nativeHeapAnalysis: NativeHeapAnalysis = NativeHeapAnalysis(),
     val artifact: CaptureArtifact? = null,
-    val viewMode: MemoryProfilerViewMode = MemoryProfilerViewMode.Dashboard,
+    val viewMode: MemoryProfilerViewMode = MemoryProfilerViewMode.ClassList,
     val selectedClassName: String? = null,
     val selectedClassifierId: String? = null,
     val selectedClassifierLabel: String? = null,
@@ -266,6 +269,7 @@ public enum class MemoryHistogramSort {
 }
 
 public data class MemoryProfilerActions(
+    val onCompareSnapshots: (String, String) -> Unit = { _, _ -> },
     val onSortHistogram: (MemoryHistogramSort) -> Unit = {},
     val onRetry: () -> Unit = {},
     val onCancelOperation: () -> Unit = {},

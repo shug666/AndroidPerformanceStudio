@@ -2,6 +2,7 @@ package com.androidperformancestudio.memory.presentation
 
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import com.androidperformancestudio.memory.model.HeapCapability
 import com.androidperformancestudio.memory.model.HeapSnapshotSummary
@@ -72,6 +73,7 @@ class MemorySnapshotEvidenceTest {
                 )
             }
 
+            onNodeWithText("Evidence & warnings").performClick()
             onNodeWithText("Snapshot Evidence").assertExists()
             onNodeWithText("Classes 18 · Objects 400 · Parse warnings 0").assertExists()
         }
