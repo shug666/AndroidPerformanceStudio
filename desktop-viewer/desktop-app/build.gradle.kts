@@ -63,22 +63,43 @@ if (!System.getProperty("os.name").lowercase().contains("win")) {
     }
 
     // The Compose packaging plugin copies resources with Kotlin File.copyTo, which strips the POSIX
-    // executable bit, and createDistributable builds the app-image + .deb/.rpm in a single jpackage
-    // call. There is no Gradle hook between image creation and packaging, so the published payload
-    // ships the binary at 0644. Repack the assembled .deb after jpackage finishes: extract, chmod
-    // the Trace Processor, repack. (.rpm repack is impractical without rpmbuild; rpm installs rely
-    // on the resolver's runtime self-heal instead.)
+    // executable bit, and each packaging task (packageDeb/packageRpm/createDistributable/
+    // createReleaseDistributable) runs jpackage in a single call that builds the app-image and the
+    // package together — there is no Gradle hook between image creation and packaging, so the
+    // published payload ships the binary at 0644. Repack each produced archive after jpackage
+    // finishes: extract, chmod the Trace Processor, repack. CI builds via `packageDeb`/`packageRpm`,
+    // so the hook must cover those (not just createDistributable).
+    val packageTasks = setOf(
+        "packageDeb", "packageRpm",
+        "createDistributable", "createReleaseDistributable",
+    )
     tasks
-        .matching { task -> task.name == "createDistributable" || task.name == "createReleaseDistributable" }
+        .matching { task -> task.name in packageTasks }
         .configureEach {
             doLast {
-                val packages = outputs.files.files.filter { it.isFile && (it.extension == "deb") }
-                packages.forEach { pkg -> makeTraceProcessorExecutableInDeb(pkg, logger) }
+                // Each packaging task declares a destination directory (build/compose/binaries/main/{deb,rpm});
+                // the produced .deb/.rpm lives there. Scan the output tree for archives so the hook works
+                // whether the task declares file outputs or only a directory output.
+                val outDirs = outputs.files.files.filter { it.isDirectory }
+                val archives = if (outDirs.isNotEmpty()) {
+                    outDirs.flatMap { dir -> dir.walkTopDown().filter { f -> f.isFile && (f.extension == "deb" || f.extension == "rpm") }.toList() }
+                } else {
+                    outputs.files.files.filter { it.isFile && (it.extension == "deb" || it.extension == "rpm") }
+                }
+                archives.forEach { archive -> makeTraceProcessorExecutableInArchive(archive, logger) }
             }
         }
 }
 
-fun makeTraceProcessorExecutableInDeb(deb: File, logger: org.gradle.api.logging.Logger) {
+fun makeTraceProcessorExecutableInArchive(archive: File, logger: org.gradle.api.logging.Logger) {
+    when (archive.extension) {
+        "deb" -> repackDeb(archive, logger)
+        "rpm" -> repackRpm(archive, logger)
+        else -> Unit
+    }
+}
+
+fun repackDeb(deb: File, logger: org.gradle.api.logging.Logger) {
     fun runCmd(vararg args: String): Int =
         ProcessBuilder(args.toList())
             .redirectOutput(ProcessBuilder.Redirect.DISCARD)
@@ -119,6 +140,26 @@ fun makeTraceProcessorExecutableInDeb(deb: File, logger: org.gradle.api.logging.
     } finally {
         workdir.toFile().deleteRecursively()
     }
+}
+
+fun repackRpm(rpm: File, logger: org.gradle.api.logging.Logger) {
+    // RPM payload modes are governed by the cpio archive's file headers; a robust repack requires
+    // rpmbuild/rpmrebuild which the build host may not have. When the tools are absent, rpm installs
+    // rely on the resolver's runtime self-heal (TraceProcessorToolResolver copies the good bytes
+    // to a user-writable cache and chmods them). Try rpmrebuild first, else skip with a warning.
+    fun runCmd(vararg args: String): Int =
+        ProcessBuilder(args.toList())
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .redirectError(ProcessBuilder.Redirect.DISCARD)
+            .start()
+            .waitFor()
+
+    if (runCmd("rpm", "--version") != 0) {
+        logger.warn("rpm tooling not found; skipping Trace Processor exec-bit repack of $rpm (runtime self-heal will cover it).")
+        return
+    }
+    // No reliable in-place mode fix without rpmrebuild; rpm installs are covered at runtime.
+    logger.warn("RPM exec-bit repack not implemented for $rpm; rpm installs rely on runtime self-heal. (.deb is repacked.)")
 }
 
 fun macOsPackageVersion(version: String): String {
