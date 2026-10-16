@@ -73,3 +73,4 @@ Trace Analyzer 的 probe 卡片是布尔开关,无子参数。官网 record 页�
 
 - atrace 类别 UI 是否显示官网 `title` 友好名(am→"Activity Manager")而非裸 token——已实现显示 `displayName`(`PerfettoAtraceCategory.displayName`,即官网 title 映射),已解决。
 - `ATRACE_DIALOG_COLUMNS` 列数(当前 3)是否需按对话框宽度/类别名长度调优——当前 3 列 + 520dp 宽效果可接受,后续可调。
+- **数据源名称中文化(已实现)**:`PerfettoProbeGroup.displayName` 与 `PerfettoProbe.displayName` 翻译为中文(如"内存""调度详情""CPU 频率与空闲状态")。保留英文术语不强行翻译:CPU、I/O、GPU、ART、JIT、GC、Atrace、ftrace、logcat、Mali、Perfetto SDK、Track events、Native、Java、LMK、Wi-Fi。probe 名称无既有 i18n 机制(枚举 `displayName` 直接用),故直接改枚举值;`render test` 用 `probe.displayName` 动态引用,无需改断言。

@@ -21,7 +21,7 @@ Trace Analyzer 已有完整的 trace 导出基建:`PerfettoFileMenu` 的 Export 
 ## Decisions
 
 ### D1. 入口在 Configuration 面板按钮
-Configuration 面板的 Start Capture 同行加 "Export config" 按钮。语义贴合:配置在哪导出在哪。不放文件菜单(文件菜单现有 Export 导出的是已抓 trace 产物,配置导出是另一语义;且用户调完配置直接导出最顺)。
+Configuration 面板的 Start Capture 同行加 "Export config" 按钮。语义贴合:配置在哪导出在哪。不放文件菜单(文件菜单现有 Export 导出的是已抓 trace 产物,配置导出是另一语义;且用户调完配置直接导出最顺)。**按钮位置(已调整)**:Export config 按钮放在 Start Capture 按钮**左侧**(而非右侧),便于导出与开始采集区分。
 - 备选(否决):文件菜单 Export 子菜单加项——语义上与 trace 产物导出混淆,且离配置远。
 
 ### D2. presentation 层只组装上传,app 层做文件 IO

@@ -84,8 +84,11 @@ UI 上：左侧模板列、中间 DATA SOURCES（probe 卡片，每卡一个 che
 ### D8. buffer fill_policy 可配置（默认仍 RING_BUFFER）
 新增 `enum PerfettoBufferPolicy { RING_BUFFER, DISCARD }`。`PerfettoCaptureConfig.bufferPolicy`（默认 RING_BUFFER）→ `PerfettoCaptureDocument.bufferPolicy` → `PerfettoConfigComposer` 按 policy 输出 `fill_policy`。UI 新增 fill policy 选择控件。
 
-**决策（已定）**：**所有模板默认 RING_BUFFER**（含 System Overview），不改默认；DISCARD 作为可选选项供高级用户。不引入 `defaultBufferPolicy()`——所有模板默认即 RING_BUFFER，无需随模板重置 fill_policy（切换模板时 bufferPolicy 不变，仅 probes 重置）。理由：32MB + DISCARD + 10s 在高事件密度下可能截断后段（官方配套 64MB），而现状 RING_BUFFER 保最近数据不丢尾；默认 RING_BUFFER **零回归**，用户需要"短时完整快照"时可手选 DISCARD（并自行调大 buffer）。
-- 备选（否决）：System Overview 默认 DISCARD——会引入 32MB 尾部丢数据风险；且官方 64MB 配套需破"buffer size 非目标"。
+**决策（已定）**：**所有模板默认 RING_BUFFER**（含 System Overview），不改默认；DISCARD 作为可选选项供高级用户。不引入 `defaultBufferPolicy()`——所有模板默认即 RING_BUFFER，无需随模板重置 fill_policy（切换模板时 bufferPolicy 不变，仅 probes 重置）。理由：原 32MB + DISCARD + 10s 在高事件密度下可能截断后段；默认 RING_BUFFER 保最近数据不丢尾，**零回归**。
+
+**默认时长与缓冲区（已调整）**：默认采集时长从 10s 改为 **30s**，默认缓冲区从 32MB 改为 **64MB**（`PerfettoCaptureConfig` 默认参数 + UI 初始 state 同步）。64MB 对齐官方 Default 的 buffer size，30s 更适合实际分析场景。用户需要"短时完整快照"时可手选 DISCARD。
+
+**PROCESS_MEMORY_POLL 默认不勾（已调整，见 `align-log-and-process-poll`）**：System Overview 默认不再勾选 `PROCESS_MEMORY_POLL`，导出不含 `proc_stats_poll_ms`（对齐官方 Default 仅 `scan_all_processes_on_start`）。用户可手动勾选开启轮询。
 - 备选：支持双 buffer + `target_buffer:1`——否，超出本次范围，模型改动大。
 
 `PerfettoCaptureDocument`/`PerfettoCaptureConfig` 新字段带默认值 RING_BUFFER，二进制兼容；composer 默认 RING_BUFFER 保持既有调用方行为。
@@ -97,8 +100,8 @@ UI 上：左侧模板列、中间 DATA SOURCES（probe 卡片，每卡一个 che
 - [atrace 24 项含部分设备不支持类别] → Perfetto 对未知 atrace category 静默忽略，不报错。
 - [`power/*` 通配与显式事件重复] → `distinct()` 去重；测试断言 psci 存在而非逐行比对。
 - [`disable_generic_events: true` 可能丢弃 generic 事件] → 与官方 Default 一致；需 advanced ftrace 用户可开 `ADVANCED_FTRACE`。
-- [System Overview 默认改 DISCARD 改变语义] → DISCARD 满了丢新数据保前段，适合短时完整快照，与官方 Default 一致；32MB/10s 默认下足够。其他模板仍 RING_BUFFER 无回归。
-- [新 probe `PROCESS_MEMORY_POLL` 默认勾选] → 行为与现状一致，仅多一个可取消的入口；无回归。
+- [System Overview 默认改 DISCARD 改变语义] → DISCARD 满了丢新数据保前段，适合短时完整快照；默认仍 RING_BUFFER，DISCARD 可选。默认时长/缓冲区已调整为 30s/64MB。
+- [新 probe `PROCESS_MEMORY_POLL` 默认勾选] → 后调整为**默认不勾**（见 `align-log-and-process-poll`），对齐官方 Default 不含 proc_stats_poll_ms。
 - [`PerfettoCaptureDocument` 公共 API 加字段] → 带默认值，二进制兼容；composer 默认 RING_BUFFER 保持既有调用方行为。
 - [能力检测静默丢弃默认项] → `PerfettoDeviceCapabilities.unsupportedReason` + `PerfettoCapturePage` 的 `enabledProbes.filterTo` 会把设备 `perfetto --query` 未注册的数据源对应 probe **静默从配置删除**。`android.log`、`linux.process_stats` 在能力样本里未出现，若设备不注册则补的 android.log / process poll 会被吃掉且无提示。缓解：本次不引入额外提示机制（属既有行为），但实现后应人工在真实设备上确认 `android.log` 在 `--query` 输出中的注册名，确认 `ANDROID_LOG` 不被误判 unavailable。
 - [`stat_counters` 是能力检测盲区] → 能力检测只看数据源名不看字段，无法验证设备 `/proc/stat` 支持 `STAT_CPU_TIMES`/`STAT_FORK_COUNT`。这俩是 Linux 标准 `/proc/stat` 字段，所有 Android 均有，风险低；盲区记录在案。
