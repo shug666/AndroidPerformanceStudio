@@ -53,6 +53,23 @@ report the same version. There is no `PATH` fallback. Install the development bi
 ../scripts/install-trace-processor.sh
 ```
 
+The Trace Processor is a native executable that must ship with its executable bit. The Compose packaging
+plugin copies resources with `File.copyTo`, which strips POSIX modes, and `createDistributable` builds the
+app-image and the package in a single jpackage call — so the `.deb` payload would otherwise land at `0644`.
+Two layers keep it runnable:
+
+- **Build (`.deb`)**: a `doLast` on `createDistributable`/`createReleaseDistributable` repacks the assembled
+  `.deb` (`dpkg-deb -x`/`-e` → `chmod 0755` → `dpkg-deb --build`) and asserts the published payload's binary
+  is executable. `.rpm` repack is not done (no `rpmbuild`/`rpmrebuild` assumed); rpm installs rely on the
+  runtime layer below. The `:desktop-app:run` dev runtime reads the assembled resource dir directly, so
+  `prepareProfilerAppResources` chmods it there.
+- **Runtime (`TraceProcessorToolResolver`)**: if the packaged binary is the right bytes but lost its bit, the
+  resolver first falls back to an existing user-installed copy; if none exists, it self-heals by copying the
+  packaged bytes into the user-writable cache (`~/.android-performance-studio/tools/perfetto/<version>/`) and
+  chmod-ing the copy. A wrong-checksum packaged binary still surfaces `TRACE_PROCESSOR_CHECKSUM_MISMATCH`.
+  Users on already-deployed broken installs can also recover with `sudo chmod +x` on the packaged path or
+  `PERFETTO_TRACE_PROCESSOR_PATH` pointing at an `install-trace-processor.sh`-installed copy.
+
 ## Common commands
 
 ```bash

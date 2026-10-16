@@ -14,6 +14,7 @@ import com.androidperformancestudio.platform.toolchain.JvmHostProcessRunner
 import com.androidperformancestudio.platform.toolchain.SystemHostPlatformDetector
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -90,10 +91,59 @@ public class TraceProcessorToolResolver(
                     "The pinned Trace Processor is not available for ${platform.resourceDirectory}",
                 )
         val binaryName = if (platform.operatingSystem == HostOperatingSystem.WINDOWS) WINDOWS_BINARY else UNIX_BINARY
+
         val packaged = applicationResourcesPath?.resolve("perfetto-tools")?.resolve(binaryName)
-        if (packaged != null && Files.exists(packaged)) return verifiedPinned(packaged, expected)
+        // The packaged copy may exist with the correct bytes but a missing executable bit (a known
+        // packaging defect where the Compose plugin's resource copy strips POSIX modes). When that
+        // happens we do not fail outright; we fall through to the installed copy, and if that is
+        // missing too we self-heal by copying the good packaged bytes into a user-writable cache.
+        val packagedVerdict = if (packaged != null && Files.exists(packaged)) verifyPinned(packaged, expected) else null
+        when (packagedVerdict) {
+            is BinaryVerification.Valid -> return StudioResult.Success(packagedVerdict.tool)
+            is BinaryVerification.ChecksumMismatch ->
+                return failure(
+                    ErrorCategory.DATA_VALIDATION,
+                    "TRACE_PROCESSOR_CHECKSUM_MISMATCH",
+                    "Trace Processor checksum mismatch for $packaged",
+                )
+            else -> Unit // null (absent), NotExecutable (right bytes, bit lost), or NotRegular
+        }
+
         val installed = installedToolsPath.resolve(binaryName)
-        if (Files.exists(installed)) return verifiedPinned(installed, expected)
+        val installedVerdict = if (Files.exists(installed)) verifyPinned(installed, expected) else null
+        when (installedVerdict) {
+            is BinaryVerification.Valid -> return StudioResult.Success(installedVerdict.tool)
+            is BinaryVerification.ChecksumMismatch -> {
+                // Only surface the installed checksum mismatch if we have no good packaged bytes to
+                // heal from. When the packaged copy is the right binary that lost its bit, self-heal
+                // from it instead of failing on the corrupt installed copy.
+                if (packagedVerdict !is BinaryVerification.NotExecutable) {
+                    return failure(
+                        ErrorCategory.DATA_VALIDATION,
+                        "TRACE_PROCESSOR_CHECKSUM_MISMATCH",
+                        "Trace Processor checksum mismatch for $installed",
+                    )
+                }
+            }
+            else -> Unit
+        }
+
+        // The packaged copy is the right binary but lost its executable bit: recover out-of-the-box
+        // by copying it into the user-writable cache and setting the executable bit on the copy.
+        if (packagedVerdict is BinaryVerification.NotExecutable) {
+            return selfHeal(packaged!!, binaryName)
+        }
+
+        // No good source to heal from and no usable installed copy.
+        if (installedVerdict is BinaryVerification.NotExecutable) {
+            return failure(
+                ErrorCategory.CONFIGURATION,
+                "TRACE_PROCESSOR_NOT_EXECUTABLE",
+                "Trace Processor is not executable: $installed. " +
+                    "Recover by running scripts/install-trace-processor.sh or configuring " +
+                    "$TRACE_PROCESSOR_OVERRIDE_ENVIRONMENT explicitly.",
+            )
+        }
         return failure(
             ErrorCategory.CONFIGURATION,
             "TRACE_PROCESSOR_NOT_FOUND",
@@ -102,22 +152,43 @@ public class TraceProcessorToolResolver(
         )
     }
 
-    private fun verifiedPinned(
+    private fun selfHeal(
+        source: Path,
+        binaryName: String,
+    ): StudioResult<TraceProcessorTool> {
+        val target = installedToolsPath.resolve(binaryName)
+        return runCatching {
+            Files.createDirectories(target.parent)
+            Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING)
+            if (!Files.isExecutable(target) && !target.toFile().setExecutable(true, false)) {
+                error("Unable to set the executable bit on $target")
+            }
+            TraceProcessorTool(target, TraceQuerySchema.PINNED_TRACE_PROCESSOR_VERSION, ArtifactFileEvidence.sha256(target).value)
+        }.fold(
+            onSuccess = { StudioResult.Success(it) },
+            onFailure = {
+                failure(
+                    ErrorCategory.CONFIGURATION,
+                    "TRACE_PROCESSOR_NOT_EXECUTABLE",
+                    "Trace Processor is not executable: $source. " +
+                        "Recover by running scripts/install-trace-processor.sh or configuring " +
+                        "$TRACE_PROCESSOR_OVERRIDE_ENVIRONMENT explicitly.",
+                )
+            },
+        )
+    }
+
+    private fun verifyPinned(
         path: Path,
         expectedSha256: String,
-    ): StudioResult<TraceProcessorTool> {
-        if (!Files.isRegularFile(path) || !Files.isExecutable(path)) {
-            return failure(ErrorCategory.CONFIGURATION, "TRACE_PROCESSOR_NOT_EXECUTABLE", "Trace Processor is not executable: $path")
-        }
+    ): BinaryVerification {
+        if (!Files.isRegularFile(path)) return BinaryVerification.NotRegular
         val actual = ArtifactFileEvidence.sha256(path).value
-        if (actual != expectedSha256) {
-            return failure(
-                ErrorCategory.DATA_VALIDATION,
-                "TRACE_PROCESSOR_CHECKSUM_MISMATCH",
-                "Trace Processor checksum mismatch for $path",
-            )
-        }
-        return StudioResult.Success(TraceProcessorTool(path, TraceQuerySchema.PINNED_TRACE_PROCESSOR_VERSION, actual))
+        // A wrong checksum is surfaced as a mismatch even when the executable bit is also missing:
+        // the fallback only applies to the right binary that lost its bit, not to unexpected bytes.
+        if (actual != expectedSha256) return BinaryVerification.ChecksumMismatch(path, actual)
+        if (!Files.isExecutable(path)) return BinaryVerification.NotExecutable(path)
+        return BinaryVerification.Valid(TraceProcessorTool(path, TraceQuerySchema.PINNED_TRACE_PROCESSOR_VERSION, actual))
     }
 
     private suspend fun resolveOverride(path: Path): StudioResult<TraceProcessorTool> {
@@ -171,3 +242,16 @@ private fun <T> failure(
     code: String,
     message: String,
 ): StudioResult<T> = StudioResult.Failure(StudioError(category, code, message))
+
+private sealed interface BinaryVerification {
+    data class Valid(val tool: TraceProcessorTool) : BinaryVerification
+
+    /** The file is a regular file with the pinned checksum but is not executable (bit lost in packaging). */
+    data class NotExecutable(val path: Path) : BinaryVerification
+
+    /** The file is a regular file whose SHA-256 does not match the pinned manifest. */
+    data class ChecksumMismatch(val path: Path, val actualSha256: String) : BinaryVerification
+
+    /** The path exists but is not a regular file (e.g. a directory). */
+    data object NotRegular : BinaryVerification
+}

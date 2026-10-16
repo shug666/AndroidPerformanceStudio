@@ -76,6 +76,18 @@ If the repository was cloned without submodules, initialize them before running 
 git submodule update --init --depth 1 --recursive
 ```
 
+### Trace Processor not executable (Linux .deb/.rpm installs)
+
+If Trace Analyzer diagnostics report `Trace Processor is not executable: .../perfetto-tools/trace_processor_shell`,
+the packaged binary lost its executable bit during packaging. The app self-heals this on first run by copying the
+binary into a user-writable cache; if that fails, recover manually:
+
+```bash
+sudo chmod +x /opt/androidperfermancestudio/lib/app/resources/perfetto-tools/trace_processor_shell
+# or point at a self-installed copy:
+export PERFETTO_TRACE_PROCESSOR_PATH="$HOME/.android-performance-studio/tools/perfetto/v57.2/trace_processor_shell"
+```
+
 ### Run the desktop application
 
 ```bash

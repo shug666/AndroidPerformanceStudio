@@ -142,6 +142,217 @@ class TraceProcessorToolResolverTest {
             assertEquals("v57.2", tool.version)
         }
 
+    @Test
+    fun `falls back to the installed copy when the packaged copy lost its executable bit`() =
+        runBlocking {
+            val resources = Files.createTempDirectory("packaged-noexec")
+            val packaged = resources.resolve("perfetto-tools/trace_processor_shell")
+            Files.createDirectories(packaged.parent)
+            Files.writeString(packaged, "pinned binary")
+            // deliberately leave packaged non-executable
+            val installedDir = Files.createTempDirectory("installed-tool")
+            val installed = installedDir.resolve("trace_processor_shell")
+            Files.writeString(installed, "pinned binary")
+            installed.toFile().setExecutable(true)
+            val platform = HostPlatform(HostOperatingSystem.LINUX, CpuArchitecture.X64)
+            val expectedHash = ArtifactFileEvidence.sha256(installed).value
+
+            val result =
+                TraceProcessorToolResolver(
+                    platformDetector = HostPlatformDetector { StudioResult.Success(platform) },
+                    manifest = TraceProcessorManifest(mapOf(platform to expectedHash)),
+                    applicationResourcesPath = resources,
+                    installedToolsPath = installedDir,
+                    configuredOverride = null,
+                ).resolve()
+
+            val tool = assertIs<StudioResult.Success<TraceProcessorTool>>(result).value
+            assertEquals(installed, tool.path)
+            assertEquals(expectedHash, tool.sha256)
+        }
+
+    @Test
+    fun `reports not executable when self-heal cannot write to the user cache`() =
+        runBlocking {
+            val resources = Files.createTempDirectory("packaged-noexec-unwritable")
+            val packaged = resources.resolve("perfetto-tools/trace_processor_shell")
+            Files.createDirectories(packaged.parent)
+            Files.writeString(packaged, "pinned binary")
+            val platform = HostPlatform(HostOperatingSystem.LINUX, CpuArchitecture.X64)
+            val expectedHash = ArtifactFileEvidence.sha256(packaged).value
+            // Block self-heal: make the cache root a regular file so createDirectories fails.
+            val blockedCache = Files.createTempFile("blocked-cache", "")
+
+            val result =
+                TraceProcessorToolResolver(
+                    platformDetector = HostPlatformDetector { StudioResult.Success(platform) },
+                    manifest = TraceProcessorManifest(mapOf(platform to expectedHash)),
+                    applicationResourcesPath = resources,
+                    installedToolsPath = blockedCache,
+                    configuredOverride = null,
+                ).resolve()
+
+            val error = assertIs<StudioResult.Failure>(result).error
+            assertEquals("TRACE_PROCESSOR_NOT_EXECUTABLE", error.code)
+            assertTrue(error.message.contains("PERFETTO_TRACE_PROCESSOR_PATH"))
+            assertTrue(error.message.contains("install-trace-processor.sh"))
+        }
+
+    @Test
+    fun `resolves the installed copy when nothing is packaged`() =
+        runBlocking {
+            val installedDir = Files.createTempDirectory("installed-only")
+            val installed = installedDir.resolve("trace_processor_shell")
+            Files.writeString(installed, "pinned binary")
+            installed.toFile().setExecutable(true)
+            val platform = HostPlatform(HostOperatingSystem.LINUX, CpuArchitecture.X64)
+            val expectedHash = ArtifactFileEvidence.sha256(installed).value
+
+            val result =
+                TraceProcessorToolResolver(
+                    platformDetector = HostPlatformDetector { StudioResult.Success(platform) },
+                    manifest = TraceProcessorManifest(mapOf(platform to expectedHash)),
+                    applicationResourcesPath = Files.createTempDirectory("no-packaged-tool"),
+                    installedToolsPath = installedDir,
+                    configuredOverride = null,
+                ).resolve()
+
+            val tool = assertIs<StudioResult.Success<TraceProcessorTool>>(result).value
+            assertEquals(installed, tool.path)
+        }
+
+    @Test
+    fun `an explicit override takes precedence over a non-executable packaged copy`() =
+        runBlocking {
+            val resources = Files.createTempDirectory("packaged-noexec-override")
+            val packaged = resources.resolve("perfetto-tools/trace_processor_shell")
+            Files.createDirectories(packaged.parent)
+            Files.writeString(packaged, "pinned binary")
+            val override = Files.createTempFile("override-trace-processor", "")
+            Files.writeString(override, "compatible override")
+            override.toFile().setExecutable(true)
+            val platform = HostPlatform(HostOperatingSystem.LINUX, CpuArchitecture.X64)
+
+            val result =
+                TraceProcessorToolResolver(
+                    platformDetector = HostPlatformDetector { StudioResult.Success(platform) },
+                    manifest = TraceProcessorManifest(emptyMap()),
+                    applicationResourcesPath = resources,
+                    installedToolsPath = Files.createTempDirectory("no-installed-tool"),
+                    configuredOverride = override,
+                    processRunner = VersionRunner("Perfetto Trace Processor v57.2"),
+                ).resolve()
+
+            val tool = assertIs<StudioResult.Success<TraceProcessorTool>>(result).value
+            assertEquals(override, tool.path)
+            assertEquals("v57.2", tool.version)
+        }
+
+    @Test
+    fun `a packaged checksum mismatch is surfaced even when the binary is not executable`() =
+        runBlocking {
+            val resources = Files.createTempDirectory("packaged-badbytes-noexec")
+            val packaged = resources.resolve("perfetto-tools/trace_processor_shell")
+            Files.createDirectories(packaged.parent)
+            Files.writeString(packaged, "not the pinned binary")
+            // deliberately leave non-executable
+            val platform = HostPlatform(HostOperatingSystem.LINUX, CpuArchitecture.X64)
+            val result =
+                TraceProcessorToolResolver(
+                    platformDetector = HostPlatformDetector { StudioResult.Success(platform) },
+                    manifest = TraceProcessorManifest(mapOf(platform to "a".repeat(64))),
+                    applicationResourcesPath = resources,
+                    installedToolsPath = Files.createTempDirectory("no-installed-tool"),
+                    configuredOverride = null,
+                ).resolve()
+
+            assertEquals("TRACE_PROCESSOR_CHECKSUM_MISMATCH", assertIs<StudioResult.Failure>(result).error.code)
+        }
+
+    @Test
+    fun `self-heals by copying a non-executable packaged binary into the user cache`() =
+        runBlocking {
+            val resources = Files.createTempDirectory("packaged-noexec-selfheal")
+            val packaged = resources.resolve("perfetto-tools/trace_processor_shell")
+            Files.createDirectories(packaged.parent)
+            Files.writeString(packaged, "pinned binary")
+            // packaged is deliberately non-executable
+            val cacheDir = Files.createTempDirectory("selfheal-cache")
+            val platform = HostPlatform(HostOperatingSystem.LINUX, CpuArchitecture.X64)
+            val expectedHash = ArtifactFileEvidence.sha256(packaged).value
+
+            val result =
+                TraceProcessorToolResolver(
+                    platformDetector = HostPlatformDetector { StudioResult.Success(platform) },
+                    manifest = TraceProcessorManifest(mapOf(platform to expectedHash)),
+                    applicationResourcesPath = resources,
+                    installedToolsPath = cacheDir,
+                    configuredOverride = null,
+                ).resolve()
+
+            val tool = assertIs<StudioResult.Success<TraceProcessorTool>>(result).value
+            val healed = cacheDir.resolve("trace_processor_shell")
+            assertEquals(healed, tool.path)
+            assertEquals(expectedHash, tool.sha256)
+            assertTrue(Files.isExecutable(healed))
+        }
+
+    @Test
+    fun `self-heal overwrites a corrupt cache copy from the good packaged bytes`() =
+        runBlocking {
+            val resources = Files.createTempDirectory("packaged-good-cache-corrupt")
+            val packaged = resources.resolve("perfetto-tools/trace_processor_shell")
+            Files.createDirectories(packaged.parent)
+            Files.writeString(packaged, "pinned binary")
+            val cacheDir = Files.createTempDirectory("selfheal-overwrite")
+            Files.createDirectories(cacheDir)
+            val stale = cacheDir.resolve("trace_processor_shell")
+            Files.writeString(stale, "corrupt stale copy")
+            stale.toFile().setExecutable(true)
+            val platform = HostPlatform(HostOperatingSystem.LINUX, CpuArchitecture.X64)
+            val expectedHash = ArtifactFileEvidence.sha256(packaged).value
+
+            val result =
+                TraceProcessorToolResolver(
+                    platformDetector = HostPlatformDetector { StudioResult.Success(platform) },
+                    manifest = TraceProcessorManifest(mapOf(platform to expectedHash)),
+                    applicationResourcesPath = resources,
+                    installedToolsPath = cacheDir,
+                    configuredOverride = null,
+                ).resolve()
+
+            val tool = assertIs<StudioResult.Success<TraceProcessorTool>>(result).value
+            assertEquals(cacheDir.resolve("trace_processor_shell"), tool.path)
+            assertEquals(expectedHash, tool.sha256)
+            assertTrue(Files.isExecutable(tool.path))
+        }
+
+    @Test
+    fun `self-heal yields to an explicit override`() =
+        runBlocking {
+            val resources = Files.createTempDirectory("packaged-noexec-override-selfheal")
+            val packaged = resources.resolve("perfetto-tools/trace_processor_shell")
+            Files.createDirectories(packaged.parent)
+            Files.writeString(packaged, "pinned binary")
+            val override = Files.createTempFile("override-trace-processor", "")
+            Files.writeString(override, "compatible override")
+            override.toFile().setExecutable(true)
+            val platform = HostPlatform(HostOperatingSystem.LINUX, CpuArchitecture.X64)
+
+            val result =
+                TraceProcessorToolResolver(
+                    platformDetector = HostPlatformDetector { StudioResult.Success(platform) },
+                    manifest = TraceProcessorManifest(emptyMap()),
+                    applicationResourcesPath = resources,
+                    installedToolsPath = Files.createTempDirectory("selfheal-cache"),
+                    configuredOverride = override,
+                    processRunner = VersionRunner("Perfetto Trace Processor v57.2"),
+                ).resolve()
+
+            val tool = assertIs<StudioResult.Success<TraceProcessorTool>>(result).value
+            assertEquals(override, tool.path)
+        }
+
     private class VersionRunner(
         private val version: String,
     ) : HostProcessRunner {

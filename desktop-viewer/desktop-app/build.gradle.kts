@@ -1,6 +1,7 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import groovy.json.JsonSlurper
+import java.nio.file.Files
 import java.security.MessageDigest
 import java.util.HexFormat
 
@@ -46,22 +47,78 @@ tasks
     .configureEach { dependsOn(prepareProfilerAppResources) }
 
 if (!System.getProperty("os.name").lowercase().contains("win")) {
+    // The :desktop-app:run dev runtime reads the Trace Processor straight out of the assembled
+    // app-resources dir, with no intervening jpackage copy. Ensure it is executable there so the
+    // resolver does not reject it in dev mode. (The published .deb/.rpm is fixed separately below:
+    // jpackage's single-call build leaves no earlier hook, so the payload is repacked after build.)
+    prepareProfilerAppResources.configure {
+        doLast {
+            val binary = profilerAppResources.get().asFile.resolve("common/perfetto-tools/trace_processor_shell")
+            check(binary.isFile) { "Packaged Trace Processor is missing from the assembled app resources: $binary" }
+            if (!binary.canExecute()) {
+                check(binary.setExecutable(true, false)) { "Unable to make the packaged Trace Processor executable: $binary" }
+            }
+            check(binary.canExecute()) { "Packaged Trace Processor is not executable after assembly: $binary" }
+        }
+    }
+
+    // The Compose packaging plugin copies resources with Kotlin File.copyTo, which strips the POSIX
+    // executable bit, and createDistributable builds the app-image + .deb/.rpm in a single jpackage
+    // call. There is no Gradle hook between image creation and packaging, so the published payload
+    // ships the binary at 0644. Repack the assembled .deb after jpackage finishes: extract, chmod
+    // the Trace Processor, repack. (.rpm repack is impractical without rpmbuild; rpm installs rely
+    // on the resolver's runtime self-heal instead.)
     tasks
         .matching { task -> task.name == "createDistributable" || task.name == "createReleaseDistributable" }
         .configureEach {
             doLast {
-                val packagedBinaries =
-                    outputs.files.asFileTree
-                        .matching { include("**/resources/perfetto-tools/trace_processor_shell") }
-                        .files
-                check(packagedBinaries.isNotEmpty()) { "Packaged Trace Processor is missing from the distributable" }
-                packagedBinaries.forEach { binary ->
-                    check(binary.canExecute() || binary.setExecutable(true, false)) {
-                        "Unable to make the packaged Trace Processor executable: $binary"
-                    }
-                }
+                val packages = outputs.files.files.filter { it.isFile && (it.extension == "deb") }
+                packages.forEach { pkg -> makeTraceProcessorExecutableInDeb(pkg, logger) }
             }
         }
+}
+
+fun makeTraceProcessorExecutableInDeb(deb: File, logger: org.gradle.api.logging.Logger) {
+    fun runCmd(vararg args: String): Int =
+        ProcessBuilder(args.toList())
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .redirectError(ProcessBuilder.Redirect.DISCARD)
+            .start()
+            .waitFor()
+
+    if (runCmd("dpkg-deb", "--version") != 0) {
+        logger.warn("dpkg-deb not found; skipping Trace Processor exec-bit repack of $deb (runtime self-heal will cover it).")
+        return
+    }
+    val binaryName = "trace_processor_shell"
+    val workdir = Files.createTempDirectory("deb-repack")
+    try {
+        val root = workdir.resolve("root")
+        check(runCmd("dpkg-deb", "-x", deb.absolutePath, root.toString()) == 0) { "dpkg-deb -x failed for $deb" }
+        check(runCmd("dpkg-deb", "-e", deb.absolutePath, root.resolve("DEBIAN").toString()) == 0) { "dpkg-deb -e failed for $deb" }
+
+        val binaries = File(root.toString()).walkTopDown().filter { it.name == binaryName && it.isFile }.toList()
+        check(binaries.isNotEmpty()) { "Trace Processor $binaryName not found in .deb payload: $deb" }
+        binaries.forEach { binary ->
+            if (!binary.canExecute()) {
+                check(binary.setExecutable(true, false)) { "Unable to make Trace Processor executable in .deb: $binary" }
+            }
+        }
+
+        val repacked = workdir.resolve("repacked.deb")
+        check(runCmd("dpkg-deb", "--build", root.toString(), repacked.toString()) == 0) { "dpkg-deb --build failed for $deb" }
+        check(deb.delete()) { "Unable to replace original .deb: $deb" }
+        check(repacked.toFile().copyTo(deb, overwrite = true) == deb) { "Unable to write repacked .deb: $deb" }
+
+        // Build-time assertion: the published payload's Trace Processor must be executable.
+        val verifyRoot = workdir.resolve("verify")
+        check(runCmd("dpkg-deb", "-x", deb.absolutePath, verifyRoot.toString()) == 0) { "verify dpkg-deb -x failed for $deb" }
+        val verified = File(verifyRoot.toString()).walkTopDown().filter { it.name == binaryName && it.isFile }.toList()
+        check(verified.all { it.canExecute() }) { "Repacked .deb Trace Processor is not executable: $deb" }
+        logger.lifecycle("Repacked $deb: Trace Processor marked executable.")
+    } finally {
+        workdir.toFile().deleteRecursively()
+    }
 }
 
 fun macOsPackageVersion(version: String): String {

@@ -76,6 +76,16 @@ PERFETTO_TOOLS_DIR="$PWD/build/perfetto-tools" ./scripts/install-trace-processor
 git submodule update --init --depth 1 --recursive
 ```
 
+### Trace Processor 不可执行（Linux .deb/.rpm 安装）
+
+若轨迹诊断提示 `Trace Processor is not executable: .../perfetto-tools/trace_processor_shell`，说明打包后的二进制在打包过程中丢失了可执行权限位。应用首次运行时会自动自愈（将二进制复制到用户可写的缓存目录并加上执行位）；若自愈失败，可手动恢复：
+
+```bash
+sudo chmod +x /opt/androidperfermancestudio/lib/app/resources/perfetto-tools/trace_processor_shell
+# 或指向自行安装的副本：
+export PERFETTO_TRACE_PROCESSOR_PATH="$HOME/.android-performance-studio/tools/perfetto/v57.2/trace_processor_shell"
+```
+
 ### 运行桌面应用
 
 ```bash
