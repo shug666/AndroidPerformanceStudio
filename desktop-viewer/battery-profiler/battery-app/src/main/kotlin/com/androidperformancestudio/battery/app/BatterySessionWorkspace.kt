@@ -35,7 +35,6 @@ import com.androidperformancestudio.battery.battery_app.generated.resources.sess
 import com.androidperformancestudio.battery.battery_app.generated.resources.sessions_count
 import com.androidperformancestudio.battery.battery_app.generated.resources.sessions_empty
 import com.androidperformancestudio.battery.battery_app.generated.resources.sessions_interrupted
-import com.androidperformancestudio.battery.battery_app.generated.resources.sessions_loading
 import com.androidperformancestudio.battery.battery_app.generated.resources.sessions_new
 import com.androidperformancestudio.battery.battery_app.generated.resources.sessions_no_matches
 import com.androidperformancestudio.battery.battery_app.generated.resources.sessions_run_status
@@ -145,9 +144,6 @@ private fun BatterySessionsPane(
         }
         state.sessionError?.let {
             Text(it, color = LocalViewerColors.current.error, style = ViewerTypography.secondary)
-        }
-        if (state.isLoadingSession) {
-            Text(localizedStringResource(Res.string.sessions_loading, language), style = ViewerTypography.secondary)
         }
         val sessions = filterBatterySessions(state.sessions, query)
         if (sessions.isEmpty()) {

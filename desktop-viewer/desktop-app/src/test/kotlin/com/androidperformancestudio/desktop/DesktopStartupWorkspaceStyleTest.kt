@@ -52,7 +52,7 @@ class DesktopStartupWorkspaceStyleTest {
     fun `source workspace leaves the native toolbar and resizable source workflow intact`() {
         val source = Files.readString(sourceRoot.resolve("SourceWorkspacesPage.kt"))
         assertFalse(source.contains("StudioWorkspaceHeader("))
-        assertTrue(source.contains("HomeButton("))
+        assertFalse(source.contains("HomeButton("))
         assertTrue(source.contains(".height(HEADER_TOOL_BAR_HEIGHT)"))
         assertTrue(source.contains("onClick = onOpenAiSettings"))
         assertTrue(source.contains("Res.string.source_add_local"))

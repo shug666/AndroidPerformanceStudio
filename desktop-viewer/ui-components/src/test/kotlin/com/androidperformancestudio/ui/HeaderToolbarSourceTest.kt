@@ -15,4 +15,13 @@ class HeaderToolbarSourceTest {
         assertTrue(source.contains("modifier: Modifier = Modifier"))
         assertFalse(source.contains("modifier ?:"))
     }
+
+    @Test
+    fun `top-level home and settings buttons stay hidden`() {
+        val source = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/ui/HeaderToolbar.kt"))
+
+        assertFalse(source.contains("HomeButton("))
+        assertFalse(source.contains("SettingsButton("))
+        assertFalse(source.contains("back_to_home"))
+    }
 }

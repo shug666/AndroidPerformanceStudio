@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test
 
 class HeaderControlTest {
     @Test
-    fun `home button is the first header control and exposes a localized description`() {
+    fun `top-level navigation buttons are hidden while header actions remain available`() {
         val source = Files.readString(
             Path.of("src/main/kotlin/com/androidperformancestudio/desktop/LayoutInspectorMainPage.kt"),
         )
@@ -27,10 +27,8 @@ class HeaderControlTest {
         assertTrue(source.indexOf("HeaderToolbar(") < source.indexOf("DeviceSelector("))
         assertFalse(header.contains("Text(packageName"))
         assertTrue(header.contains("onNavigateHome = onNavigateHome"))
-        assertTrue(sharedHeader.contains("if (onNavigateHome != null)"))
-        assertTrue(sharedHeader.contains("HomeButton("))
-        assertTrue(sharedHeader.contains("Res.string.back_to_home"))
-        assertTrue(sharedHeader.contains("onClick = onNavigateHome"))
+        assertFalse(sharedHeader.contains("HomeButton("))
+        assertFalse(sharedHeader.contains("SettingsButton("))
         assertEquals(
             "Back to home",
             localizedStringResource(Res.string.back_to_home, UiLanguage.ENGLISH),
@@ -117,7 +115,7 @@ class HeaderControlTest {
             .substringBefore("private fun HierarchyPane(")
 
         assertTrue(sharedHeader.contains("val colors = LocalViewerColors.current"))
-        assertTrue(sharedHeader.contains("colors = colors"))
+        assertTrue(sharedHeader.contains("background(colors.panel)"))
         assertTrue(panelToggle.contains("val iconColor = colors.accent"))
         assertFalse(panelToggle.contains("colors.mutedText"))
         assertTrue(sharedSearch.contains("colors.accent"))

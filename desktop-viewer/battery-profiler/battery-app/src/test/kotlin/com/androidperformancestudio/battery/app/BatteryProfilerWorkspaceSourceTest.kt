@@ -12,6 +12,14 @@ class BatteryProfilerWorkspaceSourceTest {
         Files.readString(
             Path.of("src/main/kotlin/com/androidperformancestudio/battery/app/BatteryProfilerMainPage.kt"),
         )
+    private val controllerSource =
+        Files.readString(
+            Path.of("src/main/kotlin/com/androidperformancestudio/battery/app/BatteryProfilerController.kt"),
+        )
+    private val sessionsPaneSource =
+        Files.readString(
+            Path.of("src/main/kotlin/com/androidperformancestudio/battery/app/BatterySessionWorkspace.kt"),
+        )
 
     @Test
     fun `workspace uses layered shared compact chrome without changing battery flows`() {
@@ -53,6 +61,14 @@ class BatteryProfilerWorkspaceSourceTest {
         assertTrue(footer.contains(".background(colors.toolbar)"))
         assertTrue(footer.contains(".horizontalScroll(rememberScrollState())"))
         assertTrue(footer.contains("errorMessage ?: operationMessage"))
+    }
+
+    @Test
+    fun `saved-session loading status is kept in the footer instead of the session list`() {
+        assertTrue(controllerSource.contains("operationMessage = localizedStringResource(Res.string.sessions_loading, language)"))
+        assertFalse(sessionsPaneSource.contains("sessions_loading"))
+        assertFalse(sessionsPaneSource.contains("if (state.isLoadingSession)"))
+        assertTrue(source.substring(source.indexOf("private fun BatteryProfilerStatusBar(")).contains("errorMessage ?: operationMessage"))
     }
 
     @Test

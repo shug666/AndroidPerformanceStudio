@@ -76,7 +76,6 @@ import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.HEADER_TOOL_BAR_HEIGHT
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTypography
-import com.androidperformancestudio.ui.button.HomeButton
 import com.androidperformancestudio.ui.button.MacOSTextButton
 import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.search.CompactSearchField
@@ -101,6 +100,7 @@ private enum class RemoteWorkspaceDialog {
 
 private val READY_SUMMARY_PATTERN = Regex("""(\d+) files · (\d+) symbols""")
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 internal fun SourceWorkspacesPage(
     language: UiLanguage,
@@ -145,10 +145,6 @@ internal fun SourceWorkspacesPage(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                HomeButton(
-                    contentDescription = localizedStringResource(Res.string.home, language),
-                    onClick = onNavigateHome,
-                )
                 Spacer(Modifier.weight(1f))
                 MacOSTextButton(
                     localizedStringResource(Res.string.source_add_local, language),

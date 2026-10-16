@@ -33,6 +33,7 @@ import com.androidperformancestudio.battery.battery_app.generated.resources.sess
 import com.androidperformancestudio.battery.battery_app.generated.resources.session_opened
 import com.androidperformancestudio.battery.battery_app.generated.resources.session_persistence_failed
 import com.androidperformancestudio.battery.battery_app.generated.resources.sessions_load_failed
+import com.androidperformancestudio.battery.battery_app.generated.resources.sessions_loading
 import com.androidperformancestudio.battery.battery_app.generated.resources.unable_to_start_battery_experiment
 import com.androidperformancestudio.battery.battery_app.generated.resources.unable_to_stop_battery_experiment
 import com.androidperformancestudio.battery.capture.ActiveBatteryExperiment
@@ -100,7 +101,12 @@ internal class BatteryProfilerController(
 
     suspend fun openSession(sessionId: String) {
         if (mutableState.value.isRunning || mutableState.value.isLoadingSession) return
-        mutableState.value = mutableState.value.copy(isLoadingSession = true, sessionError = null)
+        mutableState.value =
+            mutableState.value.copy(
+                isLoadingSession = true,
+                sessionError = null,
+                operationMessage = localizedStringResource(Res.string.sessions_loading, language),
+            )
         runCatching {
             withContext(Dispatchers.IO) { SqliteBatterySessionStore.open(databaseFile).use { it.loadEvidence(sessionId) } }
         }.onSuccess { evidence ->
