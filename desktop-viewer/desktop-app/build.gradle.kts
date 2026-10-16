@@ -49,11 +49,11 @@ tasks
 if (!System.getProperty("os.name").lowercase().contains("win")) {
     // The :desktop-app:run dev runtime reads the Trace Processor straight out of the assembled
     // app-resources dir, with no intervening jpackage copy. Ensure it is executable there so the
-    // resolver does not reject it in dev mode. (The published .deb/.rpm is fixed separately below:
-    // jpackage's single-call build leaves no earlier hook, so the payload is repacked after build.)
+    // resolver does not reject it in dev mode. (The published .deb/.rpm is fixed separately below.)
     prepareProfilerAppResources.configure {
+        val resourcesPath = profilerAppResources.get().asFile.resolve("common/perfetto-tools/trace_processor_shell").absolutePath
         doLast {
-            val binary = profilerAppResources.get().asFile.resolve("common/perfetto-tools/trace_processor_shell")
+            val binary = File(resourcesPath)
             check(binary.isFile) { "Packaged Trace Processor is missing from the assembled app resources: $binary" }
             if (!binary.canExecute()) {
                 check(binary.setExecutable(true, false)) { "Unable to make the packaged Trace Processor executable: $binary" }
@@ -69,6 +69,9 @@ if (!System.getProperty("os.name").lowercase().contains("win")) {
     // published payload ships the binary at 0644. Repack each produced archive after jpackage
     // finishes: extract, chmod the Trace Processor, repack. CI builds via `packageDeb`/`packageRpm`,
     // so the hook must cover those (not just createDistributable).
+    //
+    // The doLast action is kept self-contained (only uses the task's own logger/outputs, no script-
+    // scope captures) so it is compatible with Gradle's configuration cache.
     val packageTasks = setOf(
         "packageDeb", "packageRpm",
         "createDistributable", "createReleaseDistributable",
@@ -76,90 +79,66 @@ if (!System.getProperty("os.name").lowercase().contains("win")) {
     tasks
         .matching { task -> task.name in packageTasks }
         .configureEach {
+            val taskOutputs = outputs.files
             doLast {
-                // Each packaging task declares a destination directory (build/compose/binaries/main/{deb,rpm});
-                // the produced .deb/.rpm lives there. Scan the output tree for archives so the hook works
-                // whether the task declares file outputs or only a directory output.
-                val outDirs = outputs.files.files.filter { it.isDirectory }
+                val task = this
+                fun runCmd(vararg args: String): Int =
+                    ProcessBuilder(args.toList())
+                        .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                        .redirectError(ProcessBuilder.Redirect.DISCARD)
+                        .start()
+                        .waitFor()
+
+                // Each packaging task declares a destination directory; the produced .deb/.rpm lives
+                // there. Scan the output tree for archives.
+                val outDirs = taskOutputs.files.filter { it.isDirectory }
                 val archives = if (outDirs.isNotEmpty()) {
                     outDirs.flatMap { dir -> dir.walkTopDown().filter { f -> f.isFile && (f.extension == "deb" || f.extension == "rpm") }.toList() }
                 } else {
-                    outputs.files.files.filter { it.isFile && (it.extension == "deb" || it.extension == "rpm") }
+                    taskOutputs.files.filter { it.isFile && (it.extension == "deb" || it.extension == "rpm") }
                 }
-                archives.forEach { archive -> makeTraceProcessorExecutableInArchive(archive, logger) }
+                val binaryName = "trace_processor_shell"
+                archives.forEach { archive ->
+                    if (archive.extension == "deb") {
+                        if (runCmd("dpkg-deb", "--version") != 0) {
+                            task.logger.warn("dpkg-deb not found; skipping Trace Processor exec-bit repack of $archive (runtime self-heal will cover it).")
+                            return@forEach
+                        }
+                        val workdir = Files.createTempDirectory("deb-repack")
+                        try {
+                            val root = workdir.resolve("root")
+                            check(runCmd("dpkg-deb", "-x", archive.absolutePath, root.toString()) == 0) { "dpkg-deb -x failed for $archive" }
+                            check(runCmd("dpkg-deb", "-e", archive.absolutePath, root.resolve("DEBIAN").toString()) == 0) { "dpkg-deb -e failed for $archive" }
+
+                            val binaries = File(root.toString()).walkTopDown().filter { it.name == binaryName && it.isFile }.toList()
+                            check(binaries.isNotEmpty()) { "Trace Processor $binaryName not found in .deb payload: $archive" }
+                            binaries.forEach { binary ->
+                                if (!binary.canExecute()) {
+                                    check(binary.setExecutable(true, false)) { "Unable to make Trace Processor executable in .deb: $binary" }
+                                }
+                            }
+
+                            val repacked = workdir.resolve("repacked.deb")
+                            check(runCmd("dpkg-deb", "--build", root.toString(), repacked.toString()) == 0) { "dpkg-deb --build failed for $archive" }
+                            check(archive.delete()) { "Unable to replace original .deb: $archive" }
+                            check(repacked.toFile().copyTo(archive, overwrite = true) == archive) { "Unable to write repacked .deb: $archive" }
+
+                            val verifyRoot = workdir.resolve("verify")
+                            check(runCmd("dpkg-deb", "-x", archive.absolutePath, verifyRoot.toString()) == 0) { "verify dpkg-deb -x failed for $archive" }
+                            val verified = File(verifyRoot.toString()).walkTopDown().filter { it.name == binaryName && it.isFile }.toList()
+                            check(verified.all { it.canExecute() }) { "Repacked .deb Trace Processor is not executable: $archive" }
+                            task.logger.lifecycle("Repacked $archive: Trace Processor marked executable.")
+                        } finally {
+                            workdir.toFile().deleteRecursively()
+                        }
+                    } else if (archive.extension == "rpm") {
+                        // No robust in-place rpm mode fix without rpmrebuild; rpm installs rely on the
+                        // resolver's runtime self-heal.
+                        task.logger.warn("RPM exec-bit repack not implemented for $archive; rpm installs rely on runtime self-heal. (.deb is repacked.)")
+                    }
+                }
             }
         }
-}
-
-fun makeTraceProcessorExecutableInArchive(archive: File, logger: org.gradle.api.logging.Logger) {
-    when (archive.extension) {
-        "deb" -> repackDeb(archive, logger)
-        "rpm" -> repackRpm(archive, logger)
-        else -> Unit
-    }
-}
-
-fun repackDeb(deb: File, logger: org.gradle.api.logging.Logger) {
-    fun runCmd(vararg args: String): Int =
-        ProcessBuilder(args.toList())
-            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-            .redirectError(ProcessBuilder.Redirect.DISCARD)
-            .start()
-            .waitFor()
-
-    if (runCmd("dpkg-deb", "--version") != 0) {
-        logger.warn("dpkg-deb not found; skipping Trace Processor exec-bit repack of $deb (runtime self-heal will cover it).")
-        return
-    }
-    val binaryName = "trace_processor_shell"
-    val workdir = Files.createTempDirectory("deb-repack")
-    try {
-        val root = workdir.resolve("root")
-        check(runCmd("dpkg-deb", "-x", deb.absolutePath, root.toString()) == 0) { "dpkg-deb -x failed for $deb" }
-        check(runCmd("dpkg-deb", "-e", deb.absolutePath, root.resolve("DEBIAN").toString()) == 0) { "dpkg-deb -e failed for $deb" }
-
-        val binaries = File(root.toString()).walkTopDown().filter { it.name == binaryName && it.isFile }.toList()
-        check(binaries.isNotEmpty()) { "Trace Processor $binaryName not found in .deb payload: $deb" }
-        binaries.forEach { binary ->
-            if (!binary.canExecute()) {
-                check(binary.setExecutable(true, false)) { "Unable to make Trace Processor executable in .deb: $binary" }
-            }
-        }
-
-        val repacked = workdir.resolve("repacked.deb")
-        check(runCmd("dpkg-deb", "--build", root.toString(), repacked.toString()) == 0) { "dpkg-deb --build failed for $deb" }
-        check(deb.delete()) { "Unable to replace original .deb: $deb" }
-        check(repacked.toFile().copyTo(deb, overwrite = true) == deb) { "Unable to write repacked .deb: $deb" }
-
-        // Build-time assertion: the published payload's Trace Processor must be executable.
-        val verifyRoot = workdir.resolve("verify")
-        check(runCmd("dpkg-deb", "-x", deb.absolutePath, verifyRoot.toString()) == 0) { "verify dpkg-deb -x failed for $deb" }
-        val verified = File(verifyRoot.toString()).walkTopDown().filter { it.name == binaryName && it.isFile }.toList()
-        check(verified.all { it.canExecute() }) { "Repacked .deb Trace Processor is not executable: $deb" }
-        logger.lifecycle("Repacked $deb: Trace Processor marked executable.")
-    } finally {
-        workdir.toFile().deleteRecursively()
-    }
-}
-
-fun repackRpm(rpm: File, logger: org.gradle.api.logging.Logger) {
-    // RPM payload modes are governed by the cpio archive's file headers; a robust repack requires
-    // rpmbuild/rpmrebuild which the build host may not have. When the tools are absent, rpm installs
-    // rely on the resolver's runtime self-heal (TraceProcessorToolResolver copies the good bytes
-    // to a user-writable cache and chmods them). Try rpmrebuild first, else skip with a warning.
-    fun runCmd(vararg args: String): Int =
-        ProcessBuilder(args.toList())
-            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-            .redirectError(ProcessBuilder.Redirect.DISCARD)
-            .start()
-            .waitFor()
-
-    if (runCmd("rpm", "--version") != 0) {
-        logger.warn("rpm tooling not found; skipping Trace Processor exec-bit repack of $rpm (runtime self-heal will cover it).")
-        return
-    }
-    // No reliable in-place mode fix without rpmrebuild; rpm installs are covered at runtime.
-    logger.warn("RPM exec-bit repack not implemented for $rpm; rpm installs rely on runtime self-heal. (.deb is repacked.)")
 }
 
 fun macOsPackageVersion(version: String): String {
