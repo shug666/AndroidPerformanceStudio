@@ -1,20 +1,20 @@
 ## ADDED Requirements
 
-### Requirement: Packaged Trace Processor is executable in native distributions
+### Requirement: Packaged Trace Processor is executable in the published `.deb`
 
-The Trace Processor binary packaged into native distributions (`deb`, `rpm`, and the shared app-image that feeds `dmg`/`pkg`/`msi`/`exe`) SHALL be a regular file with the executable bit set, so it can be launched by the host process runner without an out-of-band `chmod`. Because the Compose packaging plugin strips POSIX modes when it copies resources (`File.copyTo`) and `createDistributable` builds the app-image and the package in a single jpackage call (leaving no Gradle hook between image creation and packaging), the build SHALL guarantee the executable bit by repacking the assembled package after jpackage finishes: extracting the payload, setting the executable bit on the Trace Processor, and repacking. The repack SHALL be a build-time step on the packaging tasks (`createDistributable`/`createReleaseDistributable`) and SHALL fail the build if the published payload's Trace Processor is not executable.
+The Trace Processor binary published in the Linux `.deb` SHALL be a regular file with the executable bit set, so it can be launched by the host process runner without an out-of-band `chmod`. Because the Compose packaging plugin strips POSIX modes when it copies resources (`File.copyTo`) and each packaging task runs jpackage in a single call (no Gradle hook between image creation and packaging), the build SHALL guarantee the executable bit by repacking the produced `.deb` after jpackage finishes — extracting the payload, setting the executable bit on the Trace Processor, and repacking — and SHALL fail the build if the published payload's Trace Processor is not executable. The repack SHALL run on the packaging tasks CI actually invokes (`packageDeb`/`packageRpm`, plus `createDistributable`/`createReleaseDistributable`), and the repack action SHALL be configuration-cache compatible (no script-scope captures).
 
 #### Scenario: deb-installed binary is executable
 - **WHEN** a user installs the Linux `.deb` distribution and inspects `<install-root>/lib/app/resources/perfetto-tools/trace_processor_shell`
 - **THEN** the file MUST be a regular file with an executable mode (at least `0755` for the owner), and `Files.isExecutable` SHALL return true
 
-#### Scenario: rpm-installed binary is executable
-- **WHEN** a user installs the Linux `.rpm` distribution and inspects the installed `trace_processor_shell`
-- **THEN** the file MUST be a regular file with an executable mode (at least `0755` for the owner)
-
 #### Scenario: build fails if the published binary is not executable
-- **WHEN** the repack step cannot make the packaged Trace Processor executable in the published artifact
+- **WHEN** the repack step cannot make the packaged Trace Processor executable in the published `.deb`
 - **THEN** the build MUST fail rather than ship a non-executable Trace Processor
+
+#### Scenario: rpm installs rely on runtime self-heal
+- **WHEN** a user installs the Linux `.rpm` distribution (no build-time rpm repack is performed)
+- **THEN** the packaged `trace_processor_shell` MAY be non-executable, and the resolver's runtime self-heal SHALL recover it out-of-the-box on first run
 
 ### Requirement: Resolver falls back to the installed copy when the packaged copy is not executable
 

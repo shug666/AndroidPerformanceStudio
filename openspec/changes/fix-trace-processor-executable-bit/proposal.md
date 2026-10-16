@@ -4,9 +4,9 @@ Trace Analyzer diagnostics that depend on the native Trace Processor (CPU schedu
 
 ## What Changes
 
-- Set `fileMode = 0b111101101` (`0755`) on the `perfetto-tools` `CopySpec` in `prepareProfilerAppResources`, so the packaged Trace Processor is executable from the moment it enters the app-resources directory — before Gradle Sync, jpackage's resource copy, and `.deb`/`.rpm` packaging can strip the bit.
-- Move the existing `setExecutable` chmod from the `createDistributable`/`createReleaseDistributable` `doLast` (which runs *after* jpackage has already frozen the `.deb` payload) to a point that precedes jpackage's resource consumption, as a defense-in-depth guarantee that the bit survives into the packaged artifact regardless of how resources are copied.
-- Harden `TraceProcessorToolResolver.resolve()`: when the packaged binary exists and is a regular file whose SHA-256 matches the pinned manifest but is not executable, fall back to the user-installed copy (`~/.android-performance-studio/tools/perfetto/<version>/...`) instead of failing outright, so a manual install can recover a broken packaged install.
+- Repack the published `.deb` after jpackage produces it: a `doLast` on `packageDeb`/`packageRpm`/`createDistributable`/`createReleaseDistributable` extracts the archive, sets the executable bit (`0755`) on the `trace_processor_shell`, and repacks it, then asserts the published payload is executable. This is necessary because the Compose packaging plugin's resource copy (`File.copyTo`) strips the POSIX executable bit, and there is no Gradle hook between app-image creation and packaging. (The originally-proposed `fileMode = 0b111101101` on the `CopySpec` was abandoned: it does not compile in this Gradle/Kotlin-DSL version and `copyTo` would strip the bit anyway — see design.)
+- Chmod the assembled resource binary in `prepareProfilerAppResources.doLast` so the `:desktop-app:run` dev runtime (which reads that dir directly) works.
+- Harden `TraceProcessorToolResolver.resolve()`: when the packaged binary is a regular file whose SHA-256 matches the pinned manifest but is not executable, fall back to an existing user-installed copy; if none exists, self-heal by copying the good packaged bytes into the user-writable cache (`~/.android-performance-studio/tools/perfetto/<version>/...`) and chmod-ing the copy — out-of-the-box, no user action. A wrong-checksum packaged binary still surfaces `TRACE_PROCESSOR_CHECKSUM_MISMATCH`; the configured override keeps top precedence.
 
 ## Capabilities
 
@@ -18,7 +18,9 @@ Trace Analyzer diagnostics that depend on the native Trace Processor (CPU schedu
 
 ## Impact
 
-- **Build**: `desktop-viewer/desktop-app/build.gradle.kts` — `prepareProfilerAppResources` Sync `CopySpec` gains `fileMode`; the post-packaging `setExecutable` hook is retimed. Affects every native distribution target (`Deb`, `Rpm`, and transitively `Dmg`/`Pkg`/`Msi`/`Exe` whose app-images share the same resource copy path).
-- **Runtime**: `desktop-viewer/platform-perfetto/platform-perfetto/src/main/kotlin/com/androidperformancestudio/platform/perfetto/TraceProcessorToolResolver.kt` — `resolve()` and `verifiedPinned` gain a fallback path.
-- **Tests**: `TraceProcessorToolResolverTest` — new cases for the executable-bit fallback; `build.gradle.kts` packaging checks (`PerfettoFeatureSchemaCompatibilityTest`, `SharedCoreModulesContractTest`) reviewed for the retimed chmod.
+- **Build**: `desktop-viewer/desktop-app/build.gradle.kts` — `prepareProfilerAppResources.doLast` chmods the assembled resource binary (fixes the `:desktop-app:run` dev runtime); a self-contained `doLast` repack hook on `packageDeb`/`packageRpm`/`createDistributable`/`createReleaseDistributable` extracts the produced archive, sets the executable bit on the Trace Processor, and repacks it. (The `fileMode = 0b111101101` approach originally proposed does not work: it does not compile in this Gradle/Kotlin-DSL version and the Compose plugin's `File.copyTo` strips the bit before jpackage reads it — see design.) The repack hook must be configuration-cache compatible (no script-scope captures), or Gradle 9 fails the build at cache-store time even though the artifact is correct.
+- **CI**: `.github/workflows/package-linux.yml` builds via `:desktop-app:packageDeb :desktop-app:packageRpm` — **not** `createDistributable`. The repack hook must match those task names or it never runs on CI (the first attempted fix only matched `createDistributable` and shipped 0644 debs). Verified: CI run `38880462482` repacks the `.deb` and the published payload's `trace_processor_shell` is `0755`.
+- **Runtime**: `TraceProcessorToolResolver.kt` — `resolve()` gains an installed-copy fallback and a self-heal copy for a non-executable-but-checksum-valid packaged binary.
+- **Tests**: `TraceProcessorToolResolverTest` — 8 new cases; desktop contract tests green.
+- **`.rpm`**: no build-time repack (no robust in-place mode fix without `rpmrebuild`); rpm installs rely on the runtime self-heal.
 - **No API/dependency changes.** No impact on trace capture or query schemas — the pinned version (`v57.2`) and checksums are unchanged.
