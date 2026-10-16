@@ -146,6 +146,120 @@ class PerfettoCapturePageRenderTest {
         }
     }
 
+    @Test
+    fun `recording state renders a single stop button and no second capture button`() {
+        SwingUtilities.invokeAndWait {
+            val recording =
+                PerfettoCaptureState.Recording(
+                    startTime = java.time.Instant.parse("2026-01-01T00:00:00Z"),
+                    pid = 1234L,
+                )
+            ImageComposeScene(1200, 800) {
+                ViewerTheme(darkTheme = false) {
+                    PerfettoCapturePage(
+                        captureState = recording,
+                        language = UiLanguage.ENGLISH,
+                        onStartCapture = { _, _ -> },
+                        onStopCapture = {},
+                        onOpenTrace = {},
+                    )
+                }
+            }.use { scene ->
+                repeat(3) { scene.render().close() }
+                val nodes = scene.semanticsOwners.flatMap { it.unmergedRootSemanticsNode.descendants() }
+                // Exactly one capture control button labeled "Stop" (ENGLISH localization).
+                val stopButtons = nodes.filter { it.text == "Stop" }
+                assertEquals(1, stopButtons.size, "exactly one Stop button must be present while recording")
+                // The start label must NOT be present — the toggle is showing Stop, not Start Capture.
+                assertTrue(nodes.none { it.text == "Start Capture" }, "the start label must not appear while recording")
+            }
+        }
+    }
+
+    @Test
+    fun `recording state stop button renders in the error color`() {
+        SwingUtilities.invokeAndWait {
+            val recording =
+                PerfettoCaptureState.Recording(
+                    startTime = java.time.Instant.parse("2026-01-01T00:00:00Z"),
+                    pid = 1234L,
+                )
+            ImageComposeScene(1200, 800) {
+                ViewerTheme(darkTheme = false) {
+                    PerfettoCapturePage(
+                        captureState = recording,
+                        language = UiLanguage.ENGLISH,
+                        onStartCapture = { _, _ -> },
+                        onStopCapture = {},
+                        onOpenTrace = {},
+                    )
+                }
+            }.use { scene ->
+                repeat(3) { scene.render().close() }
+                val path = Path.of("build/reports/trace-layout/recording-stop.png")
+                Files.createDirectories(path.parent)
+                scene.render().use { image ->
+                    val encoded = checkNotNull(image.encodeToData())
+                    encoded.use { Files.write(path, it.bytes) }
+                }
+                val screenshot = ImageIO.read(path.toFile())
+                // The Stop button's border/text use MaterialTheme.colorScheme.error (a red-ish tone).
+                // Confirm the rendered frame contains reddish pixels (error color is present).
+                val hasErrorRed =
+                    (0 until screenshot.width step 4).any { x ->
+                        (0 until screenshot.height step 4).any { y ->
+                            val rgb = screenshot.getRGB(x, y)
+                            val r = (rgb shr 16) and 0xFF
+                            val g = (rgb shr 8) and 0xFF
+                            val b = rgb and 0xFF
+                            r > 150 && g < 120 && b < 120
+                        }
+                    }
+                assertTrue(hasErrorRed, "recording state must render the Stop button in the error color")
+            }
+        }
+    }
+
+    @Test
+    fun `preparing and pulling states render a single disabled start button`() {
+        SwingUtilities.invokeAndWait {
+            val preparing =
+                PerfettoCaptureState.Preparing(
+                    config = com.androidperformancestudio.perfetto.model.PerfettoCaptureConfig(
+                        template = com.androidperformancestudio.perfetto.model.PerfettoTraceTemplate.SYSTEM_OVERVIEW,
+                    ),
+                )
+            val pulling = PerfettoCaptureState.Pulling(bytesTransferred = 0L, totalBytes = null)
+            listOf("preparing" to preparing, "pulling" to pulling).forEach { (label, state) ->
+                ImageComposeScene(1200, 800) {
+                    ViewerTheme(darkTheme = false) {
+                        PerfettoCapturePage(
+                            captureState = state,
+                            language = UiLanguage.ENGLISH,
+                            onStartCapture = { _, _ -> },
+                            onStopCapture = {},
+                            onOpenTrace = {},
+                        )
+                    }
+                }.use { scene ->
+                    repeat(3) { scene.render().close() }
+                    val nodes = scene.semanticsOwners.flatMap { it.unmergedRootSemanticsNode.descendants() }
+                    // A single Start Capture label is present; the Stop label is not.
+                    val startButtons = nodes.filter { it.text == "Start Capture" }
+                    assertEquals(1, startButtons.size, "exactly one Start Capture button in $label state")
+                    assertTrue(nodes.none { it.text == "Stop" }, "no Stop button in $label state")
+                    // The button is disabled during intermediate (uninterruptible) phases. The
+                    // Disabled semantics flag lives on the clickable Box (not the Text child), so
+                    // assert a disabled control node is present in the unmerged tree.
+                    assertTrue(
+                        nodes.any { it.config.getOrNull(SemanticsProperties.Disabled) != null },
+                        "a disabled control must be present in $label state",
+                    )
+                }
+            }
+        }
+    }
+
     private fun SemanticsNode.descendants(): List<SemanticsNode> = listOf(this) + children.flatMap { it.descendants() }
 
     private val SemanticsNode.text: String?

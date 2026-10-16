@@ -128,13 +128,20 @@ fun PerfettoCompactButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     selected: Boolean = false,
+    danger: Boolean = false,
 ) {
     val shape = RoundedCornerShape(4.dp)
+    val colorScheme = MaterialTheme.colorScheme
+    // A danger button is an outlined destructive control: neutral fill with an
+    // error-colored border and text. It overrides the primary tint a normal
+    // (non-selected) button would use, so a "stop" action reads as destructive
+    // without becoming a filled red block.
+    val accentColor = if (danger && enabled && !selected) colorScheme.error else colorScheme.primary
     val background =
         if (selected) {
-            MaterialTheme.colorScheme.primary
+            colorScheme.primary
         } else {
-            MaterialTheme.colorScheme.surfaceVariant
+            colorScheme.surfaceVariant
         }
     val interactionSource = remember { MutableInteractionSource() }
     Box(
@@ -143,7 +150,7 @@ fun PerfettoCompactButton(
                 .height(24.dp)
                 .clip(shape)
                 .background(background)
-                .border(1.dp, MaterialTheme.colorScheme.primary, shape)
+                .border(1.dp, accentColor, shape)
                 .clickable(
                     enabled = enabled,
                     interactionSource = interactionSource,
@@ -156,9 +163,9 @@ fun PerfettoCompactButton(
             text = text,
             color =
                 when {
-                    !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    !enabled -> colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     selected -> MaterialTheme.colorScheme.onPrimary
-                    else -> MaterialTheme.colorScheme.primary
+                    else -> accentColor
                 },
             fontSize = ViewerTypography.secondary.fontSize,
             fontWeight = FontWeight.Medium,

@@ -838,6 +838,8 @@ private fun PerfettoConfigurationPanel(
                 )
             }
 
+            val isRecording = captureState is PerfettoCaptureState.Recording
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -868,39 +870,50 @@ private fun PerfettoConfigurationPanel(
                     },
                     selected = false,
                 )
+                // Single capture toggle: "开始采集" when a capture can begin (or is in an
+                // uninterruptible phase, in which case it is disabled), "停止" while recording.
+                // The recording branch routes to onStopCapture; every other state routes to the
+                // start lambda, which is a no-op when canStartCapture is false (disabled).
                 PerfettoCompactButton(
-                    text = localizedStringResource(Res.string.start_capture, language),
+                    text =
+                        if (isRecording) {
+                            localizedStringResource(Res.string.stop, language)
+                        } else {
+                            localizedStringResource(Res.string.start_capture, language)
+                        },
                     onClick = {
-                        selectedDeviceSerial?.let { deviceSerial ->
-                            onStartCapture(
-                                createCaptureConfig(
-                                    selectedTemplate = selectedTemplate,
-                                    targetPackage = targetPackage,
-                                    durationSeconds = durationSeconds,
-                                    bufferSizeKb = bufferSizeKb,
-                                    bufferPolicy = bufferPolicy,
-                                    androidSdk = deviceCapabilities?.androidSdk ?: 0,
-                                    pollIntervals = pollIntervals,
-                                    atraceCategories = atraceCategories,
-                                    logBuffers = logBuffers,
-                                    additionalCategories = additionalCategories,
-                                    customConfigText = customConfigText,
-                                    enabledProbes =
-                                        enabledProbes.filterTo(mutableSetOf()) { probe ->
-                                            deviceCapabilities?.unsupportedReason(probe) == null &&
-                                                (!probe.requiresTargetPackage || targetPackage.isNotBlank())
-                                        },
-                                ),
-                                deviceSerial,
-                            )
+                        if (isRecording) {
+                            onStopCapture()
+                        } else {
+                            selectedDeviceSerial?.let { deviceSerial ->
+                                onStartCapture(
+                                    createCaptureConfig(
+                                        selectedTemplate = selectedTemplate,
+                                        targetPackage = targetPackage,
+                                        durationSeconds = durationSeconds,
+                                        bufferSizeKb = bufferSizeKb,
+                                        bufferPolicy = bufferPolicy,
+                                        androidSdk = deviceCapabilities?.androidSdk ?: 0,
+                                        pollIntervals = pollIntervals,
+                                        atraceCategories = atraceCategories,
+                                        logBuffers = logBuffers,
+                                        additionalCategories = additionalCategories,
+                                        customConfigText = customConfigText,
+                                        enabledProbes =
+                                            enabledProbes.filterTo(mutableSetOf()) { probe ->
+                                                deviceCapabilities?.unsupportedReason(probe) == null &&
+                                                    (!probe.requiresTargetPackage || targetPackage.isNotBlank())
+                                            },
+                                    ),
+                                    deviceSerial,
+                                )
+                            }
                         }
                     },
-                    enabled = canStartCapture,
-                    selected = canStartCapture,
+                    enabled = if (isRecording) true else canStartCapture,
+                    selected = if (isRecording) false else canStartCapture,
+                    danger = isRecording,
                 )
-                if (captureState is PerfettoCaptureState.Recording) {
-                    PerfettoCompactButton(text = localizedStringResource(Res.string.stop, language), onClick = onStopCapture)
-                }
                 if (captureState is PerfettoCaptureState.Completed) {
                     PerfettoCompactButton(
                         text = localizedStringResource(Res.string.open_in_perfetto_ui, language),
