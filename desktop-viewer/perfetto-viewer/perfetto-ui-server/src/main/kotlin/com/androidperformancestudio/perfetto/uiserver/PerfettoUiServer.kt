@@ -52,6 +52,8 @@ class PerfettoUiServer(
             server =
                 createServer().apply {
                     createContext("/trace") { exchange ->
+                        // Context covers /trace* so a filename suffix (e.g. /trace_file.perfetto-trace)
+                        // resolves to the same handler and the trace keeps a recognizable name.
                         // Chrome's Private Network Access sends a preflight for requests from a
                         // public site (ui.perfetto.dev) to localhost and requires this acknowledgement,
                         // otherwise the fetch fails with "TypeError: Failed to fetch". Echo the
@@ -151,11 +153,16 @@ class PerfettoUiServer(
                 ),
             )
             currentTraceFile = traceFile
+            // Use 127.0.0.1 rather than "localhost": the JVM HttpServer binds the IPv4 wildcard
+            // address, so a browser that resolves localhost to ::1 first would fail to connect.
+            // A named path (instead of bare /trace) also gives the trace a filename in the UI,
+            // matching what record_android_trace produces.
+            val traceUrl = "http://127.0.0.1:$boundPort/trace_file.perfetto-trace"
             val targetUrl =
                 if (hasUiAssets) {
-                    "http://localhost:$boundPort/#!/?url=http://localhost:$boundPort/trace"
+                    "http://127.0.0.1:$boundPort/#!/?url=$traceUrl&referrer=record_android_trace"
                 } else {
-                    "https://ui.perfetto.dev/#!/?url=http://localhost:$boundPort/trace"
+                    "https://ui.perfetto.dev/#!/?url=$traceUrl&referrer=record_android_trace"
                 }
             Desktop.getDesktop().browse(URI.create(targetUrl))
             StudioResult.Success(Unit)
