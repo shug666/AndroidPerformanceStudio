@@ -54,10 +54,17 @@ class PerfettoUiServer(
                     createContext("/trace") { exchange ->
                         // Chrome's Private Network Access sends a preflight for requests from a
                         // public site (ui.perfetto.dev) to localhost and requires this acknowledgement,
-                        // otherwise the fetch fails with "TypeError: Failed to fetch".
-                        exchange.responseHeaders.add("Access-Control-Allow-Origin", "*")
+                        // otherwise the fetch fails with "TypeError: Failed to fetch". Echo the
+                        // request Origin instead of "*" — some Chrome versions reject the wildcard
+                        // on private-network responses.
+                        val origin = exchange.requestHeaders.getFirst("Origin")
+                        exchange.responseHeaders.add("Access-Control-Allow-Origin", origin ?: "*")
                         exchange.responseHeaders.add("Access-Control-Allow-Private-Network", "true")
                         exchange.responseHeaders.add("Access-Control-Allow-Methods", "GET, OPTIONS")
+                        if (origin != null) {
+                            exchange.responseHeaders.add("Access-Control-Allow-Credentials", "true")
+                            exchange.responseHeaders.add("Vary", "Origin")
+                        }
                         when (exchange.requestMethod) {
                             "OPTIONS" -> exchange.sendResponseHeaders(204, -1)
                             "HEAD" -> {
