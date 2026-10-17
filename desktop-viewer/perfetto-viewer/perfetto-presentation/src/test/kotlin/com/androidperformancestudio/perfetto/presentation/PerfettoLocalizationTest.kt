@@ -38,12 +38,12 @@ class PerfettoLocalizationTest {
     fun `capture page provides Chinese resources`() {
         assertTrue(chineseResources.contains("<string name=\"trace_template\">轨迹模板</string>"))
         assertTrue(chineseResources.contains("<string name=\"configuration\">配置</string>"))
-        assertTrue(chineseResources.contains("<string name=\"start_capture\">开始采集</string>"))
+        assertTrue(chineseResources.contains("<string name=\"start_capture\">开始抓取</string>"))
         assertTrue(chineseResources.contains("<string name=\"system_overview\">系统概览</string>"))
 
         assertEquals("轨迹模板", localizedStringResource(Res.string.trace_template, UiLanguage.SIMPLIFIED_CHINESE))
         assertEquals("配置", localizedStringResource(Res.string.configuration, UiLanguage.SIMPLIFIED_CHINESE))
-        assertEquals("开始采集", localizedStringResource(Res.string.start_capture, UiLanguage.SIMPLIFIED_CHINESE))
+        assertEquals("开始抓取", localizedStringResource(Res.string.start_capture, UiLanguage.SIMPLIFIED_CHINESE))
         assertEquals("系统概览", localizedStringResource(Res.string.system_overview, UiLanguage.SIMPLIFIED_CHINESE))
     }
 }

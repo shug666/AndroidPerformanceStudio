@@ -15,8 +15,8 @@
     <string name="fill_policy_discard">丢弃（保留最早）</string>
     <string name="additional_categories_events">其他类别 / 事件</string>
     <string name="custom_traceconfig_text_protobuf">自定义 TraceConfig（文本 protobuf）</string>
-    <string name="start_capture">开始采集</string>
-    <string name="stop">停止</string>
+    <string name="start_capture">开始抓取</string>
+    <string name="stop">停止抓取</string>
     <string name="open_in_perfetto_ui">在 Perfetto UI 中打开</string>
     <string name="export_config">导出配置</string>
     <string name="export_config_dialog">导出 TraceConfig</string>

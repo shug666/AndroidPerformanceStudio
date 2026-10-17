@@ -167,10 +167,10 @@ class PerfettoCapturePageRenderTest {
             }.use { scene ->
                 repeat(3) { scene.render().close() }
                 val nodes = scene.semanticsOwners.flatMap { it.unmergedRootSemanticsNode.descendants() }
-                // Exactly one capture control button labeled "Stop" (ENGLISH localization).
-                val stopButtons = nodes.filter { it.text == "Stop" }
-                assertEquals(1, stopButtons.size, "exactly one Stop button must be present while recording")
-                // The start label must NOT be present — the toggle is showing Stop, not Start Capture.
+                // Exactly one capture control button labeled "Stop Capture" (ENGLISH localization).
+                val stopButtons = nodes.filter { it.text == "Stop Capture" }
+                assertEquals(1, stopButtons.size, "exactly one Stop Capture button must be present while recording")
+                // The start label must NOT be present — the toggle is showing Stop Capture, not Start Capture.
                 assertTrue(nodes.none { it.text == "Start Capture" }, "the start label must not appear while recording")
             }
         }
@@ -244,10 +244,10 @@ class PerfettoCapturePageRenderTest {
                 }.use { scene ->
                     repeat(3) { scene.render().close() }
                     val nodes = scene.semanticsOwners.flatMap { it.unmergedRootSemanticsNode.descendants() }
-                    // A single Start Capture label is present; the Stop label is not.
+                    // A single Start Capture label is present; the Stop Capture label is not.
                     val startButtons = nodes.filter { it.text == "Start Capture" }
                     assertEquals(1, startButtons.size, "exactly one Start Capture button in $label state")
-                    assertTrue(nodes.none { it.text == "Stop" }, "no Stop button in $label state")
+                    assertTrue(nodes.none { it.text == "Stop Capture" }, "no Stop Capture button in $label state")
                     // The button is disabled during intermediate (uninterruptible) phases. The
                     // Disabled semantics flag lives on the clickable Box (not the Text child), so
                     // assert a disabled control node is present in the unmerged tree.

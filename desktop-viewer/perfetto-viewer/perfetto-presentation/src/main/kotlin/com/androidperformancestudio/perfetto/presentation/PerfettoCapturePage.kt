@@ -870,8 +870,9 @@ private fun PerfettoConfigurationPanel(
                     },
                     selected = false,
                 )
-                // Single capture toggle: "开始采集" when a capture can begin (or is in an
-                // uninterruptible phase, in which case it is disabled), "停止" while recording.
+                // Single capture toggle: "开始抓取" when a capture can begin (or is in an
+                // uninterruptible phase, in which case it is disabled), "停止抓取" while recording.
+                // Both labels share the same width so the button does not shift on toggle.
                 // The recording branch routes to onStopCapture; every other state routes to the
                 // start lambda, which is a no-op when canStartCapture is false (disabled).
                 PerfettoCompactButton(
