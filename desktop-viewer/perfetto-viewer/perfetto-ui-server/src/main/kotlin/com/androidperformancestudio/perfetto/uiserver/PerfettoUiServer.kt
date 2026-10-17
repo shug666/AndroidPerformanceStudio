@@ -3,10 +3,10 @@ package com.androidperformancestudio.perfetto.uiserver
 import com.androidperformancestudio.model.ErrorCategory
 import com.androidperformancestudio.model.StudioError
 import com.androidperformancestudio.model.StudioResult
-import com.androidperformancestudio.ui.ViewerDocumentTheme
 import com.sun.net.httpserver.HttpServer
 import com.sun.net.httpserver.SimpleFileServer
 import java.awt.Desktop
+import java.net.BindException
 import java.net.InetSocketAddress
 import java.net.URI
 import java.nio.file.Files
@@ -15,24 +15,42 @@ import java.nio.file.Paths
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
+/**
+ * Serves the active trace bytes over a short-lived local HTTP endpoint so a browser-side Perfetto UI
+ * can fetch them via `?url=`, and optionally hosts local Perfetto UI assets when the user asks for
+ * the self-hosted UI.
+ *
+ * The service is started only by an explicit user action and stopped when the page deactivates or
+ * disposes. Once the official UI has fetched the trace it caches it in IndexedDB and rewrites the
+ * URL to a `local_cache_key`, so the endpoint is no longer needed for refreshes.
+ */
 class PerfettoUiServer(
-    private val port: Int = DEFAULT_PORT,
+    private val preferredPort: Int = DEFAULT_PORT,
 ) {
     private var server: HttpServer? = null
     private var executor: ExecutorService? = null
 
     @Volatile
     private var currentTraceFile: Path? = null
-    @Volatile
-    private var currentTraceTimestampNanos: Long? = null
     private var hasUiAssets: Boolean = false
     val isRunning: Boolean get() = server != null
 
-    fun start(uiAssetsDir: Path?): StudioResult<Unit> {
+    /** Port actually bound after [start]; `null` while the server is stopped. */
+    val port: Int?
+        get() = server?.address?.port
+
+    /**
+     * Starts the server in [mode]. A running server is reused; a trace-only server is never
+     * downgraded, and starting it in [ServeMode.TRACE_AND_UI] fails when it cannot host assets.
+     */
+    fun start(
+        uiAssetsDir: Path?,
+        mode: ServeMode = ServeMode.TRACE_ONLY,
+    ): StudioResult<Unit> {
         if (server != null) return StudioResult.Success(Unit)
         return try {
             server =
-                HttpServer.create(InetSocketAddress(port), 0).apply {
+                createServer().apply {
                     createContext("/trace") { exchange ->
                         val traceFile = currentTraceFile
                         if (traceFile != null && Files.exists(traceFile)) {
@@ -44,7 +62,8 @@ class PerfettoUiServer(
                             exchange.sendResponseHeaders(404, -1)
                         }
                     }
-                    if (uiAssetsDir != null &&
+                    if (mode == ServeMode.TRACE_AND_UI &&
+                        uiAssetsDir != null &&
                         Files.isDirectory(uiAssetsDir) &&
                         uiAssetsDir.resolve("index.html").toFile().exists()
                     ) {
@@ -52,10 +71,7 @@ class PerfettoUiServer(
                         hasUiAssets = true
                     } else {
                         createContext("/") { exchange ->
-                            val html = buildEmbedPage()
-                            exchange.responseHeaders.add("Content-Type", "text/html; charset=UTF-8")
-                            exchange.sendResponseHeaders(200, html.length.toLong())
-                            exchange.responseBody.use { it.write(html.toByteArray()) }
+                            exchange.sendResponseHeaders(404, -1)
                         }
                         hasUiAssets = false
                     }
@@ -76,7 +92,12 @@ class PerfettoUiServer(
         }
     }
 
-    fun openTrace(traceFile: Path, timestampNanos: Long? = null): StudioResult<Unit> =
+    /**
+     * Opens the active trace in a browser-side Perfetto UI. When local UI assets are hosted the
+     * browser targets the locally hosted UI at the same origin; otherwise it targets the official
+     * https://ui.perfetto.dev via `?url=`.
+     */
+    fun openTrace(traceFile: Path): StudioResult<Unit> =
         try {
             if (!Files.isRegularFile(traceFile)) {
                 return StudioResult.Failure(
@@ -96,17 +117,19 @@ class PerfettoUiServer(
                     ),
                 )
             }
+            val boundPort = port ?: return StudioResult.Failure(
+                StudioError(
+                    category = ErrorCategory.CONFIGURATION,
+                    code = "SERVER_NOT_RUNNING",
+                    message = "The trace-serving endpoint is not running",
+                ),
+            )
             currentTraceFile = traceFile
-            currentTraceTimestampNanos = timestampNanos
             val targetUrl =
                 if (hasUiAssets) {
-                    val timeWindow = timestampNanos?.let { timestamp ->
-                        val start = (timestamp - TIMESTAMP_WINDOW_NANOS).coerceAtLeast(0)
-                        "&visStart=$start&visEnd=${timestamp + TIMESTAMP_WINDOW_NANOS}"
-                    }.orEmpty()
-                    "http://localhost:$port/#!/?url=http://localhost:$port/trace$timeWindow"
+                    "http://localhost:$boundPort/#!/?url=http://localhost:$boundPort/trace"
                 } else {
-                    "http://localhost:$port/"
+                    "https://ui.perfetto.dev/#!/?url=http://localhost:$boundPort/trace"
                 }
             Desktop.getDesktop().browse(URI.create(targetUrl))
             StudioResult.Success(Unit)
@@ -127,46 +150,21 @@ class PerfettoUiServer(
         executor?.shutdownNow()
         executor = null
         currentTraceFile = null
-        currentTraceTimestampNanos = null
         hasUiAssets = false
     }
 
-    private fun buildEmbedPage(): String {
-        val p = port
-        val zoom =
-            currentTraceTimestampNanos?.let { timestamp ->
-                val start = (timestamp - TIMESTAMP_WINDOW_NANOS).coerceAtLeast(0) / NANOS_PER_SECOND
-                val end = (timestamp + TIMESTAMP_WINDOW_NANOS) / NANOS_PER_SECOND
-                """
-  var attempts=0, zoom=setInterval(function(){
-   document.getElementById("pf").contentWindow.postMessage({perfetto:{timeStart:$start,timeEnd:$end}},"*");
-   if(++attempts===20) clearInterval(zoom);
-  },500);
-                """.trimIndent()
-            }.orEmpty()
-        return """<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Perfetto Trace</title>
-<style>body{margin:0;background:${ViewerDocumentTheme.darkCanvas}}iframe{width:100vw;height:100vh;border:none}</style></head>
-<body><iframe id="pf" src="https://ui.perfetto.dev/#!/?mode=embedded"></iframe>
-<script>
-var url="http://localhost:$p/trace";
-document.getElementById("pf").onload=function(){
- fetch(url).then(function(r){return r.arrayBuffer()}).then(function(buf){
-  document.getElementById("pf").contentWindow.postMessage({
-   perfetto:{buffer:buf,title:"APS Trace"}
-  },"*");
-$zoom
- }).catch(function(e){
-  document.body.innerHTML='<div style="color:${ViewerDocumentTheme.errorText};text-align:center;padding-top:40vh;font-size:${ViewerDocumentTheme.errorFontSize};font-family:${ViewerDocumentTheme.systemFontFamily},sans-serif"><p>Failed: '+e.message+'</p><p><a href="https://ui.perfetto.dev" style="color:${ViewerDocumentTheme.externalLink}">Open Perfetto UI</a></p></div>';
- });
-};
-</script></body></html>"""
-    }
+    /** Prefers [preferredPort]; falls back to an OS-assigned ephemeral port when it is occupied. */
+    private fun createServer(): HttpServer =
+        try {
+            HttpServer.create(InetSocketAddress(preferredPort), 0)
+        } catch (e: BindException) {
+            HttpServer.create(InetSocketAddress(0), 0)
+        }
+
+    enum class ServeMode { TRACE_ONLY, TRACE_AND_UI }
 
     companion object {
         const val DEFAULT_PORT = 8090
-        private const val TIMESTAMP_WINDOW_NANOS = 5_000_000L
-        private const val NANOS_PER_SECOND = 1_000_000_000.0
 
         fun tryFindUiAssetsDir(
             repoRoot: Path = Paths.get(".").toAbsolutePath(),

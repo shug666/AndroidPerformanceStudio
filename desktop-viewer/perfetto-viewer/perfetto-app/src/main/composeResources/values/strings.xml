@@ -2,6 +2,7 @@
 <resources>
     <string name="file">File</string>
     <string name="open_u2026">Open\u2026</string>
+    <string name="open_in_local_perfetto_ui">Open in local Perfetto UI</string>
     <string name="export">Export</string>
     <string name="session_package_zip">Session Package (.zip)</string>
     <string name="raw_trace_pftrace">Raw Trace (.pftrace)</string>
@@ -19,6 +20,7 @@
     <string name="back_to_home">Back to home</string>
     <string name="trace_diagnostics">TRACE DIAGNOSTICS · %1$s</string>
     <string name="open_perfetto_trace">Open Perfetto Trace</string>
+    <string name="no_active_trace">No trace is active</string>
     <string name="export_trace">Export Trace</string>
     <string name="failed_to_export_trace">Failed to export trace</string>
     <string name="export_config_dialog">Export TraceConfig</string>

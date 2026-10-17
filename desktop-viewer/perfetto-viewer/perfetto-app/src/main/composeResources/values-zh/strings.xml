@@ -2,6 +2,7 @@
 <resources>
     <string name="file">文件</string>
     <string name="open_u2026">打开\u2026</string>
+    <string name="open_in_local_perfetto_ui">在本地 Perfetto UI 中打开</string>
     <string name="export">导出</string>
     <string name="session_package_zip">会话包 (.zip)</string>
     <string name="raw_trace_pftrace">原始轨迹 (.pftrace)</string>
@@ -19,6 +20,7 @@
     <string name="back_to_home">返回首页</string>
     <string name="trace_diagnostics">轨迹诊断 · %1$s</string>
     <string name="open_perfetto_trace">打开 Perfetto 轨迹</string>
+    <string name="no_active_trace">当前没有活动的轨迹</string>
     <string name="export_trace">导出轨迹</string>
     <string name="failed_to_export_trace">轨迹导出失败</string>
     <string name="export_config_dialog">导出 TraceConfig</string>

@@ -9,6 +9,7 @@ import com.androidperformancestudio.perfetto_app.generated.resources.clear_menu
 import com.androidperformancestudio.perfetto_app.generated.resources.export
 import com.androidperformancestudio.perfetto_app.generated.resources.file
 import com.androidperformancestudio.perfetto_app.generated.resources.no_recent_files
+import com.androidperformancestudio.perfetto_app.generated.resources.open_in_local_perfetto_ui
 import com.androidperformancestudio.perfetto_app.generated.resources.open_recent
 import com.androidperformancestudio.perfetto_app.generated.resources.open_u2026
 import com.androidperformancestudio.perfetto_app.generated.resources.raw_trace_pftrace
@@ -23,8 +24,10 @@ import java.nio.file.Path
 internal fun FrameWindowScope.PerfettoFileMenuBar(
     language: UiLanguage,
     canExport: Boolean,
+    canOpenLocalPerfettoUi: Boolean,
     recentFiles: List<Path>,
     onOpen: () -> Unit,
+    onOpenInLocalPerfettoUi: () -> Unit,
     onExportSession: () -> Unit,
     onExportRawTrace: () -> Unit,
     onOpenRecent: (Path) -> Unit,
@@ -36,6 +39,11 @@ internal fun FrameWindowScope.PerfettoFileMenuBar(
     ActiveWindowMenuBar {
         Menu(localizedStringResource(Res.string.file, language)) {
             Item(localizedStringResource(Res.string.open_u2026, language), shortcut = openShortcut, onClick = onOpen)
+            Item(
+                localizedStringResource(Res.string.open_in_local_perfetto_ui, language),
+                enabled = canOpenLocalPerfettoUi,
+                onClick = onOpenInLocalPerfettoUi,
+            )
             Menu(localizedStringResource(Res.string.export, language)) {
                 Item(localizedStringResource(Res.string.session_package_zip, language), enabled = canExport, onClick = onExportSession)
                 Item(localizedStringResource(Res.string.raw_trace_pftrace, language), enabled = canExport, onClick = onExportRawTrace)

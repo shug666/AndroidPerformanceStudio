@@ -1,16 +1,18 @@
 package com.androidperformancestudio.perfetto.uiserver
 
-import com.androidperformancestudio.ui.ViewerDocumentTheme
+import com.androidperformancestudio.model.StudioResult
+import java.net.ServerSocket
 import java.nio.file.Files
 import kotlin.test.Test
-import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class PerfettoUiServerTest {
     @Test
-    fun `starting for another trace reuses the running server`() {
-        val uiServer = PerfettoUiServer(port = 0)
+    fun `starting again reuses the running server`() {
+        val uiServer = PerfettoUiServer(preferredPort = 0)
         try {
             uiServer.start(null)
             val firstServer = uiServer.runningServer()
@@ -24,14 +26,41 @@ class PerfettoUiServerTest {
     }
 
     @Test
-    fun `fallback embed page preserves the root document theme values`() {
-        val page = PerfettoUiServer(port = 8090).embedPage()
+    fun `start succeeds and exposes the bound ephemeral port`() {
+        val uiServer = PerfettoUiServer(preferredPort = 0)
+        try {
+            val started = uiServer.start(null, PerfettoUiServer.ServeMode.TRACE_ONLY)
 
-        assertContains(page, "background:${ViewerDocumentTheme.darkCanvas}")
-        assertContains(page, "color:${ViewerDocumentTheme.errorText}")
-        assertContains(page, "font-size:${ViewerDocumentTheme.errorFontSize}")
-        assertContains(page, "font-family:${ViewerDocumentTheme.systemFontFamily},sans-serif")
-        assertContains(page, "color:${ViewerDocumentTheme.externalLink}")
+            assertTrue(started is StudioResult.Success)
+            val boundPort = uiServer.port
+            assertTrue(boundPort != null && boundPort > 0)
+        } finally {
+            uiServer.stop()
+        }
+    }
+
+    @Test
+    fun `falls back to an ephemeral port when the preferred port is occupied`() {
+        ServerSocket(0).use { blocker ->
+            val occupiedPort = blocker.localPort
+            val uiServer = PerfettoUiServer(preferredPort = occupiedPort)
+            try {
+                val started = uiServer.start(null, PerfettoUiServer.ServeMode.TRACE_ONLY)
+
+                assertTrue(started is StudioResult.Success)
+                val boundPort = uiServer.port
+                assertTrue(boundPort != null && boundPort != occupiedPort)
+            } finally {
+                uiServer.stop()
+            }
+        }
+    }
+
+    @Test
+    fun `port is null while the server is stopped`() {
+        val uiServer = PerfettoUiServer(preferredPort = 0)
+
+        assertNull(uiServer.port)
     }
 
     @Test
@@ -72,10 +101,4 @@ private fun PerfettoUiServer.runningServer(): Any? =
     javaClass.getDeclaredField("server").run {
         isAccessible = true
         get(this@runningServer)
-    }
-
-private fun PerfettoUiServer.embedPage(): String =
-    javaClass.getDeclaredMethod("buildEmbedPage").run {
-        isAccessible = true
-        invoke(this@embedPage) as String
     }

@@ -137,6 +137,7 @@ import com.androidperformancestudio.perfetto_app.generated.resources.export_trac
 import com.androidperformancestudio.perfetto_app.generated.resources.export_config_dialog
 import com.androidperformancestudio.perfetto_app.generated.resources.failed_to_export_trace
 import com.androidperformancestudio.perfetto_app.generated.resources.mb_n
+import com.androidperformancestudio.perfetto_app.generated.resources.no_active_trace
 import com.androidperformancestudio.perfetto_app.generated.resources.no_online_device
 import com.androidperformancestudio.perfetto_app.generated.resources.open
 import com.androidperformancestudio.perfetto_app.generated.resources.open_perfetto_trace
@@ -268,7 +269,7 @@ fun FrameWindowScope.PerfettoMainPage(
     var fileDialogOpen by remember { mutableStateOf(false) }
     var traceOpenJob by remember { mutableStateOf<Job?>(null) }
     val traceOpenMutex = remember { Mutex() }
-    val openTrace: (Path, com.androidperformancestudio.contracts.CaptureArtifact?, Long?) -> Unit = { traceFile, artifact, timestamp ->
+    val openTrace: (Path, com.androidperformancestudio.contracts.CaptureArtifact?) -> Unit = { traceFile, artifact ->
         traceOpenJob?.cancel()
         traceOpenJob =
             coroutineScope.launch {
@@ -280,12 +281,33 @@ fun FrameWindowScope.PerfettoMainPage(
                     activeTraceFile = traceFile
                     activeArtifact = importedArtifact
                     recentFiles = (listOf(traceFile) + recentFiles).distinct().take(10)
-                    when (val opened = withContext(Dispatchers.IO) { launchTraceInUi(traceFile, uiServer, timestamp) }) {
+                }
+            }
+    }
+    // Opening a trace has no side effects; launching a browser-side Perfetto UI is an explicit
+    // user action via these entry points. The server, once started, stays up until the page
+    // deactivates so the browser can refresh or switch between the official and local UI.
+    val launchInUi: (Path?, PerfettoUiServer.ServeMode) -> Unit = { requestedTraceFile, mode ->
+        coroutineScope.launch(Dispatchers.IO) {
+            val traceFile = requestedTraceFile ?: activeTraceFile ?: run {
+                diagnosticError = localizedStringResource(Res.string.no_active_trace, language)
+                return@launch
+            }
+            when (val started = uiServer.start(PerfettoUiServer.tryFindUiAssetsDir(), mode)) {
+                is StudioResult.Failure -> diagnosticError = started.error.message
+                is StudioResult.Success ->
+                    when (val opened = uiServer.openTrace(traceFile)) {
                         is StudioResult.Failure -> diagnosticError = opened.error.message
                         is StudioResult.Success -> diagnosticError = null
                     }
-                }
             }
+        }
+    }
+    val openInPerfettoUi: (Path?) -> Unit = { traceFile ->
+        launchInUi(traceFile, PerfettoUiServer.ServeMode.TRACE_ONLY)
+    }
+    val openInLocalPerfettoUi: () -> Unit = {
+        launchInUi(null, PerfettoUiServer.ServeMode.TRACE_AND_UI)
     }
     val exportRawTrace: (Path) -> Unit = { traceFile ->
         coroutineScope.launch(Dispatchers.IO) {
@@ -371,7 +393,7 @@ fun FrameWindowScope.PerfettoMainPage(
     LaunchedEffect(initialTraceFile, initialTraceRequestId, initialTraceTimestampNanos, sessionsLoaded) {
         if (sessionsLoaded) {
             initialTraceFile?.let { trace ->
-                openTrace(trace, storedArtifactForTrace(sessions, trace), initialTraceTimestampNanos)
+                openTrace(trace, storedArtifactForTrace(sessions, trace))
             }
         }
     }
@@ -409,6 +431,7 @@ fun FrameWindowScope.PerfettoMainPage(
     PerfettoFileMenuBar(
         language = language,
         canExport = activeTraceFile != null,
+        canOpenLocalPerfettoUi = PerfettoUiServer.tryFindUiAssetsDir() != null,
         recentFiles = recentFiles,
         onOpen = {
             if (!fileDialogOpen) {
@@ -424,12 +447,13 @@ fun FrameWindowScope.PerfettoMainPage(
                             "pftrace",
                             "perfetto-trace",
                         )
-                    if (file != null) openTrace(file.toPath(), null, null)
+                    if (file != null) openTrace(file.toPath(), null)
                 } finally {
                     fileDialogOpen = false
                 }
             }
         },
+        onOpenInLocalPerfettoUi = openInLocalPerfettoUi,
         onExportSession = {
             coroutineScope.launch(Dispatchers.IO) {
                 val traceFile = activeTraceFile ?: return@launch
@@ -461,7 +485,7 @@ fun FrameWindowScope.PerfettoMainPage(
         },
         onExportRawTrace = { activeTraceFile?.let(exportRawTrace) },
         onOpenRecent = { path ->
-            openTrace(path, sessions.firstOrNull { it.traceFile == path }?.artifact, null)
+            openTrace(path, sessions.firstOrNull { it.traceFile == path }?.artifact)
         },
         onClearRecent = { recentFiles = emptyList() },
     )
@@ -518,7 +542,8 @@ fun FrameWindowScope.PerfettoMainPage(
                         },
                         onStopCapture = { coroutineScope.launch { captureSession.stopCapture() } },
                         onOpenTrace = { traceFile ->
-                            openTrace(traceFile, sessions.firstOrNull { it.traceFile == traceFile }?.artifact, null)
+                            openTrace(traceFile, sessions.firstOrNull { it.traceFile == traceFile }?.artifact)
+                            openInPerfettoUi(traceFile)
                         },
                         onExportConfig = exportConfig,
                         modifier = Modifier.weight(1f),
@@ -531,7 +556,7 @@ fun FrameWindowScope.PerfettoMainPage(
                         language = language,
                         sessions = sessions,
                         onOpen = { session ->
-                            openTrace(session.traceFile, session.artifact, null)
+                            openTrace(session.traceFile, session.artifact)
                         },
                         onDelete = { session ->
                             coroutineScope.launch {
@@ -1151,14 +1176,3 @@ private fun DiagnosticQuery.localizedDescription(language: UiLanguage): String =
         "wakeup_latency" -> localizedStringResource(Res.string.diagnostic_wakeup_latency_description, language)
         else -> description
     }
-
-private fun launchTraceInUi(
-    traceFile: Path,
-    uiServer: PerfettoUiServer,
-    timestampNanos: Long? = null,
-): StudioResult<Unit> {
-    val assetsDir = PerfettoUiServer.tryFindUiAssetsDir()
-    val started = uiServer.start(assetsDir)
-    if (started is StudioResult.Failure) return started
-    return uiServer.openTrace(traceFile, timestampNanos)
-}
