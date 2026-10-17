@@ -52,14 +52,33 @@ class PerfettoUiServer(
             server =
                 createServer().apply {
                     createContext("/trace") { exchange ->
-                        val traceFile = currentTraceFile
-                        if (traceFile != null && Files.exists(traceFile)) {
-                            exchange.responseHeaders.add("Access-Control-Allow-Origin", "*")
-                            exchange.responseHeaders.add("Content-Type", "application/octet-stream")
-                            exchange.sendResponseHeaders(200, Files.size(traceFile))
-                            exchange.responseBody.use { output -> Files.copy(traceFile, output) }
-                        } else {
-                            exchange.sendResponseHeaders(404, -1)
+                        // Chrome's Private Network Access sends a preflight for requests from a
+                        // public site (ui.perfetto.dev) to localhost and requires this acknowledgement,
+                        // otherwise the fetch fails with "TypeError: Failed to fetch".
+                        exchange.responseHeaders.add("Access-Control-Allow-Origin", "*")
+                        exchange.responseHeaders.add("Access-Control-Allow-Private-Network", "true")
+                        exchange.responseHeaders.add("Access-Control-Allow-Methods", "GET, OPTIONS")
+                        when (exchange.requestMethod) {
+                            "OPTIONS" -> exchange.sendResponseHeaders(204, -1)
+                            "HEAD" -> {
+                                val traceFile = currentTraceFile
+                                if (traceFile != null && Files.exists(traceFile)) {
+                                    exchange.responseHeaders.add("Content-Type", "application/octet-stream")
+                                    exchange.sendResponseHeaders(200, Files.size(traceFile))
+                                } else {
+                                    exchange.sendResponseHeaders(404, -1)
+                                }
+                            }
+                            else -> {
+                                val traceFile = currentTraceFile
+                                if (traceFile != null && Files.exists(traceFile)) {
+                                    exchange.responseHeaders.add("Content-Type", "application/octet-stream")
+                                    exchange.sendResponseHeaders(200, Files.size(traceFile))
+                                    exchange.responseBody.use { output -> Files.copy(traceFile, output) }
+                                } else {
+                                    exchange.sendResponseHeaders(404, -1)
+                                }
+                            }
                         }
                     }
                     if (mode == ServeMode.TRACE_AND_UI &&
