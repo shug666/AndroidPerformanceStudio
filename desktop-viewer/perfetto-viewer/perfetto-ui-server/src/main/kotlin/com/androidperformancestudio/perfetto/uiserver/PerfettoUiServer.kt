@@ -54,19 +54,15 @@ class PerfettoUiServer(
                     createContext("/trace") { exchange ->
                         // Context covers /trace* so a filename suffix (e.g. /trace_file.perfetto-trace)
                         // resolves to the same handler and the trace keeps a recognizable name.
-                        // Chrome's Private Network Access sends a preflight for requests from a
-                        // public site (ui.perfetto.dev) to localhost and requires this acknowledgement,
-                        // otherwise the fetch fails with "TypeError: Failed to fetch". Echo the
-                        // request Origin instead of "*" — some Chrome versions reject the wildcard
-                        // on private-network responses.
+                        // Mirror the proven record_android_trace server: echo the request Origin and
+                        // send Cache-Control: no-cache, nothing else. Extra CORS headers (private-
+                        // network acknowledgement, credentials, Vary) have been observed to trip
+                        // Chrome's private-network fetch path, so they are deliberately omitted.
                         val origin = exchange.requestHeaders.getFirst("Origin")
-                        exchange.responseHeaders.add("Access-Control-Allow-Origin", origin ?: "*")
-                        exchange.responseHeaders.add("Access-Control-Allow-Private-Network", "true")
-                        exchange.responseHeaders.add("Access-Control-Allow-Methods", "GET, OPTIONS")
                         if (origin != null) {
-                            exchange.responseHeaders.add("Access-Control-Allow-Credentials", "true")
-                            exchange.responseHeaders.add("Vary", "Origin")
+                            exchange.responseHeaders.add("Access-Control-Allow-Origin", origin)
                         }
+                        exchange.responseHeaders.add("Cache-Control", "no-cache")
                         when (exchange.requestMethod) {
                             "OPTIONS" -> exchange.sendResponseHeaders(204, -1)
                             "HEAD" -> {
