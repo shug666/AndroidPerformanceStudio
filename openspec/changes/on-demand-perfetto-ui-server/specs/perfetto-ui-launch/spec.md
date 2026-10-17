@@ -44,21 +44,17 @@ A menu item ("Open in local Perfetto UI") SHALL serve locally available Perfetto
 - **WHEN** local UI assets are not discoverable
 - **THEN** the "Open in local Perfetto UI" menu item is disabled and cannot start the service
 
-### Requirement: Trace endpoint port SHALL prefer 8090 and fall back to an ephemeral port
+### Requirement: Trace endpoint SHALL serve on port 9001
 
-When starting the local trace-serving endpoint, the service SHALL first attempt to bind port 8090; if that port is occupied, it SHALL bind an ephemeral port assigned by the operating system. The browser URL SHALL be generated from the actually bound port.
+The local trace-serving endpoint SHALL bind `127.0.0.1:9001`. This port is the only origin the official ui.perfetto.dev Content-Security-Policy allows fetching from (the same port record_android_trace reuses). Browser URLs SHALL reference `http://127.0.0.1:9001/trace_file.perfetto-trace` with `referrer=record_android_trace`.
 
-#### Scenario: Port 8090 is free
-- **WHEN** the service starts and port 8090 is not in use
-- **THEN** the endpoint binds port 8090 and generated URLs reference `http://localhost:8090/trace`
+#### Scenario: Port 9001 is free
+- **WHEN** the service starts and port 9001 is not in use
+- **THEN** the endpoint binds `127.0.0.1:9001` and the browser URL references `http://127.0.0.1:9001/trace_file.perfetto-trace`
 
-#### Scenario: Port 8090 is occupied
-- **WHEN** the service starts and binding port 8090 fails
-- **THEN** the endpoint binds an ephemeral port and generated URLs reference that actual port
-
-#### Scenario: Binding fails entirely
-- **WHEN** the service cannot bind any port
-- **THEN** the start fails with a `SERVER_START_FAILED` error surfaced to the user
+#### Scenario: Port 9001 is occupied
+- **WHEN** the service starts and binding port 9001 fails
+- **THEN** the start fails with a `SERVER_START_FAILED` error surfaced to the user; the service MUST NOT fall back to another port, because the official UI cannot fetch from any other origin
 
 ### Requirement: The embedded fallback page SHALL be removed
 

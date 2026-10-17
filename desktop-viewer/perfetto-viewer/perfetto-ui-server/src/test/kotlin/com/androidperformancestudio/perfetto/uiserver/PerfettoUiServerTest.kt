@@ -26,30 +26,29 @@ class PerfettoUiServerTest {
     }
 
     @Test
-    fun `start succeeds and exposes the bound ephemeral port`() {
-        val uiServer = PerfettoUiServer(preferredPort = 0)
+    fun `start succeeds and exposes the bound port`() {
+        val freePort = freeLoopbackPort()
+        val uiServer = PerfettoUiServer(preferredPort = freePort)
         try {
             val started = uiServer.start(null, PerfettoUiServer.ServeMode.TRACE_ONLY)
 
             assertTrue(started is StudioResult.Success)
-            val boundPort = uiServer.port
-            assertTrue(boundPort != null && boundPort > 0)
+            assertEquals(freePort, uiServer.port)
         } finally {
             uiServer.stop()
         }
     }
 
     @Test
-    fun `falls back to an ephemeral port when the preferred port is occupied`() {
-        ServerSocket(0).use { blocker ->
+    fun `fails to start when the preferred port is occupied`() {
+        ServerSocket(0, 0, java.net.InetAddress.getByName("127.0.0.1")).use { blocker ->
             val occupiedPort = blocker.localPort
             val uiServer = PerfettoUiServer(preferredPort = occupiedPort)
             try {
                 val started = uiServer.start(null, PerfettoUiServer.ServeMode.TRACE_ONLY)
 
-                assertTrue(started is StudioResult.Success)
-                val boundPort = uiServer.port
-                assertTrue(boundPort != null && boundPort != occupiedPort)
+                assertTrue(started is StudioResult.Failure)
+                assertNull(uiServer.port)
             } finally {
                 uiServer.stop()
             }
@@ -102,3 +101,7 @@ private fun PerfettoUiServer.runningServer(): Any? =
         isAccessible = true
         get(this@runningServer)
     }
+
+/** Finds a loopback port that is currently free, matching the server's bind address. */
+private fun freeLoopbackPort(): Int =
+    java.net.ServerSocket(0, 0, java.net.InetAddress.getByName("127.0.0.1")).use(ServerSocket::getLocalPort)

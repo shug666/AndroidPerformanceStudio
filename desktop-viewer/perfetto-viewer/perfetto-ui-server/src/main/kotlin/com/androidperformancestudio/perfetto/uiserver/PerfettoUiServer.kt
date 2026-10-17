@@ -149,10 +149,8 @@ class PerfettoUiServer(
                 ),
             )
             currentTraceFile = traceFile
-            // Use 127.0.0.1 rather than "localhost": the JVM HttpServer binds the IPv4 wildcard
-            // address, so a browser that resolves localhost to ::1 first would fail to connect.
-            // A named path (instead of bare /trace) also gives the trace a filename in the UI,
-            // matching what record_android_trace produces.
+            // Mirror record_android_trace: address the endpoint by 127.0.0.1, serve it under a
+            // named path so the trace keeps a recognizable filename, and pass its referrer.
             val traceUrl = "http://127.0.0.1:$boundPort/trace_file.perfetto-trace"
             val targetUrl =
                 if (hasUiAssets) {
@@ -182,18 +180,20 @@ class PerfettoUiServer(
         hasUiAssets = false
     }
 
-    /** Prefers [preferredPort]; falls back to an OS-assigned ephemeral port when it is occupied. */
-    private fun createServer(): HttpServer =
-        try {
-            HttpServer.create(InetSocketAddress(preferredPort), 0)
-        } catch (e: BindException) {
-            HttpServer.create(InetSocketAddress(0), 0)
-        }
+    /**
+     * Binds [preferredPort] on the IPv4 loopback. Unlike ephemeral fallback, a failure here is
+     * surfaced to the caller: the official ui.perfetto.dev CSP only allows fetches to port
+     * [DEFAULT_PORT] (see record_android_trace, which reuses the HTTP+RPC port for exactly this
+     * reason), so serving the trace on any other port could never be fetched by the official UI.
+     */
+    private fun createServer(): HttpServer = HttpServer.create(InetSocketAddress(LOOPBACK, preferredPort), 0)
 
     enum class ServeMode { TRACE_ONLY, TRACE_AND_UI }
 
     companion object {
-        const val DEFAULT_PORT = 8090
+        /** The only port ui.perfetto.dev's CSP allows fetching from; also used by trace_processor. */
+        const val DEFAULT_PORT = 9001
+        private const val LOOPBACK = "127.0.0.1"
 
         fun tryFindUiAssetsDir(
             repoRoot: Path = Paths.get(".").toAbsolutePath(),
