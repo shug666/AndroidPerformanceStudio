@@ -486,6 +486,7 @@ fun FrameWindowScope.PerfettoMainPage(
         onExportRawTrace = { activeTraceFile?.let(exportRawTrace) },
         onOpenRecent = { path ->
             openTrace(path, sessions.firstOrNull { it.traceFile == path }?.artifact)
+            openInPerfettoUi(path)
         },
         onClearRecent = { recentFiles = emptyList() },
     )
@@ -557,6 +558,7 @@ fun FrameWindowScope.PerfettoMainPage(
                         sessions = sessions,
                         onOpen = { session ->
                             openTrace(session.traceFile, session.artifact)
+                            openInPerfettoUi(session.traceFile)
                         },
                         onDelete = { session ->
                             coroutineScope.launch {
