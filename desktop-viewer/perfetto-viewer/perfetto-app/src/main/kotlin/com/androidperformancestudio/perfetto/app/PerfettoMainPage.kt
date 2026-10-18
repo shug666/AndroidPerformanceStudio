@@ -177,10 +177,16 @@ import java.nio.file.Files
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 import kotlin.io.path.fileSize
 
-internal fun formatRecentSessionTimestamp(capturedAt: Instant): String = capturedAt.toString().replace("T", "-T")
+internal fun formatRecentSessionTimestamp(
+    capturedAt: Instant,
+    zone: ZoneId = ZoneId.systemDefault(),
+): String =
+    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(zone).format(capturedAt)
 
 internal fun exportRawTraceFile(
     traceFile: Path,
