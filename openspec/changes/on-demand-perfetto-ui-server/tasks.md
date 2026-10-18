@@ -22,9 +22,17 @@
 
 ## 4. 验证
 
-- [ ] 4.1 手动验证：打开 trace（文件/最近会话/捕获完成/外部跳转）无服务启动、无浏览器弹出（`lsof -i :8090` 无监听）
-- [ ] 4.2 手动验证：官方 UI 模式——浏览器打开 `ui.perfetto.dev/#!/?url=...`，trace 正常加载，刷新后经 `local_cache_key` 仍可加载
+- [ ] 4.1 手动验证：打开 trace（文件/最近会话/捕获完成/外部跳转）无服务启动、无浏览器弹出（`lsof -i :9001` 无监听）
+- [x] 4.2 手动验证：官方 UI 模式——浏览器打开 `ui.perfetto.dev/#!/?url=http://127.0.0.1:9001/trace_file.perfetto-trace&referrer=record_android_trace`，trace 正常加载（已由用户于 2026-10-18 实测通过；刷新后经 `local_cache_key` 仍可加载）
 - [ ] 4.3 手动验证：本地 UI 模式——assets 存在时菜单可用并正常打开本地 UI；assets 不存在时菜单禁用
 - [ ] 4.4 手动验证：9001 被占用时启动报错提示（不回退其它端口）
 - [ ] 4.5 手动验证：轨迹诊断在服务未启动时正常执行
 - [x] 4.6 运行受影响模块测试：`perfetto-ui-server`、`perfetto-app`（`./gradlew` 相关 test 任务）
+
+## 5. 实现后追加修复（实现过程中发现并落地）
+
+- [x] 5.1 CORS/PNA 修复：`/trace` 预检响应（OPTIONS 204）；最终裁剪为 record_android_trace 头集合（Origin 回显 + `Cache-Control: no-cache`）
+- [x] 5.2 端口契约修正：8090 优先+随机回退 改为固定 `127.0.0.1:9001` 不回退（`ui.perfetto.dev` CSP 只允许 9001，spec 已同步）
+- [x] 5.3 URL 形态对齐 record_android_trace：`localhost` → `127.0.0.1`、`/trace` → `/trace_file.perfetto-trace` 命名路径、`referrer=record_android_trace`
+- [x] 5.4 最近会话"打开"按钮与 File → Open Recent 接 `openInPerfettoUi`：激活 trace + 官方 UI 打开
+- [x] 5.5 时间戳显示修复：最近会话 `capturedAt` 与录制中 `startTime` 由 `Instant.toString()`（UTC 纳秒）改为本地时区 `yyyy-MM-dd HH:mm:ss`（`formatRecentSessionTimestamp` / `formatCaptureTimestamp`，含单元测试）

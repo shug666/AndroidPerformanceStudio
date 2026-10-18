@@ -18,15 +18,19 @@ The Trace Analyzer SHALL NOT start `PerfettoUiServer` (or any local HTTP service
 
 ### Requirement: Open in Perfetto UI SHALL load the trace through the official Perfetto UI
 
-The "Open in Perfetto UI" action SHALL start the local trace-serving endpoint, then open the system browser at the official Perfetto UI with a `?url=` parameter pointing at the local trace endpoint (`https://ui.perfetto.dev/#!/?url=http://localhost:<port>/trace`). The trace endpoint SHALL serve the active trace bytes with `Access-Control-Allow-Origin: *` so the official UI can fetch them.
+The "Open in Perfetto UI" action SHALL start the local trace-serving endpoint, then open the system browser at the official Perfetto UI with a `?url=` parameter pointing at the local trace endpoint (`https://ui.perfetto.dev/#!/?url=http://127.0.0.1:9001/trace_file.perfetto-trace&referrer=record_android_trace`). The same behavior SHALL apply to opening a recent session (panel button and File → Open Recent): the trace is activated in the workspace and launched in the official UI. The trace endpoint SHALL serve the active trace bytes with a CORS header echoing the request Origin (not `*`) plus `Cache-Control: no-cache`, matching the record_android_trace server, so the official UI can fetch them.
 
 #### Scenario: Default open action
 - **WHEN** the user invokes "Open in Perfetto UI" with an active trace
-- **THEN** the local trace-serving endpoint starts (or is reused if already running), and the system browser opens `https://ui.perfetto.dev/#!/?url=http://localhost:<actual-port>/trace` where `<actual-port>` is the port the endpoint actually bound
+- **THEN** the local trace-serving endpoint starts (or is reused if already running), and the system browser opens `https://ui.perfetto.dev/#!/?url=http://127.0.0.1:9001/trace_file.perfetto-trace&referrer=record_android_trace`
+
+#### Scenario: Recent session open action
+- **WHEN** the user clicks "Open" on a recent session or picks a file from File → Open Recent
+- **THEN** the trace is activated in the workspace, the trace-serving endpoint starts, and the browser opens the official UI pointed at the local trace endpoint
 
 #### Scenario: Official UI fetches the trace
 - **WHEN** the official Perfetto UI requests the trace from the local endpoint
-- **THEN** the endpoint responds with the active trace bytes, CORS header `Access-Control-Allow-Origin: *`, and content type `application/octet-stream`
+- **THEN** the endpoint responds with the active trace bytes, `Access-Control-Allow-Origin` echoing the request Origin, `Cache-Control: no-cache`, and content type `application/octet-stream`
 
 #### Scenario: No trace is active
 - **WHEN** the user invokes "Open in Perfetto UI" without an active trace
@@ -34,7 +38,7 @@ The "Open in Perfetto UI" action SHALL start the local trace-serving endpoint, t
 
 ### Requirement: Local Perfetto UI assets SHALL be served only via explicit menu action
 
-A menu item ("Open in local Perfetto UI") SHALL serve locally available Perfetto UI assets and open the browser at the locally hosted UI (`http://localhost:<port>/#!/?url=http://localhost:<port>/trace`). The menu item SHALL be enabled only when local UI assets are discoverable (`PerfettoUiServer.tryFindUiAssetsDir()` returns a directory containing `index.html`); otherwise it SHALL be disabled.
+A menu item ("Open in local Perfetto UI") SHALL serve locally available Perfetto UI assets and open the browser at the locally hosted UI (`http://127.0.0.1:9001/#!/?url=http://127.0.0.1:9001/trace_file.perfetto-trace`). The menu item SHALL be enabled only when local UI assets are discoverable (`PerfettoUiServer.tryFindUiAssetsDir()` returns a directory containing `index.html`); otherwise it SHALL be disabled.
 
 #### Scenario: Local UI assets available
 - **WHEN** local UI assets are discoverable and the user invokes "Open in local Perfetto UI"
