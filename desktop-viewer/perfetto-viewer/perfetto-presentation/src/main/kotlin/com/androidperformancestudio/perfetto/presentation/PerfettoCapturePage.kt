@@ -91,6 +91,9 @@ import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
 import java.nio.file.Path
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Composable
 @Suppress("ktlint:standard:function-naming")
@@ -957,7 +960,8 @@ private fun CaptureStatus(
             when (state) {
                 is PerfettoCaptureState.Idle -> localizedStringResource(Res.string.ready, language)
                 is PerfettoCaptureState.Preparing -> localizedStringResource(Res.string.preparing_capture, language)
-                is PerfettoCaptureState.Recording -> localizedStringResource(Res.string.recording_since, language, state.startTime)
+                is PerfettoCaptureState.Recording ->
+                    localizedStringResource(Res.string.recording_since, language, formatCaptureTimestamp(state.startTime))
                 is PerfettoCaptureState.Pulling -> localizedStringResource(Res.string.pulling_trace_from_device, language)
                 is PerfettoCaptureState.Completed ->
                     localizedStringResource(Res.string.completed_mb, language, state.metadata.traceFileSizeBytes / 1024 / 1024)
@@ -1064,3 +1068,9 @@ private fun PerfettoTraceTemplate.description(language: UiLanguage): String =
         },
         language,
     )
+
+/** Renders an instant as a readable local "yyyy-MM-dd HH:mm:ss" timestamp. */
+internal fun formatCaptureTimestamp(
+    capturedAt: Instant,
+    zone: ZoneId = ZoneId.systemDefault(),
+): String = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(zone).format(capturedAt)
