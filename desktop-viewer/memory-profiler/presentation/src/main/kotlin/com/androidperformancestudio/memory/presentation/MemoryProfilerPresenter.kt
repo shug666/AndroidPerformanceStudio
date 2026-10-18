@@ -91,6 +91,7 @@ public object MemoryProfilerPresenter {
             deallocationsSize = stats.deallocationsSize,
             shallowSizeChange = stats.shallowSizeChange,
             depth = depth,
+            heapNames = stats.heapNames,
         )
 
     private class MutableTreeNode(
@@ -122,6 +123,7 @@ public object MemoryProfilerPresenter {
                 shallowSizeChange = all.mapNotNull { it.shallowSizeChange }.takeIf { it.size == all.size }?.sum(),
                 depth = depth,
                 children = all,
+                heapNames = all.flatMap { it.heapNames }.toSet(),
             )
         }
     }
@@ -220,8 +222,15 @@ public object MemoryProfilerPresenter {
         val nativeSizeByClass = nativeSizeByClass(input)
         return input.heapBaseClasses
             .filter { scopeMatches(input.classScope, it.className) }
-            .filter { leakMatches(input.leakFilter, it.className, leakClasses, activityFragmentLeakClasses, duplicateClasses) }
-            .filter { searchMatches(input.searchText, input.matchCase, input.useRegex, it.className) }
+            .filter {
+                leakMatches(
+                    input.leakFilter,
+                    it.className,
+                    leakClasses,
+                    activityFragmentLeakClasses,
+                    duplicateClasses,
+                )
+            }.filter { searchMatches(input.searchText, input.matchCase, input.useRegex, it.className) }
             .map { it.copy(nativeSize = nativeSizeByClass[it.className]) }
             .sortedWith(arrangeComparator(input.arrangeBy))
     }
@@ -247,9 +256,11 @@ public object MemoryProfilerPresenter {
                 .mapNotNull { stats -> stats.nativeSize?.let { stats.className to it } }
                 .toMap()
                 .toMutableMap()
-        input.bitmapInstances.forEach { bitmap ->
-            val native = bitmap.nativeSizeBytes ?: return@forEach
-            result[bitmap.className] = (result[bitmap.className] ?: 0L) + native
+        if (input.heapFilter != null) return result
+        input.bitmapInstances.groupBy { it.className }.forEach { (className, bitmaps) ->
+            if (className in result) return@forEach
+            val known = bitmaps.mapNotNull { it.nativeSizeBytes }
+            if (known.isNotEmpty()) result[className] = known.sum()
         }
         return result
     }

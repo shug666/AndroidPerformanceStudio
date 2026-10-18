@@ -1,6 +1,246 @@
 # Commercial UI — implementation and validation progress
 
-This is a continuation checkpoint for the [phased implementation plan](android-performance-studio-commercial-ui-implementation.md), not an assertion that the full commercial UI is finished.
+This is a continuation checkpoint for the [phased implementation plan](README.md), not an assertion that the full commercial UI is finished.
+
+## 2026-10-15: GPU Analysis Hub reference workspace (page 09)
+
+### Implemented
+
+- The hub now keeps the reference dashboard structure: an analysis toolbar, a four-card summary row,
+  an artifact rail, a tabbed analysis center and two insight rails. The device/graphics-context panel
+  and the documented artifact table (Kind | File | Device | Package | API | Captured | Status |
+  Action) stay intact; the table renders through the shared `StudioDataTable`.
+- Page 09 §14.4 keeps the reference frame-profile panels closed, so their regions render the
+  documented replacements instead of fabricated metrics: artifact preview/metadata, related analysis,
+  external tool capability and open-with-AGI. The tool-capability view names the five closed panels
+  and points at AGI/Perfetto; no GPU counter, frame time, shader hotspot, render pass, draw call or
+  overdraw value is invented.
+- Summary cards count only local index facts: indexed artifacts with a kind breakdown, verified
+  available, needs attention and the probed AGI capability. Availability still requires matching size
+  and SHA-256, and opening still revalidates the authoritative indexed artifact.
+- New: a hub tab/filter state model, `GpuHubModel.kt` derivations (summary, related-by-identity
+  grouping, case-insensitive identity search, size/timestamp formatting) and four shared status
+  vectors (`ic_stat_artifact`, `ic_stat_verified`, `ic_stat_attention`, `ic_stat_capability`).
+- Launch AGI and Import GPU Trace moved from the shell header toolbar into the page analysis toolbar,
+  matching page 09 §14.2 "Actions"; Refresh/Configure AGI remain in the header. `GpuIntegrationScreen`
+  is retained only for its localization contract and is documented as superseded.
+- Responsive: three panes at ≥1100dp with the analysis panel owning the remaining height and
+  scrolling its own body; below that the rail and rails stack inside the page scroll, and the summary
+  row wraps to two rows below 900dp. Verified at 1440x900, 1440x620, 1280x720, 1064x560.
+- 46 EN/ZH strings added (76 → 122 keys); both bundles are key-parity tested.
+
+### Fresh validation and evidence
+
+- GPU module `checkAll` (test + ktlint + detekt for all five subprojects) passes. GPU presentation
+  **37 tests**, GPU app **26 tests**, model/index/toolchain suites unchanged and green.
+- New/updated suites: `GpuAnalysisHubScreenTest` (13 Compose cases: pane ordering, toolbar dispatch,
+  index-only summary, rail search, rail selection, tab switching, recovery actions, device errors,
+  device selection, stacked layout, short viewport, expanded panel, unavailable capability),
+  `GpuHubModelTest` (9 derivations), `GpuWorkspaceStyleTest` (8 source contracts),
+  `GpuIntegrationLocalizationTest` (5 including bundle key parity),
+  `GpuAnalysisHubVisualCaptureTest` (2 renders, PNG only when `APS_GPU_HUB_SCREENSHOT` /
+  `APS_GPU_HUB_SCREENSHOT_COMPACT` is exported).
+- Automated renders reviewed against the reference: 1360x900 dark/Chinese and 1280x720 light/English.
+  Evidence: `/tmp/aps-gpu-hub-dark.png`, `/tmp/aps-gpu-hub-compact.png`. This is not pixel-equivalence
+  or native-window acceptance.
+
+### Open gates
+
+- `:desktop-app:test` could not run in this worktree: `battery-profiler/battery-app` has concurrent
+  uncommitted changes that fail to compile (`Unresolved reference 'BatteryRunWorkspace'`) and blocks
+  the desktop-app compile. The desktop-app GPU source contracts were checked by reading the assertions
+  instead: `StartupStyleAdoptionTest` (no `StudioWorkspaceHeader(`/`startupWorkspaceColors(`/
+  `ViewerTheme(` in `GpuAnalysisHubScreen.kt`), `ProfilerThemeSupportTest` (`HeaderToolbar(`,
+  `LocalViewerColors.current`, no fixed hex colours) and `UnifiedDesktopShellTest` route wiring all hold.
+- `ui-components:test` has one pre-existing failure unrelated to this slice:
+  `UnifiedUiComponentsSourceTest` reports raw colour literals in five untouched `desktop-app` files.
+  The new vectors pass `StudioIconRenderingTest`.
+- No external AGI launch, artifact open, reveal or relocate was exercised against a real installation,
+  and no real device graphics context was read. The reference's GPU counter, frame-timeline,
+  render-pass, draw-call and overdraw panels remain intentionally unimplemented per page 09 §14.4.
+- Changes remain uncommitted; this records verified local progress, not completion of the plan.
+
+## 2026-10-14: Startup Profiler reference workspace — no date row
+
+### Implemented
+
+- Replaced the vertically stacked results-only presentation with the page 07 reference structure:
+  compact mountain hero, Cold/Warm/Hot request tabs, scenario configuration, four colored metrics,
+  multi-run waterfall, selectable run table and a 300dp evidence rail. No calendar/date card or row
+  is rendered. Below 1100dp workspace width the rail stacks after the main content; both stay scrollable.
+- All scenario controls use the existing controller: device/component selection, measured runs,
+  compilation/Profile source, start/stop, advanced compilation warmups (preserving every old 0–10
+  choice), timeout, Perfetto capture and practical comparison threshold. Native File menu, import/
+  CSV/JSON actions, compilation confirmation, cancellation, progress and selectable status remain.
+- Metrics are platform TTID, platform TTFD, Agent First Frame and TTID P95; P90, TotalTime, MAD,
+  sample/missing counts, evidence confidence and low-tail-resolution warnings remain visible.
+  Completely missing metrics display zero available samples without changing the inherited analyzer.
+- Waterfalls use only matching same-source milestone endpoints and verified phase durations. Gaps
+  remain gaps; platform TotalTime labels are independent measurements, not additive phase totals.
+  First five runs are previewed and an out-of-preview selected run replaces the last preview row.
+  Phase and platform-only rows both select runs; full run/phase evidence remains available in the rail.
+- Baseline Profile success requires verified speed-profile compilation, explicitly declared Baseline
+  Profile Plugin provenance, a recorded artifact and no preparation failure. Generic speed-profile
+  requests, Macrobenchmark sources and missing evidence do not receive a Baseline-ready badge.
+  Trace navigation retains local file validation plus correlation bounds, failures and limitations.
+- Startup-only dark surfaces derive from shared theme/accent roles; light mode and other profiler
+  palettes are unchanged. The app selector remains searchable after moving into presentation; its
+  desktop source-contract test now points to the new control file.
+
+### Fresh validation and evidence
+
+- Eight Startup suites pass: presentation **27**, app **15**, analysis **8**, parser **3**, capture
+  **4**, export **4**, storage **2**, protocol **2**: **65 tests**, zero failures/errors/skips.
+  Three workspace regressions and four app-wiring regressions first failed against the old layout.
+- Startup presentation/app `ktlintCheck`, changed-file Detekt, desktop Kotlin compilation and macOS
+  `createDistributable` pass. Packaged Startup app/presentation JAR entries match their built entries.
+- Full-module Detekt is not green: **13 existing presentation findings** and **1 existing app
+  LongMethod**. All five implicated source/test files match HEAD byte-for-byte and were left untouched.
+- Full desktop tests are **171 passing / 1 failing**. The remaining failure is the independently
+  modified Network screen's theme source assertion (`ProfilerThemeSupportTest` requires a literal
+  `MaterialTheme.colorScheme`). Startup's moved searchable-selector contract passes. Earlier Network
+  compile errors were cleared by that separate work; no Network/Frame/GPU sources were edited here.
+- Automated screenshots: 1336×904 dark/Chinese reference workspace, 1280×720 dark/Chinese workspace,
+  and 1336×904 light/English workspace. Compared against the reference crop and generated a diagnostic
+  raw pixel-diff; this is not pixel-equivalence acceptance. Reference illustration, icon treatment,
+  density and unavailable sample recommendations still differ intentionally or remain visual gaps.
+- Durable local evidence (ignored, not product assets):
+  `.omx/artifacts/startup-profiler-ui/evidence-20261014/`. Screenshot comparison:
+  `/tmp/aps-startup-20261014-comparison.png`; final integration log:
+  `/tmp/aps-startup-final-integration2-20261014.log`.
+- Native desktop interaction acceptance could not run: System Events reports `UI elements enabled =
+  false`. The app image was built, not installed/launched or substituted for a running application.
+  No fresh real-device startup experiment or compilation-state mutation was performed. No commit or
+  push; this records bounded implementation and local evidence, not whole-app/release completion.
+
+## 2026-10-14: Frame timeline compact padding and coordinate axes
+
+- Removed the timeline's extra inner padding; it now uses the existing `StudioPanel` 16dp padding
+  without changing shared panel tokens or other cards.
+- Added a labeled frame-duration ruler (ms), a visible-frame ID axis and aligned dashed grid lines.
+  The duration scale contains the longest visible frame; frame IDs come from the actual samples,
+  and both axes update with paging and zoom. Axis values are not inferred frame budgets.
+- Regressions cover panel inset, duration scales including extreme durations, small capture/window
+  labels, paging/zoom updates and pointer selection with the axis gutter. Existing hover-caption
+  stability and the single-row compact toolbar remain passing.
+- Fixed the formatting issue that stopped the prior final validation. Freshly reran Frame
+  presentation **27 tests**, Frame app **30 tests** and desktop app **170 tests**: **227 tests**, zero
+  failures/errors/skips. Presentation `ktlintCheck`, changed-file Detekt, desktop compilation and
+  `git diff --check` pass.
+- Full presentation Detekt still reports **10 existing findings** in `FrameEvidenceText.kt`,
+  `FrameEvidenceTextTest.kt` and `FrameClusterPresentationTest.kt`; those files match HEAD and were
+  left untouched. Full-module static analysis is not green.
+- Reviewed the new automated dark/Chinese screenshot against the reference for this timeline slice;
+  it does not establish whole-page visual equivalence or acceptance in the running native desktop
+  window. Evidence: `/tmp/aps-frame-timeline-axis-continued-final-20261014.log`,
+  `/tmp/aps-frame-timeline-axis-full-detekt-continued-20261014.log` and
+  `/tmp/aps-frame-timeline-axis-continued-20261014.png`.
+- No application was restarted or installed, and no commit or push was performed. Existing GPU
+  and Startup worktree changes were not modified in this continuation.
+
+## 2026-10-14: Frame timeline inline hover caption
+
+- Hovered frame details now follow the deadline-miss marker hint on the same line, separated by
+  `|`. Leaving the canvas clears only the hover details, not the caption line's layout space.
+- The caption remains a single line with ellipsis overflow. When there are no clusters, its blank
+  line still reserves the same height, so hovering smooth frames does not move the analysis panels.
+- Two real-pointer Compose regressions cover every frame in three-frame samples with and without
+  clusters, including pointer exit, the hint/separator order, and unchanged canvas/panel bounds.
+  Both failed before the fix, reproducing a 17px panel displacement, and pass afterward.
+- Frame presentation **23 tests**, Frame app **30 tests** and desktop app **170 tests** pass with
+  zero failures/errors/skips. Presentation `ktlintCheck`, changed-file Detekt, desktop compilation
+  and `git diff --check` pass; the previously documented full-module Detekt findings remain open.
+- Evidence: `/tmp/aps-frame-timeline-hover-final-20261014.log` and
+  `/tmp/aps-frame-timeline-hover-20261014.png` (dark/Chinese automated rendering with frame #9
+  hovered). This is automated verification, not acceptance in the running desktop application.
+  No application was restarted or installed, and no commit or push was performed.
+
+## 2026-10-14: Frame timeline single-row compact toolbar
+
+- The timeline title, Previous/Next/Zoom in/Zoom out controls, and Within budget/Jank/Jank cluster
+  legend now share one vertically centred row. The four controls reuse `ProfilerCompactButton`, the
+  same 24dp shared component as Start Capture, instead of duplicating button styling.
+- Existing enabled predicates, paging and zoom anchors are unchanged. A new 1280px Compose
+  regression checks shared vertical centres, token-defined button height, initial disabled Previous,
+  and the range transitions for Next, Zoom in, Zoom out and Previous. It failed before the change.
+- Frame presentation **21 tests** pass with zero failures/errors/skips; `ktlintCheck`, changed-file
+  Detekt and desktop Kotlin compilation pass. Frame app **30 tests** and desktop app **170 tests**
+  remain passing (their tasks were up-to-date in the final verification run).
+- Full Frame presentation Detekt is not green: the 10 existing findings documented below remain
+  outside this localized toolbar change. `git diff --check` passes.
+- Evidence: `/tmp/aps-frame-timeline-toolbar-final-20261014.log` and
+  `/tmp/aps-frame-timeline-toolbar-20261014.png` (1440px dark/Chinese automated rendering).
+  This is automated UI verification, not acceptance in the currently running application; no desktop
+  application was restarted or installed in this slice. Changes remain uncommitted.
+
+## 2026-10-14: Frame device discovery on workspace entry
+
+- Fixed the retained-page refresh trigger: Frame previously ran device discovery only when its
+  controller was first composed. The desktop route now supplies `isActive`; becoming active reruns
+  discovery without replacing the retained controller or analysis. Hidden pages do not start this
+  entry refresh, and the existing capture guard remains in force.
+- The existing selection policy is preserved: automatically choose the sole online device, retain a
+  still-online selection/process, and require an explicit choice when multiple devices are online.
+- Added four controller regressions for initial automatic selection, connecting after an empty
+  first visit, retaining selection without duplicate process discovery, and multiple-device safety;
+  added the route/activation wiring regression. The wiring test failed before the fix and passed
+  afterward.
+- Frame app **30 tests** and desktop app **170 tests** pass with zero failures/errors/skips.
+  Frame app `ktlintCheck` and full-module `detekt`, desktop compile and macOS distribution build pass.
+- A temporary probe invoked the real default Frame controller and ADB backend (no capture started):
+  one online `TCL T702W` was listed, selected serial matched, four profileable/debuggable processes
+  loaded, and `errorMessage=null`. Evidence: `/tmp/aps-frame-device-final-20261014.log`.
+- This verifies live device discovery/controller selection, not re-entry interaction in the currently
+  running desktop window. A new application bundle was built; no running application was stopped,
+  replaced or restarted. Changes remain uncommitted.
+
+## 2026-10-14: Frame and GPU review fixes — local verification
+
+### Implemented
+
+- Frame restores the documented five core metrics: Frames, Deadline Miss Rate, P50, P95 and Worst.
+  Platform Jank Signal Rate remains separate from deadline misses, alongside the observed refresh rate.
+- Activity/UI-state attribution is available in a compact, initially collapsed section; expanding it
+  retains the previous five-entry preview with frame counts, platform-jank counts and P95.
+- The latest visual instruction takes precedence over the older two-pane text diagram: retain
+  clusters, problem frames and frame detail as three adjacent panels, without adding a date row.
+  Source/result filters and existing capture/import/trace/layout behavior remain in place.
+- GPU artifact availability now requires matching size **and** SHA-256. Same-size replacements and
+  unreadable files cannot be opened; a registered alternative can be used only after verification.
+  Opening revalidates the authoritative indexed artifact instead of trusting cached UI availability
+  or a caller-supplied path. Missing/changed artifacts keep Verify/Reveal/Relocate recovery actions.
+- Regression coverage includes exact KPI values, collapsed attribution, unknown-budget rendering,
+  1280px three-column bounds, a 10,001-frame timeline with selection/range/zoom, and the GPU viewer,
+  integrity, busy-state and device-error action matrix.
+
+### Fresh verification
+
+- Re-executed all nine requested test suites (not only an up-to-date test result): Frame presentation
+  20, Frame app 25, analysis 12, export 2; GPU artifact index 14, toolchain 9, app 26, presentation 6;
+  desktop app 170. **284 tests, zero failures/errors/skips**.
+- Frame presentation and the four changed GPU modules pass `ktlintCheck`;
+  `:desktop-app:compileKotlin` and `:desktop-app:createDistributable` pass.
+- GPU artifact index, toolchain, app and presentation pass full-module Detekt. Frame changed-file
+  Detekt passes; full Frame presentation Detekt still reports **10 existing findings** in unchanged
+  `FrameEvidenceText.kt`, `FrameEvidenceTextTest.kt` and `FrameClusterPresentationTest.kt`. Those files
+  were compared byte-for-byte to HEAD and left untouched; full-module static analysis is not green.
+- The built Frame presentation, GPU app and GPU presentation JARs match their packaged counterparts
+  entry-for-entry (53, 83 and 54 entries). Container hashes differ because packaging rewrites ZIPs;
+  no class/resource entry differs.
+- Local evidence: `/tmp/aps-frame-gpu-fresh-tests-20261014.log`,
+  `/tmp/aps-frame-gpu-final-20261014.log`, `/tmp/aps-frame-gpu-static-desktop-20261014.log`, and
+  `/tmp/aps-frame-profiler-verified-20261014.png` (1440px dark/Chinese automated rendering).
+
+### Open acceptance gates
+
+- Automated bounds/rendering do not prove reference-image visual equivalence or native packaged-GUI
+  acceptance; the reference's visual styling still needs acceptance on the actual application.
+- The 10,001-frame test proves bounded navigation/rendering structure, not measured recomposition
+  counts, interaction latency or a performance benchmark.
+- No fresh real-device capture or external AGI launch/open acceptance was performed in this slice.
+  The macOS app was built, not installed or substituted for an already running application.
+- Source changes remain uncommitted; this entry records verified progress, not completion of the full
+  commercial UI plan.
 
 ## 2026-10-14: In-app Macrobenchmark orchestration
 
@@ -613,3 +853,36 @@ Run from `desktop-viewer`:
 - [ ] Phase 4 panel extraction and visual redesign parity against the main plan, followed by the remaining phased migration. The other phases were not comprehensively re-audited in this batch.
 
 Do not promote local tests, source-wiring checks, archive fixtures, or app-image creation into full commercial UI or release completion.
+
+
+## 2026-10-15: Startup Profiler page 07 — functional reference completion
+
+### Scope and baseline
+
+- Branch `main`, starting HEAD `4b9ae57e45831b688e5f22992e98d5469aa200f1`; initially clean.
+- Follow page 07 and its reference image together with the current `DESIGN.md` Startup adoption contract. Keep shared theme/density and omit the decorative banner/date card.
+- Changes are scoped to Startup presentation, controller, report import and identity-based comparison. Concurrent Battery, Network, GPU and shared-icon work is not part of this batch and was preserved. No commit/push was requested.
+
+### Implemented
+
+- Kept Cold/Warm/Hot requested modes separate from observed run types; retained real TTID/TTFD/Agent First Frame/P95, sample counts, missing/confidence labels and percentile-resolution warnings.
+- Added actual waterfall phase filtering and CSV export callbacks. Filtering preserves original offsets, gaps, independent clock domains and platform totals; changing the selected five-run preview resets unavailable phase filters.
+- Added optional build-supplied Profile artifact/hash configuration and controller wiring. Switching away from Speed Profile clears mode-only provenance. UI distinguishes verified compiler state from declared Profile provenance; it does not install a Profile or verify its contents on-device.
+- Replaced the old text-only comparison with a current/previous experiment table: real device model, TTID/TTFD/Agent First Frame/P95 and sample counts, plus both TTID evidence sources/confidences, missing samples, localized outcome, percent change, 95% BCa interval, practical threshold, phase differences and incompatibility reasons. Non-TTID values remain descriptive, not separately regression-qualified.
+- Added an Import Comparison action. A successful second import retains the previous analysis as baseline; failed/stale imports preserve newer analysis and selection. Current `deviceLocalId` and legacy `deviceSerial` reports round-trip without re-exporting raw serials. Same-installation live/imported identities compare consistently; different devices/targets and invalid identities remain fail-closed.
+- Corrected progress wording to experiment progress including compilation warmups. Stop remains available while configuration/import/export are locked.
+- Preserved trace navigation and captured-file validation, correlation error bounds, scheduling/Binder/main-thread/frame slices, limitations, compilation confirmation, import/export and run selection.
+
+### Verification
+
+- Startup feature suite: **91 tests**, zero failures/errors/skips (presentation 41, app 20, analysis 10, export 9, capture 4, parser 3, storage 2, protocol 2; model has no test source).
+- Presentation/app/analysis/export ktlint passed. Changed-file Detekt passed for all 16 changed/new Kotlin files, using a bounded temporary init script.
+- Full Detekt is **not green**: 15 pre-existing presentation findings plus 1 pre-existing `StartupPerfettoEvidenceAnalyzer` long-method finding. All files containing the remaining findings are unchanged from the starting HEAD.
+- Earlier desktop integration compilation and 7 Startup-related desktop tests passed. The latest integration rerun was blocked by concurrently edited Battery sources (`session_not_found`, `session_opened`, `sessions_load_failed` resource references; implicit `maxWidth` in `BatteryRunWorkspace`). Do not treat the earlier desktop pass as acceptance of the latest whole worktree.
+- Inspected deterministic synthetic captures: dark Chinese, light English, 1280x720 content viewport, and scrolled comparison. Stacked 900px layout, running/disabled states, phase filtering/preview changes, Profile editor, real callbacks and trace-open failure are covered by Compose tests. Captures are rendering fixtures, not device measurements or packaged-GUI acceptance.
+- Evidence: `.omx/artifacts/startup-profiler-ui/2026-10-15-functional-evidence/` (captures, logs, scoped Detekt source list/init script). `git diff --check` passed for the Startup scope.
+
+### Explicit boundaries
+
+- The comparison model currently supports current versus previous experiment, not the reference image's arbitrary multi-build/device comparison list. No unavailable build versions, competitor results, optimization diagnoses or KPI improvement arrows were fabricated.
+- No real-device acquisition, packaged native-window interaction, signing or Release validation was performed in this batch. Those remain separate acceptance gates.

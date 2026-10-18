@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="sp_cpu_profiler">CPU Profiler</string>
     <string name="sp_target_device_target">设备和目标</string>
     <string name="sp_target_selection_description">选择 Android 设备和性能采集目标。</string>
     <string name="sp_target_open_session">打开会话</string>

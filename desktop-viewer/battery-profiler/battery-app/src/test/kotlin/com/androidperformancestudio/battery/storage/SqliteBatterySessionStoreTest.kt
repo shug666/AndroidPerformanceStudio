@@ -27,6 +27,7 @@ import kotlin.test.assertNotEquals
 
 class SqliteBatterySessionStoreTest {
     @Test
+    @Suppress("LongMethod")
     fun `persists session run snapshots and delta`() {
         val file = Files.createTempDirectory("battery-store").resolve("battery.db")
         val capabilities = BatteryCapabilities(BatteryCapabilityLevel.RESOURCE_BASIC, true, false, false, false, true)
@@ -100,13 +101,15 @@ class SqliteBatterySessionStoreTest {
                 }
             assertNotEquals("serial", stored)
             assertEquals(64, stored.length)
-            connection.createStatement().executeQuery(
-                "SELECT thermal_status, thermal_throttling FROM battery_snapshots WHERE id = 'snapshot'",
-            ).use {
-                check(it.next())
-                assertEquals(3, it.getInt(1))
-                assertEquals(1, it.getInt(2))
-            }
+            connection
+                .createStatement()
+                .executeQuery(
+                    "SELECT thermal_status, thermal_throttling FROM battery_snapshots WHERE id = 'snapshot'",
+                ).use {
+                    check(it.next())
+                    assertEquals(3, it.getInt(1))
+                    assertEquals(1, it.getInt(2))
+                }
             connection.createStatement().executeQuery("SELECT COUNT(*) FROM battery_performance_windows").use {
                 check(it.next())
                 assertEquals(1, it.getInt(1))

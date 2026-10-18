@@ -29,7 +29,11 @@ import com.androidperformancestudio.battery.battery_app.generated.resources.impo
 import com.androidperformancestudio.battery.battery_app.generated.resources.online_sample_failed
 import com.androidperformancestudio.battery.battery_app.generated.resources.preparing_battery_experiment
 import com.androidperformancestudio.battery.battery_app.generated.resources.raw_bundle
+import com.androidperformancestudio.battery.battery_app.generated.resources.session_not_found
+import com.androidperformancestudio.battery.battery_app.generated.resources.session_opened
 import com.androidperformancestudio.battery.battery_app.generated.resources.session_persistence_failed
+import com.androidperformancestudio.battery.battery_app.generated.resources.sessions_load_failed
+import com.androidperformancestudio.battery.battery_app.generated.resources.sessions_loading
 import com.androidperformancestudio.battery.battery_app.generated.resources.unable_to_start_battery_experiment
 import com.androidperformancestudio.battery.battery_app.generated.resources.unable_to_stop_battery_experiment
 import com.androidperformancestudio.battery.capture.ActiveBatteryExperiment
@@ -38,7 +42,6 @@ import com.androidperformancestudio.battery.export.BatteryCsvExporter
 import com.androidperformancestudio.battery.export.BatteryJsonExporter
 import com.androidperformancestudio.battery.export.BatteryJsonImporter
 import com.androidperformancestudio.battery.export.BatteryRawBundleExporter
-import com.androidperformancestudio.battery.model.AttributionScope
 import com.androidperformancestudio.battery.model.BatteryDevice
 import com.androidperformancestudio.battery.model.BatteryExperimentConfig
 import com.androidperformancestudio.battery.model.BatteryExperimentResult
@@ -82,6 +85,89 @@ internal class BatteryProfilerController(
     }
 
     val state: StateFlow<BatteryProfilerState> = mutableState.asStateFlow()
+
+    suspend fun refreshSessions() {
+        runCatching {
+            withContext(Dispatchers.IO) { SqliteBatterySessionStore.open(databaseFile).use { it.listSessions() } }
+        }.onSuccess { sessions ->
+            mutableState.value = mutableState.value.copy(sessions = sessions, sessionError = null)
+        }.onFailure { error ->
+            mutableState.value =
+                mutableState.value.copy(
+                    sessionError = localizedStringResource(Res.string.sessions_load_failed, language, error.message.orEmpty()),
+                )
+        }
+    }
+
+    suspend fun openSession(sessionId: String) {
+        if (mutableState.value.isRunning || mutableState.value.isLoadingSession) return
+        mutableState.value =
+            mutableState.value.copy(
+                isLoadingSession = true,
+                sessionError = null,
+                operationMessage = localizedStringResource(Res.string.sessions_loading, language),
+            )
+        runCatching {
+            withContext(Dispatchers.IO) { SqliteBatterySessionStore.open(databaseFile).use { it.loadEvidence(sessionId) } }
+        }.onSuccess { evidence ->
+            if (evidence == null) {
+                mutableState.value =
+                    mutableState.value.copy(
+                        isLoadingSession = false,
+                        sessionError = localizedStringResource(Res.string.session_not_found, language),
+                    )
+            } else {
+                // Restoring evidence never retargets ADB or reconstructs unknown capture configuration.
+                mutableState.value =
+                    mutableState.value.copy(
+                        experiment = null,
+                        analysis = evidence.analysis,
+                        storedRuns = evidence.runs,
+                        baseline = null,
+                        selectedRunId =
+                            evidence.analysis.runs
+                                .firstOrNull()
+                                ?.runId,
+                        viewedStoredSessionId = sessionId,
+                        viewedAttributionScope = evidence.session.attributionScope,
+                        isLoadingSession = false,
+                        warnings = evidence.analysis.warnings,
+                        errorMessage = null,
+                        artifact = null,
+                        completedSteps = 0,
+                        totalSteps = 0,
+                        operationMessage = localizedStringResource(Res.string.session_opened, language, evidence.session.packageName),
+                    )
+            }
+        }.onFailure { error ->
+            mutableState.value =
+                mutableState.value.copy(
+                    isLoadingSession = false,
+                    sessionError = localizedStringResource(Res.string.sessions_load_failed, language, error.message.orEmpty()),
+                )
+        }
+    }
+
+    fun newExperiment() {
+        if (mutableState.value.isRunning || mutableState.value.isLoadingSession) return
+        mutableState.value =
+            mutableState.value.copy(
+                experiment = null,
+                analysis = null,
+                storedRuns = emptyList(),
+                baseline = null,
+                selectedRunId = null,
+                viewedStoredSessionId = null,
+                viewedAttributionScope = null,
+                sessionError = null,
+                artifact = null,
+                warnings = emptyList(),
+                errorMessage = null,
+                operationMessage = null,
+                completedSteps = 0,
+                totalSteps = 0,
+            )
+    }
 
     suspend fun refreshDevices() {
         if (mutableState.value.isRunning) return
@@ -177,7 +263,7 @@ internal class BatteryProfilerController(
 
     suspend fun startInteractive() {
         val snapshot = mutableState.value
-        if (snapshot.isRunning) return
+        if (snapshot.isRunning || snapshot.isLoadingSession) return
         val selectedRunner = openRunner(snapshot) ?: return
         mutableState.value =
             snapshot.copy(
@@ -270,7 +356,7 @@ internal class BatteryProfilerController(
 
     suspend fun runAutomatic() {
         val snapshot = mutableState.value
-        if (snapshot.isRunning) return
+        if (snapshot.isRunning || snapshot.isLoadingSession) return
         val selectedRunner = openRunner(snapshot) ?: return
         mutableState.value =
             snapshot.copy(
@@ -332,7 +418,7 @@ internal class BatteryProfilerController(
     }
 
     suspend fun importJson(input: Path): Boolean {
-        if (mutableState.value.isRunning) return false
+        if (mutableState.value.isRunning || mutableState.value.isLoadingSession) return false
         return runCatching { withContext(Dispatchers.IO) { jsonImporter.import(input) } }
             .fold(
                 onSuccess = { analysis ->
@@ -341,6 +427,10 @@ internal class BatteryProfilerController(
                     mutableState.value =
                         mutableState.value.copy(
                             experiment = null,
+                            storedRuns = emptyList(),
+                            viewedStoredSessionId = null,
+                            viewedAttributionScope = null,
+                            sessionError = null,
                             analysis = analysis,
                             baseline = null,
                             selectedRunId = analysis.runs.firstOrNull()?.runId,
@@ -379,7 +469,7 @@ internal class BatteryProfilerController(
                 output,
                 mutableState.value.experiment
                     ?.session
-                    ?.attributionScope ?: AttributionScope.UID,
+                    ?.attributionScope ?: mutableState.value.viewedAttributionScope,
             )
         }
 
@@ -428,6 +518,7 @@ internal class BatteryProfilerController(
     }
 
     suspend fun resetStatistics() {
+        if (mutableState.value.isRunning || mutableState.value.isLoadingSession) return
         val serial = mutableState.value.selectedDeviceSerial ?: return
         when (val result = backend.resetStatistics(serial)) {
             is BatteryBackendResult.Failure -> mutableState.value = mutableState.value.copy(errorMessage = result.message)
@@ -441,6 +532,12 @@ internal class BatteryProfilerController(
                             ),
                         analysis = null,
                         experiment = null,
+                        storedRuns = emptyList(),
+                        viewedStoredSessionId = null,
+                        viewedAttributionScope = null,
+                        selectedRunId = null,
+                        artifact = null,
+                        sessionError = null,
                         baseline = null,
                     )
         }
@@ -479,6 +576,8 @@ internal class BatteryProfilerController(
         mutableState.value =
             mutableState.value.copy(
                 experiment = experiment,
+                storedRuns = emptyList(),
+                viewedStoredSessionId = experiment.session.id,
                 analysis = analysis,
                 baseline = previous,
                 selectedRunId = analysis.runs.firstOrNull()?.runId,
@@ -489,6 +588,7 @@ internal class BatteryProfilerController(
                 warnings = (mutableState.value.warnings + analysis.warnings + listOfNotNull(persistenceWarning)).distinct(),
                 artifact = artifact,
             )
+        refreshSessions()
     }
 
     private suspend fun persist(

@@ -160,7 +160,8 @@ class MemoryDeepAnalyzer(
             .mapNotNull { (className, instances) ->
                 val reachable =
                     instances.filter {
-                        it.objectId in retainedSizes && chainFinder.depthOf(it.objectId)?.let { depth -> depth > 0 } == true
+                        it.objectId in retainedSizes &&
+                            chainFinder.depthOf(it.objectId)?.let { depth -> depth > 0 } == true
                     }
                 if (reachable.isEmpty()) return@mapNotNull null
                 val destroyedInstances = reachable.filter(::isDestroyed)
@@ -315,8 +316,14 @@ class HeapDiffAnalyzer {
                         shallowSizeDelta = (new?.shallowSize ?: 0L) - (old?.shallowSize ?: 0L),
                         matchedBy = matchMode,
                         hierarchyDepth = new?.hierarchyDepth ?: old?.hierarchyDepth,
+                        beforeRetainedSize = if (old == null) 0L else old.retainedSize,
+                        afterRetainedSize = if (new == null) 0L else new.retainedSize,
                     )
-                }.filter { it.countDelta != 0 || it.shallowSizeDelta != 0L }
+                }.filter {
+                    it.countDelta != 0 ||
+                        it.shallowSizeDelta != 0L ||
+                        it.beforeRetainedSize != it.afterRetainedSize
+                }
         return HeapDiff(
             entries.sortedWith(
                 compareByDescending<HeapDiffEntry> { it.countDelta }.thenBy { it.className },

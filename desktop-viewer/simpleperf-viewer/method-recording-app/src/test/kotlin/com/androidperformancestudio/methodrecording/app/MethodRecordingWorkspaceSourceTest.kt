@@ -33,4 +33,26 @@ class MethodRecordingWorkspaceSourceTest {
         assertTrue(source.contains("Res.string.device_offline"))
         assertTrue(source.contains("Res.string.devices_connected"))
     }
+
+    @Test
+    fun `trace content omits the decorative workspace banner before all content states`() {
+        val screen = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/methodrecording/app/MethodRecordingScreen.kt"))
+        assertFalse(screen.contains("StudioWorkspaceHeader("))
+        assertTrue(screen.contains("StudioTokens.compactContentPadding"))
+        assertFalse(source.contains("StudioWorkspaceHeader("))
+    }
+
+    @Test
+    fun `trace table uses shared panel without changing fields or flame graph`() {
+        val screen = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/methodrecording/app/MethodRecordingScreen.kt"))
+        val table = screen.substringAfter("private fun MethodTopMethodsTable(").substringBefore("private fun TableHeader(")
+        assertTrue(table.contains("StudioPanel("))
+        assertTrue(table.contains("LazyColumn(Modifier.heightIn(max = 220.dp))"))
+        listOf("symbolName", "selfMicros", "totalMicros", "callCount").forEach { field ->
+            assertTrue(table.contains("method.$field"), field)
+        }
+        assertTrue(screen.contains("FlameGraphPanel("))
+        assertTrue(screen.contains("snapshot = snapshot"))
+        assertTrue(screen.contains("actions = noopReportActions()"))
+    }
 }

@@ -15,6 +15,22 @@ class MemoryHistogramAnalyzerTest {
     private val analyzer = MemoryHistogramAnalyzer()
 
     @Test
+    fun `heap distribution and class heaps use recorded objects and preserve zero native evidence`() {
+        val histogram =
+            analyzer.histogram(
+                HeapDump(
+                    instances = listOf(HeapInstance(1, 10, "A", 16, nativeSizeBytes = 0), HeapInstance(2, 10, "A", 32)),
+                    heapByObjectId = mapOf(1L to "App", 2L to "Zygote"),
+                ),
+            )
+        assertEquals(setOf("App", "Zygote"), histogram.classes.single().heapNames)
+        assertEquals(0L, histogram.classes.single().nativeSize)
+        assertEquals(48L, histogram.summary.heapSegments.sumOf { it.size })
+        assertEquals(2, histogram.summary.heapSegments.sumOf { it.objectCount })
+        assertNull(histogram.classes.single().allocations)
+    }
+
+    @Test
     fun `generates class histogram from parsed heap`() {
         val heapDump =
             HeapDump(
@@ -32,8 +48,9 @@ class MemoryHistogramAnalyzerTest {
         assertEquals(56, histogram.summary.shallowSize)
         assertEquals(listOf("B", "A"), histogram.classes.map { it.className })
         assertEquals(2, histogram.classes.first().instanceCount)
-        assertEquals(2L, histogram.classes.first().allocations)
-        assertEquals(32L, histogram.classes.first().allocationsSize)
+        assertEquals(2L, histogram.classes.first().totalCount)
+        assertNull(histogram.classes.first().allocations)
+        assertNull(histogram.classes.first().allocationsSize)
         assertNull(histogram.classes.first().deallocations)
         assertNull(histogram.classes.first().shallowSizeChange)
     }

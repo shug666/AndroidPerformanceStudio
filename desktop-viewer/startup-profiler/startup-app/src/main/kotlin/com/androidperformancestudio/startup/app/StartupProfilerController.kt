@@ -37,6 +37,7 @@ import com.androidperformancestudio.startup.storage.SqliteStartupSessionStore
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.localizedStringResource
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -168,6 +169,15 @@ internal class StartupProfilerController(
         }
     }
 
+    fun updateBaselineProfileArtifact(artifact: String) {
+        if (!mutableState.value.isRunning && mutableState.value.config.compilationMode == CompilationMode.SPEED_PROFILE) {
+            mutableState.value =
+                mutableState.value.copy(
+                    config = mutableState.value.config.copy(baselineProfileArtifact = artifact.trim().takeIf(String::isNotEmpty)),
+                )
+        }
+    }
+
     fun dismissCompilationConfirmation() {
         mutableState.value = mutableState.value.copy(compilationConfirmationRequired = false)
     }
@@ -252,16 +262,25 @@ internal class StartupProfilerController(
         }
     }
 
-    suspend fun importJson(input: Path): Boolean {
-        if (mutableState.value.isRunning) return false
-        return runCatching { withContext(Dispatchers.IO) { jsonImporter.import(input) } }
+    suspend fun importJson(
+        input: Path,
+        importDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    ): Boolean {
+        val snapshot = mutableState.value
+        if (snapshot.isRunning) return false
+        return runCatching { withContext(importDispatcher) { jsonImporter.import(input) } }
             .fold(
                 onSuccess = { analysis ->
+                    val current = mutableState.value
+                    if (current.isRunning || current.analysis !== snapshot.analysis) return@fold false
                     mutableState.value =
-                        mutableState.value.copy(
+                        current.copy(
                             analysis = analysis,
-                            baseline = null,
-                            comparison = null,
+                            baseline = snapshot.analysis,
+                            comparison =
+                                snapshot.analysis?.let { baseline ->
+                                    analyzer.compare(analysis, baseline, snapshot.config.practicalChangeThresholdPercent)
+                                },
                             selectedRunId = analysis.runs.firstOrNull()?.id,
                             completedRuns = 0,
                             totalRuns = 0,
@@ -272,8 +291,10 @@ internal class StartupProfilerController(
                     true
                 },
                 onFailure = { exception ->
+                    val current = mutableState.value
+                    if (current.isRunning || current.analysis !== snapshot.analysis) return@fold false
                     mutableState.value =
-                        mutableState.value.copy(
+                        current.copy(
                             errorMessage =
                                 exception.message
                                     ?: localizedStringResource(Res.string.import_failed, language),

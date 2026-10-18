@@ -95,4 +95,6 @@
     <string name="diagnostic_power_rails_description">Hardware rail energy and average power</string>
     <string name="diagnostic_power_frame_alignment_title">Power / Frame Alignment</string>
     <string name="diagnostic_power_frame_alignment_description">Power rail intervals overlapping FrameTimeline frames</string>
+    <string name="diagnostic_result_rows">%1$d result rows</string>
+    <string name="diagnostic_data_source_limitation">Results are limited to data sources recorded in this trace artifact.</string>
 </resources>

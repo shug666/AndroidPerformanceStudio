@@ -85,15 +85,23 @@ public class AgiLocator(
         val executable = candidates.first()
         val versionResult = runner.run(listOf(executable.toString(), "--version"), Duration.ofSeconds(3))
         val helpResult = runner.run(listOf(executable.toString(), "--help"), Duration.ofSeconds(3))
-        val version = (versionResult.stdout + versionResult.stderr).lineSequence().firstOrNull { it.isNotBlank() }?.trim()
-        val help = helpResult.stdout + helpResult.stderr
-        val supported = listOf("--device", "--package", "--activity", "--capture").filter(help::contains).toSet()
-        val artifactOpenSupported = executable.fileName.toString().substringBeforeLast('.').lowercase() in setOf("agi", "gapic")
+        val version =
+            if (versionResult.exitCode == 0 && !versionResult.timedOut) {
+                (versionResult.stdout + "\n" + versionResult.stderr).lineSequence().firstOrNull { it.isNotBlank() }?.trim()
+            } else {
+                null
+            }
+        val help = if (helpResult.exitCode == 0 && !helpResult.timedOut) helpResult.stdout + "\n" + helpResult.stderr else ""
+        val supported = listOf("--device", "--package", "--activity", "--capture").filter { help.advertises(it) }.toSet()
+        val artifactOpenArgument = listOf("--open-artifact", "--artifact").firstOrNull(help::advertises)
+        val artifactOpenSupported = artifactOpenArgument != null
         val warnings = buildList {
             if (versionResult.timedOut) add("AGI version probe timed out; GUI launch remains available.")
-            if (versionResult.exitCode != 0 && version.isNullOrBlank()) add("AGI version could not be determined.")
+            if (!versionResult.timedOut && version.isNullOrBlank()) add("AGI version could not be determined.")
+            if (helpResult.timedOut) add("AGI help probe timed out; CLI capabilities were not verified.")
+            if (!helpResult.timedOut && helpResult.exitCode != 0) add("AGI help probe failed; CLI capabilities were not verified.")
             if (supported.isEmpty()) add("No stable automation arguments were detected; AGI will be launched in GUI-only mode.")
-            if (!artifactOpenSupported) add("Opening an artifact through this configured executable was not verified.")
+            if (!artifactOpenSupported) add("Opening an artifact through this AGI executable was not verified; launch AGI and open it from the application.")
         }
         return AgiCapability(
             executable = executable,
@@ -103,6 +111,7 @@ public class AgiLocator(
             launchMode = if (supported.isEmpty()) AgiLaunchMode.GUI_ONLY else AgiLaunchMode.VERIFIED_CLI,
             supportedArguments = supported,
             warnings = warnings,
+            artifactOpenArgument = artifactOpenArgument,
         )
     }
 
@@ -123,9 +132,11 @@ public class AgiLocator(
         artifact: Path,
     ): RunningHostProcess {
         val executable = requireNotNull(capability.executable) { "AGI executable is not configured" }
+        require(capability.launchSupported) { "AGI launch is unavailable" }
         require(capability.artifactOpenSupported) { "Opening artifacts with this AGI executable was not verified" }
         require(Files.isRegularFile(artifact)) { "Artifact does not exist: $artifact" }
-        return runner.launch(listOf(executable.toString(), artifact.toAbsolutePath().normalize().toString()))
+        val argument = requireNotNull(capability.artifactOpenArgument) { "AGI does not advertise a verified artifact-open argument" }
+        return runner.launch(listOf(executable.toString(), argument, artifact.toAbsolutePath().normalize().toString()))
     }
 
     private fun executableNames(): List<String> =
@@ -148,3 +159,6 @@ public class AgiLocator(
         )
     }
 }
+
+private fun String.advertises(argument: String): Boolean =
+    Regex("(?m)^\\s*${Regex.escape(argument)}(?:[=,\\s]|$)").containsMatchIn(this)

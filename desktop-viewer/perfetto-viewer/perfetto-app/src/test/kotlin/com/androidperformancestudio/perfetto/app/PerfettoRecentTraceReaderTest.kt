@@ -46,7 +46,7 @@ class PerfettoRecentTraceReaderTest {
         runBlocking {
             val directory = root.resolve("index")
             val existing = Files.writeString(root.resolve("trace.perfetto-trace"), "trace")
-            val missing = root.resolve("deleted.perfetto-trace")
+            val deleted = Files.writeString(root.resolve("deleted.perfetto-trace"), "deleted")
             val store = TraceSessionStore(directory)
             val artifact = PerfettoArtifactFactory(ByteArray(32) { 1 }).imported("artifact-1", existing, Instant.EPOCH)
 
@@ -72,7 +72,13 @@ class PerfettoRecentTraceReaderTest {
                     artifact = savedArtifact,
                 )
             store.save(session("available", existing, artifact))
-            store.save(session("deleted", missing))
+            store.save(session("deleted", deleted))
+            val deletedTrace =
+                assertIs<StudioResult.Success<List<TraceSession>>>(store.listRecent())
+                    .value
+                    .first { it.id == "deleted" }
+                    .traceFile
+            Files.delete(deletedTrace)
             val index = directory.resolve("sessions.json")
             val before = Files.readString(index)
 
@@ -80,10 +86,14 @@ class PerfettoRecentTraceReaderTest {
 
             assertEquals(listOf("available"), items.map(PerfettoRecentTrace::sessionId))
             assertEquals(listOf("available"), PerfettoRecentTraceReader(directory).listRecent(1).map(PerfettoRecentTrace::sessionId))
-            assertEquals(existing, items.single().traceFile)
-            assertEquals("com.example.app", items.single().packageName)
+            val item = items.single()
+            assertEquals(directory.resolve("traces").toAbsolutePath().normalize(), item.traceFile.parent)
+            assertEquals("trace", Files.readString(item.traceFile))
+            assertEquals("com.example.app", item.packageName)
             assertEquals(before, Files.readString(index))
             val storedSessions = assertIs<StudioResult.Success<List<TraceSession>>>(store.listRecent()).value
-            assertEquals(artifact, storedArtifactForTrace(storedSessions, existing))
+            val storedArtifact = storedArtifactForTrace(storedSessions, item.traceFile)
+            assertEquals(artifact.id, storedArtifact?.id)
+            assertEquals(item.traceFile.toString(), storedArtifact?.location?.value)
         }
 }

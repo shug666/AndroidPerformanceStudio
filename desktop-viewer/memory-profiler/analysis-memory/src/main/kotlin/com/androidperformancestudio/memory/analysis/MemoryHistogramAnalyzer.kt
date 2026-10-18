@@ -5,6 +5,7 @@ import com.androidperformancestudio.memory.model.HeapClass
 import com.androidperformancestudio.memory.model.HeapDump
 import com.androidperformancestudio.memory.model.HeapHistogram
 import com.androidperformancestudio.memory.model.HeapObject
+import com.androidperformancestudio.memory.model.HeapSegment
 import com.androidperformancestudio.memory.model.HeapSummary
 import com.androidperformancestudio.memory.model.MemoryHeapNames
 
@@ -32,6 +33,18 @@ class MemoryHistogramAnalyzer {
         val depthByName = hierarchyDepthByName(heapDump)
         var objectCount = 0
         var shallowSize = 0L
+        val heapSizes = linkedMapOf<String, Long>()
+        val heapCounts = linkedMapOf<String, Int>()
+
+        fun recordHeap(
+            objectId: Long,
+            size: Long,
+        ): String? {
+            val name = heapDump.heapByObjectId[objectId] ?: return null
+            heapSizes[name] = heapSizes.getOrDefault(name, 0L) + size
+            heapCounts[name] = heapCounts.getOrDefault(name, 0) + 1
+            return name
+        }
 
         fun accumulate(objects: Iterable<HeapObject>) {
             objects.forEach { heapObject ->
@@ -47,6 +60,7 @@ class MemoryHistogramAnalyzer {
                         heapObject.shallowSize,
                         retainedSizes[heapObject.objectId],
                         (heapObject as? com.androidperformancestudio.memory.model.HeapInstance)?.nativeSizeBytes,
+                        recordHeap(heapObject.objectId, heapObject.shallowSize),
                     )
             }
         }
@@ -71,6 +85,7 @@ class MemoryHistogramAnalyzer {
                     classObjectShallowSize,
                     retainedSizes[heapClass.objectId],
                     null,
+                    recordHeap(heapClass.objectId, classObjectShallowSize),
                 )
         }
 
@@ -85,13 +100,9 @@ class MemoryHistogramAnalyzer {
                         obfuscatedClassName =
                             deobfuscator?.obfuscatedName(className)?.takeIf { it != className },
                         hierarchyDepth = depthByName[className],
-                        nativeSize = totals.nativeSize.takeIf { it > 0L },
-                        // A heap dump is a point-in-time classifier: the number of live objects
-                        // is the only allocation metric it can prove. Deallocations and deltas
-                        // intentionally remain unavailable instead of being fabricated.
-                        allocations = totals.instanceCount.toLong(),
-                        allocationsSize = totals.shallowSize,
+                        nativeSize = totals.nativeSize.takeIf { totals.hasNativeSize },
                         totalCount = totals.instanceCount.toLong(),
+                        heapNames = totals.heapNames,
                     )
                 }.sortedWith(sort.comparator)
 
@@ -101,6 +112,7 @@ class MemoryHistogramAnalyzer {
                     objectCount = objectCount,
                     shallowSize = shallowSize,
                     classCount = grouped.size,
+                    heapSegments = heapSizes.map { (name, size) -> HeapSegment(name, size, heapCounts.getValue(name)) },
                 ),
             classes = grouped,
         )
@@ -119,6 +131,9 @@ class MemoryHistogramAnalyzer {
             private set
         var nativeSize: Long = 0L
             private set
+        var hasNativeSize: Boolean = false
+            private set
+        val heapNames = linkedSetOf<String>()
         private val retainedSizesByObjectId = linkedMapOf<Long, Long>()
 
         fun add(
@@ -126,11 +141,14 @@ class MemoryHistogramAnalyzer {
             objectShallowSize: Long,
             objectRetainedSize: Long?,
             objectNativeSize: Long?,
+            objectHeapName: String?,
         ) {
             instanceCount += 1
             shallowSize += objectShallowSize
             objectRetainedSize?.let { retainedSizesByObjectId[objectId] = it }
             nativeSize += objectNativeSize ?: 0L
+            if (objectNativeSize != null) hasNativeSize = true
+            objectHeapName?.let(heapNames::add)
         }
 
         fun combinedRetainedSize(immediateDominators: Map<Long, Long?>): Long? {

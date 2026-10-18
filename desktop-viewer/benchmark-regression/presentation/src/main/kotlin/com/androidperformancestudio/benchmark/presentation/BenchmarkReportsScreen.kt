@@ -2,6 +2,7 @@
 
 package com.androidperformancestudio.benchmark.presentation
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,7 +29,6 @@ import com.androidperformancestudio.benchmark.model.BenchmarkReportEntry
 import com.androidperformancestudio.benchmark.model.CompatibilityIssue
 import com.androidperformancestudio.benchmark.model.GateDecision
 import com.androidperformancestudio.benchmark.model.GateReason
-import com.androidperformancestudio.benchmark.model.MetricComparison
 import com.androidperformancestudio.benchmark.model.RegressionClassification
 import com.androidperformancestudio.benchmark.presentation.generated.resources.*
 import com.androidperformancestudio.ui.DropdownSelector
@@ -73,20 +73,18 @@ public fun BenchmarkReportsScreen(
     actions: BenchmarkReportsActions = BenchmarkReportsActions(),
 ) {
     val colors = LocalViewerColors.current
-    Column(modifier = modifier.fillMaxSize().padding(StudioTokens.contentPadding)) {
-        TitleBlock(language)
-        Spacer(Modifier.height(StudioTokens.sectionGap))
+    Column(modifier = modifier.fillMaxSize().background(colors.workspace).padding(StudioTokens.compactContentPadding)) {
         BenchmarkToolbar(state, language, actions)
-        Spacer(Modifier.height(StudioTokens.sectionGap))
+        Spacer(Modifier.height(StudioTokens.panelGap))
         BenchmarkSummaryRow(state, language)
-        Spacer(Modifier.height(StudioTokens.sectionGap))
+        Spacer(Modifier.height(StudioTokens.panelGap))
         Row(
             modifier = Modifier.fillMaxWidth().weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
+            horizontalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
         ) {
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
+                verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
             ) {
                 BenchmarkComparisonTable(
                     state = state,
@@ -112,26 +110,6 @@ public fun BenchmarkReportsScreen(
             )
         }
         StatusLine(state, colors)
-    }
-}
-
-@Composable
-private fun TitleBlock(language: UiLanguage) {
-    val colors = LocalViewerColors.current
-    Column {
-        Text(
-            text = localizedStringResource(Res.string.reports_title, language),
-            color = colors.primaryText,
-            fontSize = ViewerTypography.pageTitle.fontSize,
-            lineHeight = ViewerTypography.pageTitle.lineHeight,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Text(
-            text = localizedStringResource(Res.string.reports_subtitle, language),
-            color = colors.secondaryText,
-            fontSize = ViewerTypography.secondary.fontSize,
-            lineHeight = ViewerTypography.secondary.lineHeight,
-        )
     }
 }
 
@@ -235,33 +213,44 @@ private fun BenchmarkSummaryRow(
     state: BenchmarkReportsState,
     language: UiLanguage,
 ) {
+    val colors = LocalViewerColors.current
     val gate = state.gate
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
+        horizontalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
     ) {
         StudioMetricCard(
             label = localizedStringResource(Res.string.compared_benchmarks, language),
             value = state.comparedCount.toString(),
             supportingText = state.report?.let { localizedStringResource(Res.string.gate_policy_version, language, state.gatePolicy.policyVersion) },
             modifier = Modifier.weight(1f),
+            tone = colors.info,
         )
         StudioMetricCard(
             label = localizedStringResource(Res.string.regressions, language),
             value = state.regressionCount.toString(),
             supportingText = localizedStringResource(Res.string.count_stable, language, state.stableCount),
             modifier = Modifier.weight(1f),
+            tone = if (state.regressionCount > 0) MaterialTheme.colorScheme.error else colors.secondaryText,
         )
         StudioMetricCard(
             label = localizedStringResource(Res.string.improvements, language),
             value = state.improvementCount.toString(),
             modifier = Modifier.weight(1f),
+            tone = if (state.improvementCount > 0) colors.success else colors.secondaryText,
         )
         StudioMetricCard(
             label = localizedStringResource(Res.string.release_gate, language),
             value = gate?.decision?.displayName(language) ?: "—",
             supportingText = gate?.let { localizedStringResource(Res.string.gate_policy_version, language, it.policyVersion) },
             modifier = Modifier.weight(1f),
+            tone =
+                when (gate?.decision) {
+                    GateDecision.PASS -> colors.success
+                    GateDecision.FAIL -> MaterialTheme.colorScheme.error
+                    GateDecision.INCONCLUSIVE -> colors.warning
+                    null -> colors.secondaryText
+                },
         )
     }
 }
@@ -276,7 +265,7 @@ private fun BenchmarkReportColumn(
     val colors = LocalViewerColors.current
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
     ) {
         StudioPanel(Modifier.fillMaxWidth()) {
             StudioPanelHeader(localizedStringResource(Res.string.report_summary, language))

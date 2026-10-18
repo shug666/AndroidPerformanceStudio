@@ -16,7 +16,6 @@ import com.androidperformancestudio.battery.model.BatteryDevice
 import com.androidperformancestudio.battery.model.BatteryTarget
 import com.androidperformancestudio.model.StudioResult
 import com.androidperformancestudio.platform.adb.AdbClient
-import com.androidperformancestudio.platform.adb.AdbDeviceState
 import com.androidperformancestudio.platform.adb.DefaultAdbClient
 import java.nio.file.Path
 import kotlin.time.Duration.Companion.seconds

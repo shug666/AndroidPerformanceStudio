@@ -7,38 +7,45 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class GpuIntegrationWorkspaceSourceTest {
-    private val source =
+    private val mainPage =
         Files.readString(
             Path.of("src/main/kotlin/com/androidperformancestudio/gpu/app/GpuIntegrationMainPage.kt"),
+        )
+    private val controller =
+        Files.readString(
+            Path.of("src/main/kotlin/com/androidperformancestudio/gpu/app/GpuIntegrationController.kt"),
         )
 
     @Test
     fun `workspace uses shared compact chrome`() {
-        assertTrue(source.contains("HeaderToolbar("))
-        assertFalse(source.contains("ProfilerMacOsToolbar"))
-        assertTrue(source.contains("ProfilerCompactButton"))
-        assertTrue(source.contains("onNavigateHome = onBack"))
-        assertTrue(source.contains("GpuIntegrationScreen("))
-        assertFalse(source.contains("import androidx.compose.material3.Button"))
+        assertTrue(mainPage.contains("HeaderToolbar("))
+        assertFalse(mainPage.contains("ProfilerMacOsToolbar"))
+        assertTrue(mainPage.contains("ProfilerCompactButton"))
+        assertTrue(mainPage.contains("onNavigateHome = onBack"))
+        assertTrue(mainPage.contains("GpuAnalysisHubScreen("))
+        assertFalse(mainPage.contains("import androidx.compose.material3.Button"))
     }
 
     @Test
     fun `artifact IO runs outside the compose thread`() {
-        assertTrue(source.contains("withContext(Dispatchers.IO)"))
-        assertTrue(source.contains("indexer.import("))
-        assertTrue(source.contains("indexer.verify(artifact)"))
-        assertTrue(source.contains("indexer.relocate(artifact"))
-        assertTrue(source.contains("store.save(updated)"))
+        assertTrue(controller.contains("withContext(io)"))
+        assertTrue(controller.contains("indexer.import("))
+        assertTrue(controller.contains("indexer.verify(artifact)"))
+        assertTrue(controller.contains("indexer.relocate(artifact"))
+        assertTrue(controller.contains(".also(store::save)"))
     }
 
     @Test
     fun `runtime availability controls each opening route`() {
-        assertTrue(source.contains("artifactAvailability(artifact"))
-        assertTrue(source.contains("ArtifactPrimaryAction.OPEN_PERFETTO -> onOpenTrace(path)"))
-        assertTrue(source.contains("ArtifactPrimaryAction.OPEN_AGI -> locator.launchArtifact"))
-        assertTrue(source.contains("ArtifactPrimaryAction.LAUNCH_AGI -> locator.launch"))
-        assertTrue(source.contains("ArtifactPrimaryAction.OPEN_DESKTOP -> Desktop.getDesktop().open"))
-        assertTrue(source.contains("onRevealArtifact = ::reveal"))
-        assertTrue(source.contains("onRelocateArtifact = ::relocate"))
+        assertTrue(mainPage.contains("controller.openArtifact("))
+        assertTrue(mainPage.contains("val location = indexer.resolveLocation(artifact)"))
+        assertTrue(controller.contains("artifactAvailability(indexedArtifact"))
+        assertTrue(controller.contains("availability.locationStatus == ArtifactLocationStatus.AVAILABLE"))
+        assertTrue(mainPage.contains("ArtifactPrimaryAction.OPEN_PERFETTO -> onOpenTrace(path)"))
+        assertTrue(mainPage.contains("ArtifactPrimaryAction.OPEN_AGI -> withContext(Dispatchers.IO) { locator.launchArtifact"))
+        assertTrue(mainPage.contains("ArtifactPrimaryAction.LAUNCH_AGI -> withContext(Dispatchers.IO) { locator.launch"))
+        assertTrue(mainPage.contains("ArtifactPrimaryAction.OPEN_DESKTOP -> withContext(Dispatchers.IO) { Desktop.getDesktop().open"))
+        assertTrue(mainPage.contains("onRevealArtifact = ::reveal"))
+        assertTrue(mainPage.contains("onRelocateArtifact = ::relocate"))
     }
 }

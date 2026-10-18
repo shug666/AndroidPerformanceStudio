@@ -1,6 +1,5 @@
 package com.androidperformancestudio.startup.presentation
 
-import com.androidperformancestudio.startup.model.StartupStatistics
 import com.androidperformancestudio.startup.presentation.generated.resources.Res
 import com.androidperformancestudio.startup.presentation.generated.resources.cold
 import com.androidperformancestudio.startup.presentation.generated.resources.exact
@@ -93,36 +92,63 @@ class StartupProfilerLocalizationTest {
     }
 
     @Test
-    fun `selected run waterfall appears before the runs table and detail`() {
-        val results = source.substringAfter("private fun ResultsPane(").substringBefore("private fun MetricCard(")
+    fun `Startup consumes shared workspace styling without applying a second local palette`() {
+        val controls =
+            Files.readString(
+                Path.of(
+                    "src/main/kotlin/com/androidperformancestudio/startup/presentation/StartupWorkspaceControls.kt",
+                ),
+            )
+        val metrics =
+            Files.readString(
+                Path.of("src/main/kotlin/com/androidperformancestudio/startup/presentation/StartupWorkspaceMetrics.kt"),
+            )
 
-        assertTrue(results.indexOf("StartupWaterfallChart(selected, language)") < results.indexOf("StudioDataTable("))
-        assertTrue(results.indexOf("StudioDataTable(") < results.indexOf("RunDetail(selected, actions, language)"))
-        assertTrue(results.indexOf("RunDetail(selected, actions, language)") < results.indexOf("BaselineComparison(comparison, language)"))
+        assertFalse(controls.contains("StudioWorkspaceHeader("))
+        assertTrue(metrics.contains("StudioMetricCard("))
+        assertFalse(source.contains("startupWorkspaceColors"))
+        assertFalse(controls.contains("startupWorkspaceColors"))
     }
 
     @Test
-    fun `commercial metric cards retain sample count and low tail resolution warning`() {
-        val statistics =
-            StartupStatistics(
-                count = 3,
-                missingCount = 0,
-                minimumMs = 10.0,
-                maximumMs = 30.0,
-                medianMs = 20.0,
-                meanMs = 20.0,
-                p90Ms = 30.0,
-                p95Ms = 30.0,
-                standardDeviationMs = 10.0,
-                medianAbsoluteDeviationMs = 10.0,
-                p90LowResolution = true,
-            )
+    fun `operation messages errors and progress follow the analysis cards and baseline comparison`() {
+        val workspace =
+            source
+                .substringAfter("private fun StartupMainWorkspace(")
+                .substringBefore("private fun StartupEvidenceRail(")
+        val scenario = workspace.indexOf("StartupScenarioControls(state, actions, language)")
+        val metrics = workspace.indexOf("StartupMetricOverview(state.analysis, language)")
+        val comparison = workspace.indexOf("StartupBaselineComparison(state, actions, language)")
 
-        assertTrue(source.contains("StudioMetricCard("))
-        assertTrue(source.contains("statistics.metricSupportingText(language)"))
-        assertEquals(
-            "p90 30.0 ms · n=3\np95 30.0 ms · n=3\nTail percentile resolution is low for this sample count.",
-            statistics.metricSupportingText(UiLanguage.ENGLISH),
-        )
+        assertTrue(scenario >= 0 && metrics > scenario)
+        assertTrue(comparison > metrics)
+        listOf("state.operationMessage", "state.errorMessage", "startup-progress").forEach { marker ->
+            assertTrue(workspace.indexOf(marker) > comparison, "$marker must appear below the analysis content")
+        }
+    }
+
+    @Test
+    fun `multi-run waterfall appears before the selectable table and comparison`() {
+        val results =
+            source
+                .substringAfter("private fun StartupMainWorkspace(")
+                .substringBefore("private fun StartupEvidenceRail(")
+        val waterfallIndex =
+            results.indexOf("StartupRunsWaterfall(analysis.runs, selected, actions, language, state.isRunning)")
+        assertTrue(waterfallIndex < results.indexOf("StudioDataTable("))
+        val comparisonIndex = results.indexOf("StartupBaselineComparison(state, actions, language)")
+        assertTrue(results.indexOf("StudioDataTable(") < comparisonIndex)
+        assertTrue(source.contains("RunDetail(run, actions, language)"))
+    }
+
+    @Test
+    fun `commercial metrics retain P90 sample confidence and tail warning`() {
+        val metrics =
+            Files.readString(
+                Path.of("src/main/kotlin/com/androidperformancestudio/startup/presentation/StartupWorkspaceMetrics.kt"),
+            )
+        assertTrue(metrics.contains("metricEvidenceText("))
+        assertTrue(metrics.contains("it.firstFrame.p90Ms.formatMs()"))
+        assertTrue(metrics.contains("Res.string.low_tail_resolution"))
     }
 }

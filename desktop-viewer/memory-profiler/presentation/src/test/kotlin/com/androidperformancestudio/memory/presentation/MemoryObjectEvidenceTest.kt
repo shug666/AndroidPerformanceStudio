@@ -1,6 +1,7 @@
 package com.androidperformancestudio.memory.presentation
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import kotlin.test.Test
@@ -35,8 +36,9 @@ class MemoryObjectEvidenceTest {
                 )
             }
 
-            onNodeWithText("Reachability: not established by available GC Roots").assertExists()
-            onNodeWithText("Shallow Unavailable · Retained Unavailable · Estimated native size 4.0 KB").assertExists()
+            onAllNodesWithText("Unavailable")[0].assertExists()
+            onNodeWithText("4.0 KB").assertExists()
+            onNodeWithText("Object Inspector").assertExists()
             onNodeWithText("No fields in this parsed object").assertExists()
         }
 }

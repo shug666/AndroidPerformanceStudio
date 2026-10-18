@@ -29,8 +29,12 @@ import com.androidperformancestudio.ui_components.generated.resources.ic_nav_ben
 import com.androidperformancestudio.ui_components.generated.resources.ic_nav_method_recording
 import com.androidperformancestudio.ui_components.generated.resources.ic_nav_rail_collapse
 import com.androidperformancestudio.ui_components.generated.resources.ic_nav_rail_expand
+import com.androidperformancestudio.ui_components.generated.resources.ic_stat_artifact
+import com.androidperformancestudio.ui_components.generated.resources.ic_stat_attention
+import com.androidperformancestudio.ui_components.generated.resources.ic_stat_capability
 import com.androidperformancestudio.ui_components.generated.resources.ic_stat_device
 import com.androidperformancestudio.ui_components.generated.resources.ic_stat_history
+import com.androidperformancestudio.ui_components.generated.resources.ic_stat_verified
 import com.androidperformancestudio.ui_components.generated.resources.ic_action_play
 import com.androidperformancestudio.ui_components.generated.resources.ic_action_import
 import org.jetbrains.compose.resources.DrawableResource
@@ -63,6 +67,10 @@ class StudioIconRenderingTest {
             "nav_rail_expand" to Res.drawable.ic_nav_rail_expand,
             "stat_device" to Res.drawable.ic_stat_device,
             "stat_history" to Res.drawable.ic_stat_history,
+            "stat_artifact" to Res.drawable.ic_stat_artifact,
+            "stat_verified" to Res.drawable.ic_stat_verified,
+            "stat_attention" to Res.drawable.ic_stat_attention,
+            "stat_capability" to Res.drawable.ic_stat_capability,
             "action_play" to Res.drawable.ic_action_play,
             "action_import" to Res.drawable.ic_action_import,
         )

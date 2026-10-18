@@ -34,6 +34,21 @@ public data class StartupProfilerState(
 public data class StartupProfilerActions(
     val onSelectRun: (String) -> Unit = {},
     val onOpenTrace: ((String) -> Boolean)? = null,
+    val onSelectDevice: (String) -> Unit = {},
+    val onSelectTarget: (String) -> Unit = {},
+    val onSelectStartupType: (StartupType) -> Unit = {},
+    val onSelectCompilationMode: (CompilationMode) -> Unit = {},
+    val onSelectProfileSource: (StartupProfileSource) -> Unit = {},
+    val onUpdateBaselineProfileArtifact: (String) -> Unit = {},
+    val onUpdateCounts: (Int, Int) -> Unit = { _, _ -> },
+    val onUpdateTimeout: (Int) -> Unit = {},
+    val onSetPerfettoTraceEnabled: (Boolean) -> Unit = {},
+    val onUpdatePracticalThreshold: (Double) -> Unit = {},
+    val onRefresh: () -> Unit = {},
+    val onStartStop: () -> Unit = {},
+    val onImport: () -> Unit = {},
+    val onExportCsv: () -> Unit = {},
+    val onExportJson: () -> Unit = {},
 )
 
 public fun StartupProfilerState.withStartupType(type: StartupType): StartupProfilerState = copy(config = config.copy(requestedType = type))
@@ -45,5 +60,6 @@ public fun StartupProfilerState.withCompilationMode(mode: CompilationMode): Star
                 compilationMode = mode,
                 warmupRuns = if (mode == CompilationMode.SPEED_PROFILE) config.warmupRuns else 0,
                 profileSource = if (mode == CompilationMode.SPEED_PROFILE) config.profileSource else StartupProfileSource.UNVERIFIED,
+                baselineProfileArtifact = if (mode == CompilationMode.SPEED_PROFILE) config.baselineProfileArtifact else null,
             ),
     )

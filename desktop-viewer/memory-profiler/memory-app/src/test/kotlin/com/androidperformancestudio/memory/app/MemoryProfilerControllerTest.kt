@@ -30,6 +30,114 @@ private typealias TargetSubscription = AndroidTargetSubscription
 
 class MemoryProfilerControllerTest {
     @Test
+    fun `comparison keeps explicit snapshot identities across selection swap and close`() =
+        runTest {
+            val controller = MemoryProfilerController(FakeBackend())
+            controller.importHprof(Path.of("a.hprof"))
+            controller.importHprof(Path.of("b.hprof"))
+            controller.importHprof(Path.of("c.hprof"))
+            controller.compareSnapshots("a.hprof", "c.hprof")
+            controller.selectSnapshot("b.hprof")
+            assertEquals(
+                "a.hprof",
+                controller.state.value.heapDiff
+                    ?.beforeSnapshot
+                    ?.id,
+            )
+            assertEquals(
+                "c.hprof",
+                controller.state.value.heapDiff
+                    ?.afterSnapshot
+                    ?.id,
+            )
+            controller.compareSnapshots("c.hprof", "a.hprof")
+            assertEquals(
+                "c.hprof",
+                controller.state.value.heapDiff
+                    ?.beforeSnapshot
+                    ?.id,
+            )
+            controller.compareSnapshots("a.hprof", "a.hprof")
+            assertEquals(
+                "c.hprof",
+                controller.state.value.heapDiff
+                    ?.beforeSnapshot
+                    ?.id,
+            )
+            controller.closeSnapshot("c.hprof")
+            assertNull(controller.state.value.heapDiff)
+            assertEquals("b.hprof", controller.state.value.activeSnapshotId)
+        }
+
+    @Test
+    fun `closing the final snapshot clears Java heap evidence and object identity`() =
+        runTest {
+            val controller = MemoryProfilerController(FakeBackend())
+            controller.importHprof(Path.of("a.hprof"))
+            controller.selectInstance(1)
+            controller.togglePinnedInstance(1)
+            controller.closeSnapshot("a.hprof")
+            val state = controller.state.value
+            assertEquals(HeapSummary(), state.summary)
+            assertTrue(state.classes.isEmpty())
+            assertTrue(state.pinnedInstanceIds.isEmpty())
+            assertTrue(state.instanceHistory.isEmpty())
+            assertNull(state.selectedInstanceDetail)
+            assertNull(state.snapshotSummary)
+            assertNull(state.heapDiff)
+        }
+
+    @Test
+    fun `same object ids in different dumps do not carry navigation or pin identity`() =
+        runTest {
+            val controller = MemoryProfilerController(FakeBackend())
+            controller.importHprof(Path.of("a.hprof"))
+            controller.selectInstance(1)
+            controller.togglePinnedInstance(1)
+            controller.importHprof(Path.of("b.hprof"))
+            assertTrue(
+                controller.state.value.instanceHistory
+                    .isEmpty(),
+            )
+            assertTrue(
+                controller.state.value.pinnedInstanceIds
+                    .isEmpty(),
+            )
+            assertNull(controller.state.value.selectedInstanceDetail)
+            assertEquals(
+                "a.hprof",
+                controller.state.value.heapDiff
+                    ?.beforeSnapshot
+                    ?.id,
+            )
+            assertEquals(
+                "b.hprof",
+                controller.state.value.heapDiff
+                    ?.afterSnapshot
+                    ?.id,
+            )
+        }
+
+    @Test
+    fun `cancellation preserves the previously published snapshot`() =
+        runTest {
+            val started = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val controller =
+                MemoryProfilerController(
+                    FakeBackend(importStarted = started, importRelease = release, blockingImport = "b.hprof"),
+                )
+            controller.importHprof(Path.of("a.hprof"))
+            val snapshot = controller.state.value.snapshotSummary
+            val importing = launch { controller.importHprof(Path.of("b.hprof")) }
+            started.await()
+            controller.cancelActiveOperation()
+            importing.join()
+            assertEquals(snapshot, controller.state.value.snapshotSummary)
+            assertEquals("a.hprof", controller.state.value.activeSnapshotId)
+        }
+
+    @Test
     fun `the only online device is selected and its processes are loaded`() =
         runTest {
             val backend = FakeBackend()
@@ -257,6 +365,7 @@ class MemoryProfilerControllerTest {
         }
 
     private class FakeBackend(
+        private val blockingImport: String? = null,
         private val importFails: Boolean = false,
         private val importThrows: Boolean = false,
         private val importOutOfMemory: Boolean = false,
@@ -310,8 +419,10 @@ class MemoryProfilerControllerTest {
         }
 
         override suspend fun importHprof(file: Path): MemoryBackendResult<LoadedHeap> {
-            importStarted?.complete(Unit)
-            importRelease?.await()
+            if (blockingImport == null || file.fileName.toString() == blockingImport) {
+                importStarted?.complete(Unit)
+                importRelease?.await()
+            }
             return if (importOutOfMemory) {
                 throw OutOfMemoryError("test")
             } else if (importThrows) {
@@ -319,7 +430,10 @@ class MemoryProfilerControllerTest {
             } else if (importFails) {
                 MemoryBackendResult.Failure("Unable to analyze HPROF", "truncated")
             } else {
-                MemoryBackendResult.Success(loadedHeap())
+                val loaded = loadedHeap()
+                MemoryBackendResult.Success(
+                    loaded.copy(heapDump = loaded.heapDump.copy(id = file.fileName.toString(), rawHprofFile = file)),
+                )
             }
         }
 

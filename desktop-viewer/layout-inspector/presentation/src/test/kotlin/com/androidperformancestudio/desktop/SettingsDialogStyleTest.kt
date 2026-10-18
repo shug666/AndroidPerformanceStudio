@@ -5,6 +5,7 @@ import java.nio.file.Path
 import com.androidperformancestudio.ui.ViewerTypography
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -17,8 +18,14 @@ class SettingsDialogStyleTest {
     @Test
     fun `layout inspector settings sections use active viewer theme tokens`() {
         assertTrue(settingsContent.contains("val colors = LocalViewerColors.current"))
-        assertTrue(settingsContent.contains(".background(colors.sectionBackground, shape)"))
+        assertTrue(settingsContent.contains("StudioCard("))
+        assertTrue(settingsContent.contains("containerColor = colors.sectionBackground"))
         assertTrue(settingsContent.contains("colors.accent.copy(alpha = SETTINGS_SECTION_ACCENT_ALPHA)"))
+        assertTrue(settingsContent.contains("contentSpacing = 7.dp"))
+        val section = settingsContent.substringAfter("private fun SettingsSection(").substringBefore("private fun SettingsToggleRow(")
+        assertFalse(section.contains(".background("))
+        assertFalse(section.contains(".border("))
+        assertFalse(section.contains(".padding("))
         assertTrue(settingsContent.contains("color = colors.accent"))
     }
 

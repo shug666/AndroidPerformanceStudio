@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="memory_profiler">Memory Profiler</string>
     <string name="no_devices">No devices</string>
     <string name="no_processes">No processes</string>
     <string name="text">%1$s (%2$s)</string>

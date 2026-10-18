@@ -1,13 +1,21 @@
 package com.androidperformancestudio.battery.presentation
 
 import com.androidperformancestudio.battery.analysis.BatteryAnalysisResult
+import com.androidperformancestudio.battery.model.AttributionScope
 import com.androidperformancestudio.battery.model.BatteryDevice
 import com.androidperformancestudio.battery.model.BatteryExperimentConfig
 import com.androidperformancestudio.battery.model.BatteryExperimentResult
+import com.androidperformancestudio.battery.model.BatteryRun
 import com.androidperformancestudio.battery.model.BatteryTarget
+import com.androidperformancestudio.battery.storage.StoredBatterySession
 import com.androidperformancestudio.contracts.CaptureArtifact
 
 public data class BatteryProfilerState(
+    val sessions: List<StoredBatterySession> = emptyList(),
+    val viewedAttributionScope: AttributionScope? = null,
+    val viewedStoredSessionId: String? = null,
+    val isLoadingSession: Boolean = false,
+    val sessionError: String? = null,
     val devices: List<BatteryDevice> = emptyList(),
     val selectedDeviceSerial: String? = null,
     val targets: List<BatteryTarget> = emptyList(),
@@ -17,6 +25,7 @@ public data class BatteryProfilerState(
     val analysis: BatteryAnalysisResult? = null,
     val baseline: BatteryAnalysisResult? = null,
     val selectedRunId: String? = null,
+    val storedRuns: List<BatteryRun> = emptyList(),
     val isRefreshing: Boolean = false,
     val isRunning: Boolean = false,
     val isInteractiveActive: Boolean = false,

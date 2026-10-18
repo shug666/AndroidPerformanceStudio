@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import com.androidperformancestudio.memory.model.BitmapDumpImage
 import com.androidperformancestudio.memory.model.BitmapDumpSession
@@ -26,6 +27,8 @@ import com.androidperformancestudio.memory.model.NativeHeapAnalysis
 import com.androidperformancestudio.memory.model.NativeHeapSample
 import com.androidperformancestudio.memory.model.NativeHeapTrace
 import com.androidperformancestudio.memory.model.ObjectReference
+import com.androidperformancestudio.ui.UiLanguage
+import com.androidperformancestudio.ui.ViewerTheme
 import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.Test
@@ -34,6 +37,30 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class MemoryProfilerScreenTest {
+    @Test
+    fun `memory modes keep a border footer without a top banner in both themes`() {
+        listOf(UiLanguage.ENGLISH, UiLanguage.SIMPLIFIED_CHINESE).forEach { language ->
+            listOf(false, true).forEach { darkTheme ->
+                MemoryProfilerViewMode.entries.forEach { viewMode ->
+                    runDesktopComposeUiTest(width = 1000, height = 760) {
+                        setContent {
+                            ViewerTheme(darkTheme = darkTheme) {
+                                MemoryProfilerScreen(
+                                    state = MemoryProfilerState(viewMode = viewMode),
+                                    actions = MemoryProfilerActions(),
+                                    language = language,
+                                )
+                            }
+                        }
+                        val footer = onNodeWithTag("memory-profiler-status-bar").fetchSemanticsNode().boundsInRoot
+                        val root = onRoot().fetchSemanticsNode().boundsInRoot
+                        assertEquals(root.bottom, footer.bottom)
+                    }
+                }
+            }
+        }
+    }
+
     @Test
     fun `content does not duplicate toolbar or file actions`() =
         runDesktopComposeUiTest(width = 1000, height = 700) {
@@ -254,6 +281,33 @@ class MemoryProfilerScreenTest {
         }
 
     @Test
+    fun `leak suspect card expands and collapses its reference chain`() =
+        runDesktopComposeUiTest(width = 1000, height = 700) {
+            setContent {
+                MemoryProfilerScreen(
+                    state =
+                        loadedState().copy(
+                            leakSuspects =
+                                listOf(
+                                    LeakSuspect(
+                                        className = "com.example.LeakingActivity",
+                                        reason = "Retained by singleton",
+                                        referenceChain = listOf(ObjectReference("owner", 42L, "com.example.Singleton")),
+                                    ),
+                                ),
+                        ),
+                    actions = MemoryProfilerActions(),
+                )
+            }
+
+            onNodeWithText("owner", substring = true).assertDoesNotExist()
+            onNodeWithText("Retained by singleton", substring = true).performScrollTo().performClick()
+            onNodeWithText("owner", substring = true).assertExists()
+            onNodeWithText("Retained by singleton", substring = true).performScrollTo().performClick()
+            onNodeWithText("owner", substring = true).assertDoesNotExist()
+        }
+
+    @Test
     fun `busy state shows progress in the compact bottom status bar`() =
         runDesktopComposeUiTest(width = 1000, height = 700) {
             setContent {
@@ -320,10 +374,16 @@ class MemoryProfilerScreenTest {
 
             onNodeWithTag("memory-profiler-status-bar").assertExists()
             onNodeWithText("Capture failed:", useUnmergedTree = true).assertExists()
-            onNodeWithText("Target app may not be debuggable or permission was denied.", useUnmergedTree = true).assertExists()
+            onNodeWithText(
+                "Target app may not be debuggable or permission was denied.",
+                useUnmergedTree = true,
+            ).assertExists()
             onNodeWithText("Cleanup warning:", useUnmergedTree = true).assertExists()
             onNodeWithText("Warning:", useUnmergedTree = true).assertExists()
-            onNodeWithText("Install SDK Platform Tools to enable standard HPROF conversion.", useUnmergedTree = true).assertExists()
+            onNodeWithText(
+                "Install SDK Platform Tools to enable standard HPROF conversion.",
+                useUnmergedTree = true,
+            ).assertExists()
             onNodeWithText(
                 "Could not remove /data/local/tmp/heap-1.hprof; local analysis is still available.",
                 useUnmergedTree = true,
@@ -385,6 +445,7 @@ class MemoryProfilerScreenTest {
 
             onNodeWithText("Dominator tree").assertExists()
             onNodeWithText("0x2a · com.example.Root").performClick()
+            onNodeWithText("▸").performClick()
             onNodeWithText("0x2b · com.example.Child").assertExists()
             onNodeWithText("▾").performClick()
             onNodeWithText("0x2b · com.example.Child").assertDoesNotExist()
@@ -465,10 +526,12 @@ class MemoryProfilerScreenTest {
             }
 
             onNodeWithText("com.example.Child #2", useUnmergedTree = true).performClick()
-            onNodeWithText("owner ← com.example.Owner #3", useUnmergedTree = true).performClick()
-            onAllNodesWithText("↳ root → com.example.RootKeeper", useUnmergedTree = true)[1].performClick()
-            onNodeWithText("Back").assertExists()
-            onNodeWithText("Forward").assertExists()
+            onNodeWithText("Inbound references").performClick()
+            onNodeWithText("com.example.Owner #3", useUnmergedTree = true).performClick()
+            onNodeWithText("GC Root path").performClick()
+            onNodeWithText("1. com.example.RootKeeper", useUnmergedTree = true).performClick()
+            onNodeWithContentDescription("Back").assertExists()
+            onNodeWithContentDescription("Forward").assertExists()
             onNodeWithText("Pin object").performClick()
 
             assertEquals(listOf(2L, 3L, 4L), followed)
@@ -526,6 +589,7 @@ class MemoryProfilerScreenTest {
 
     private fun loadedState(): MemoryProfilerState =
         MemoryProfilerState(
+            viewMode = MemoryProfilerViewMode.Dashboard,
             devices = listOf(MemoryDeviceOption("emulator-5554", "Pixel 8")),
             selectedDeviceSerial = "emulator-5554",
             processes = listOf(MemoryProcessOption(pid = 42, name = "com.example")),

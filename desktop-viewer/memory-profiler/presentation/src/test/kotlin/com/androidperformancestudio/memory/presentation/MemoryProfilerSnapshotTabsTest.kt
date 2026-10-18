@@ -45,7 +45,7 @@ class MemoryProfilerSnapshotTabsTest {
     }
 
     @Test
-    fun `multi-line snapshot cards expose fields selection and independent close action`() =
+    fun `compact snapshot tabs expose evidence semantics selection and independent close action`() =
         runDesktopComposeUiTest(width = 1000, height = 720) {
             val selected = mutableListOf<String>()
             val closed = mutableListOf<String>()
@@ -63,10 +63,8 @@ class MemoryProfilerSnapshotTabsTest {
                 )
             }
 
-            onNodeWithText("Source: heap.hprof", useUnmergedTree = true).assertExists()
-            onNodeWithText("Loaded: 2026-09-24T01:02:03Z", useUnmergedTree = true).assertExists()
-            onNodeWithText("18 classes · 400 objects · 2 warnings", useUnmergedTree = true).assertExists()
-            onNodeWithText("Capabilities: GC_ROOTS, HEAP_GRAPH", useUnmergedTree = true).assertExists()
+            onNodeWithText("Source: heap.hprof", useUnmergedTree = true).assertDoesNotExist()
+            onNodeWithText("Loaded: 2026-09-24T01:02:03Z", useUnmergedTree = true).assertDoesNotExist()
             onNodeWithContentDescription(first.tabEvidence(UiLanguage.ENGLISH).accessibilityLabel).assertIsSelected()
             onNodeWithContentDescription(second.tabEvidence(UiLanguage.ENGLISH).accessibilityLabel).performClick()
             onNodeWithContentDescription("Close snapshot snapshot-7").performClick()

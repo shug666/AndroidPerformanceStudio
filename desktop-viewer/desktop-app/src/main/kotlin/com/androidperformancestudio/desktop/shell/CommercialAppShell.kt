@@ -130,8 +130,7 @@ internal fun CommercialAppShell(
             AppDestination.MEMORY_PROFILER,
             AppDestination.FRAME_PROFILER,
             AppDestination.STARTUP_PROFILER,
-            AppDestination.BATTERY_PROFILER,
-            AppDestination.NETWORK_PROFILER,
+            AppDestination.BATTERY_NETWORK,
             AppDestination.GPU_INSPECTOR,
             AppDestination.BENCHMARK_REGRESSION,
             AppDestination.SOURCE_WORKSPACES,
@@ -183,7 +182,7 @@ internal fun CommercialAppShell(
                 .focusable(),
     ) {
         val collapsed = resolvedNavigationRailCollapsed(maxWidth.value.toInt(), navigationRailCollapsed)
-        Column(modifier = Modifier.fillMaxSize().background(colors.canvasBackground)) {
+        Column(modifier = Modifier.fillMaxSize().background(colors.toolbar)) {
             Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 StudioNavigationRail(
                     items = navigationItems,

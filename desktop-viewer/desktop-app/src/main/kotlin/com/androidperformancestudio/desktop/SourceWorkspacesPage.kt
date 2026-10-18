@@ -30,8 +30,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -59,6 +57,7 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -77,10 +76,11 @@ import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.HEADER_TOOL_BAR_HEIGHT
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTypography
-import com.androidperformancestudio.ui.button.HomeButton
 import com.androidperformancestudio.ui.button.MacOSTextButton
 import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.search.CompactSearchField
+import com.androidperformancestudio.ui.studio.StudioCard
+import com.androidperformancestudio.ui.studio.StudioTokens
 import com.androidperformancestudio.ui.viewerOutlinedTextFieldColors
 import java.awt.Cursor
 import java.awt.Desktop
@@ -100,6 +100,7 @@ private enum class RemoteWorkspaceDialog {
 
 private val READY_SUMMARY_PATTERN = Regex("""(\d+) files · (\d+) symbols""")
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 internal fun SourceWorkspacesPage(
     language: UiLanguage,
@@ -144,15 +145,6 @@ internal fun SourceWorkspacesPage(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                HomeButton(
-                    contentDescription = localizedStringResource(Res.string.home, language),
-                    onClick = onNavigateHome,
-                )
-                Text(
-                    text = localizedStringResource(Res.string.source_workspaces, language),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                )
                 Spacer(Modifier.weight(1f))
                 MacOSTextButton(
                     localizedStringResource(Res.string.source_add_local, language),
@@ -648,46 +640,47 @@ private fun WorkspaceCard(
     onToggleAiUpload: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    Card(
-        onClick = onSelect,
-        colors = CardDefaults.cardColors(
-            containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-        ),
+    val contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
+    StudioCard(
+        modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onSelect),
+        containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+        contentColor = contentColor,
+        contentPadding = StudioTokens.compactContentPadding,
+        contentSpacing = 4.dp,
     ) {
-        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                workspace.displayName,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                softWrap = false,
-            )
-            Text(
+        Text(
+            workspace.displayName,
+            color = contentColor,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            softWrap = false,
+        )
+        Text(
+            localizedStringResource(
+                Res.string.source_status_summary,
+                language,
+                workspace.config.kind.localizedLabel(language),
+                workspace.phase.localizedLabel(language),
+            ),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (workspace.phase !in setOf(SourceWorkspacePhase.READY, SourceWorkspacePhase.FAILED)) {
+            LinearProgressIndicator(progress = { workspace.progress }, modifier = Modifier.fillMaxWidth())
+        }
+        workspace.localizedMessage(language)?.let { Text(it, color = contentColor, style = MaterialTheme.typography.bodySmall) }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            MacOSTextButton(localizedStringResource(Res.string.source_sync, language), onClick = onRefresh)
+            MacOSTextButton(
                 localizedStringResource(
-                    Res.string.source_status_summary,
-                    language,
-                    workspace.config.kind.localizedLabel(language),
-                    workspace.phase.localizedLabel(language),
-                ),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    if (workspace.allowAiSourceUpload) {
+                        Res.string.source_ai_upload_allowed
+                    } else {
+                        Res.string.source_ai_upload_blocked
+                    }, language
+                ), onClick = onToggleAiUpload
             )
-            if (workspace.phase !in setOf(SourceWorkspacePhase.READY, SourceWorkspacePhase.FAILED)) {
-                LinearProgressIndicator(progress = { workspace.progress }, modifier = Modifier.fillMaxWidth())
-            }
-            workspace.localizedMessage(language)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                MacOSTextButton(localizedStringResource(Res.string.source_sync, language), onClick = onRefresh)
-                MacOSTextButton(
-                    localizedStringResource(
-                        if (workspace.allowAiSourceUpload) {
-                            Res.string.source_ai_upload_allowed
-                        } else {
-                            Res.string.source_ai_upload_blocked
-                        }, language
-                    ), onClick = onToggleAiUpload
-                )
-                MacOSTextButton(localizedStringResource(Res.string.source_remove, language), onClick = onRemove)
-            }
+            MacOSTextButton(localizedStringResource(Res.string.source_remove, language), onClick = onRemove)
         }
     }
 }

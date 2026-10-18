@@ -64,7 +64,7 @@ flowchart TD
 | Startup Profiler | `AppDestination.STARTUP_PROFILER` | `StartupProfilerScreen` | `StartupProfilerMainPage`、`StartupProfilerController` |
 | Battery Profiler | `AppDestination.BATTERY_PROFILER` | `BatteryProfilerScreen` | `BatteryProfilerMainPage`、`BatteryProfilerController` |
 | Network Profiler | `AppDestination.NETWORK_PROFILER` | `NetworkProfilerScreen` | `NetworkProfilerMainPage` |
-| GPU Inspector | `AppDestination.GPU_INSPECTOR` | `GpuIntegrationScreen` | `GpuIntegrationMainPage` |
+| GPU Inspector | `AppDestination.GPU_INSPECTOR` | `GpuAnalysisHubScreen` | `GpuIntegrationMainPage` |
 | Benchmark Regression | `AppDestination.BENCHMARK_REGRESSION` | `BenchmarkRegressionScreen` | `BenchmarkRegressionMainPage` |
 | 统一设置窗口 | 全局菜单、Layout Inspector/CPU Profiler 设置入口 | `DesktopAppSettingsDialog` | `ApplicationUiSettingsStore`、`SimpleperfPreferencesStore` |
 
@@ -297,7 +297,9 @@ Toolbar：主页 / adb 路径 / 设备 / 刷新
 | --- | --- | --- |
 | MainPage、状态、工具栏和动作 | `desktop-viewer/gpu-inspector-integration/gpu-integration-app/src/main/kotlin/com/androidperformancestudio/gpu/app/GpuIntegrationMainPage.kt` | `GpuIntegrationMainPage` |
 | 页面状态和动作模型 | `desktop-viewer/gpu-inspector-integration/presentation/src/main/kotlin/com/androidperformancestudio/gpu/presentation/GpuIntegrationScreen.kt` | `GpuIntegrationState`、`GpuIntegrationActions` |
-| AGI 能力卡和产物列表 | `desktop-viewer/gpu-inspector-integration/presentation/src/main/kotlin/com/androidperformancestudio/gpu/presentation/GpuIntegrationScreen.kt` | `GpuIntegrationScreen` |
+| 索引事实派生（汇总、关联证据、搜索、格式化） | `desktop-viewer/gpu-inspector-integration/presentation/src/main/kotlin/com/androidperformancestudio/gpu/presentation/GpuHubModel.kt` | `GpuHubTab`、`GpuHubSummary`、`hubSummary`、`relatedArtifacts`、`filterArtifacts` |
+| 分析工具栏、汇总卡片、设备上下文和两个洞察栏 | `desktop-viewer/gpu-inspector-integration/presentation/src/main/kotlin/com/androidperformancestudio/gpu/presentation/GpuAnalysisHubScreen.kt` | `GpuAnalysisHubScreen`、`GpuAnalysisToolbar`、`GpuSummaryRow`、`GpuDeviceContextPanel`、`GpuCapabilityRail`、`GpuOpenWithRail` |
+| 产物栏、产物表、产物预览、关联分析和工具能力 | `desktop-viewer/gpu-inspector-integration/presentation/src/main/kotlin/com/androidperformancestudio/gpu/presentation/GpuAnalysisHubArtifacts.kt` | `GpuArtifactRail`、`GpuArtifactTable`、`GpuArtifactPreview`、`GpuRelatedEvidence`、`GpuToolCapability` |
 | AGI 和产物文件选择器 | `desktop-viewer/gpu-inspector-integration/gpu-integration-app/src/main/kotlin/com/androidperformancestudio/gpu/app/GpuIntegrationMainPage.kt` | `chooseExecutable`、`chooseArtifact` |
 
 ## 15. Benchmark Regression

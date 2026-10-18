@@ -5,7 +5,6 @@ import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.desktop_app.generated.resources.Res
 import com.androidperformancestudio.desktop_app.generated.resources.*
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,7 +26,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -65,7 +63,9 @@ import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.ProvideViewerThemeContext
 import com.androidperformancestudio.ui.ViewerThemeContext
 import com.androidperformancestudio.ui.viewerOutlinedTextFieldColors
+import com.androidperformancestudio.ui.studio.StudioCard
 import com.androidperformancestudio.ui.studio.StudioPanel
+import com.androidperformancestudio.ui.studio.StudioTokens
 import com.androidperformancestudio.ui.switch.MacOSSwitch
 import com.androidperformancestudio.ui.DropdownSelector
 import com.androidperformancestudio.ui_components.generated.resources.Res as UiComponentsRes
@@ -111,10 +111,9 @@ internal fun DesktopAppSettingsPage(
     ProvideViewerThemeContext(viewerThemeContext) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = LocalViewerColors.current.canvasBackground,
+            color = LocalViewerColors.current.workspace,
         ) {
             Column(Modifier.fillMaxSize()) {
-                SettingsPageHeader(language)
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline)
                 Row(Modifier.weight(1f)) {
                     SettingsSidebar(
@@ -123,7 +122,10 @@ internal fun DesktopAppSettingsPage(
                         onPageSelected = onPageSelected,
                     )
                     VerticalDivider(color = MaterialTheme.colorScheme.outline)
-                    Column(Modifier.weight(1f).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(
+                        Modifier.weight(1f).padding(StudioTokens.compactContentPadding),
+                        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
+                    ) {
                         if (persistenceErrorPage != null) {
                             Text(
                                 localizedStringResource(
@@ -205,18 +207,6 @@ private fun SettingsPageTitle(
 }
 
 @Composable
-private fun SettingsPageHeader(language: UiLanguage) {
-    val colors = LocalViewerColors.current
-    Text(
-        text = localizedStringResource(Res.string.settings, language),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        color = colors.primaryText,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.SemiBold,
-    )
-}
-
-@Composable
 private fun SettingsSidebar(
     selectedPage: SettingsPage,
     language: UiLanguage,
@@ -293,7 +283,7 @@ private fun AiSettingsContent(
 
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
     ) {
         SettingsPageTitle(
             text = localizedStringResource(Res.string.source_ai_settings, language),
@@ -488,7 +478,7 @@ private fun GeneralSettingsContent(
 ) {
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
     ) {
         SettingsPageTitle(localizedStringResource(Res.string.general, language))
         SettingsChoice(
@@ -540,7 +530,7 @@ private fun ConfigurationSettingsContent(
 ) {
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
     ) {
         SettingsPageTitle(localizedStringResource(Res.string.configuration, language))
         SettingsPageTitle(
@@ -694,15 +684,11 @@ private fun ThemeColorOption(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    StudioCard(
         modifier = modifier.height(38.dp).clickable(onClick = onClick),
-        shape = RoundedCornerShape(6.dp),
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-        border =
-            BorderStroke(
-                width = if (selected) 1.5.dp else 1.dp,
-                color = if (selected) color.color else MaterialTheme.colorScheme.outline,
-            ),
+        containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+        borderColor = if (selected) color.color else MaterialTheme.colorScheme.outline,
+        contentPadding = 0.dp,
     ) {
         Row(
             modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
@@ -715,6 +701,7 @@ private fun ThemeColorOption(
             Text(
                 text = label,
                 modifier = Modifier.weight(1f),
+                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                 maxLines = 1,
@@ -738,7 +725,7 @@ private fun AboutSettingsContent(
 ) {
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
     ) {
         SettingsPageTitle(
             text = localizedStringResource(Res.string.about, language),
@@ -870,7 +857,7 @@ private fun CompleteSimpleperfSettingsContent(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth().weight(1f),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
         ) {
             items(CaptureSettingsSection.entries, key = CaptureSettingsSection::name) { section ->
                 StudioPanel(modifier = Modifier.fillMaxWidth()) {

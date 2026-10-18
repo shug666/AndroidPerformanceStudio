@@ -13,6 +13,22 @@ class FrameProfilerWorkspaceSourceTest {
         )
 
     @Test
+    fun `retained workspace refreshes devices when it becomes active again`() {
+        assertTrue(source.contains("isActive: Boolean = true"))
+        assertTrue(source.contains("LaunchedEffect(controller, isActive)"))
+        assertTrue(source.contains("if (isActive) controller.refreshDevices()"))
+        val shell =
+            Files.readString(
+                Path.of("../../desktop-app/src/main/kotlin/com/androidperformancestudio/desktop/DesktopAppMainPage.kt"),
+            )
+        val frameRoute =
+            shell
+                .substringAfter("AppDestination.FRAME_PROFILER ->")
+                .substringBefore("AppDestination.STARTUP_PROFILER ->")
+        assertTrue(frameRoute.contains("isActive = active"))
+    }
+
+    @Test
     fun `workspace uses shared compact chrome without changing frame screen`() {
         assertTrue(source.contains("HeaderToolbar("))
         assertFalse(source.contains("ProfilerMacOsToolbar"))

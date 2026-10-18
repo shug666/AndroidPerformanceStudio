@@ -14,12 +14,29 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTheme
+import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class SimpleperfAiInsightDrawerTest {
+    @Test
+    fun `finding cards use the shared card without replacing the structural drawer`() {
+        val source = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/SimpleperfAiInsightDrawer.kt"))
+        val finding = source.substringAfter("private fun SimpleperfAiFindingCard(")
+        val drawer =
+            source
+                .substringAfter("internal fun SimpleperfAiInsightDrawer(")
+                .substringBefore("private fun SimpleperfAiFindingCard(")
+
+        assertTrue(finding.contains("StudioCard(Modifier.fillMaxWidth())"))
+        assertTrue(finding.contains("onOpenSourceCandidate(candidateId)"))
+        assertTrue(drawer.contains("StudioPanel(modifier.testTag(\"simpleperf-ai-insight-drawer\"))"))
+        assertTrue(drawer.contains(".verticalScroll(rememberScrollState())"))
+    }
+
     @Test
     fun `wide workspace docks insights and close restores the workspace`() =
         runDesktopComposeUiTest(width = 1300, height = 700) {

@@ -2,12 +2,15 @@
 
 package com.androidperformancestudio.startup.export
 
+import com.androidperformancestudio.contracts.DeviceIdentityPseudonymizer
 import com.androidperformancestudio.startup.analysis.StartupAnalyzer
+import com.androidperformancestudio.startup.analysis.StartupComparisonStatus
 import com.androidperformancestudio.startup.model.CompilationMode
 import com.androidperformancestudio.startup.model.EvidenceConfidence
 import com.androidperformancestudio.startup.model.PlatformLaunchMetrics
 import com.androidperformancestudio.startup.model.StartupCompilationEvidence
 import com.androidperformancestudio.startup.model.StartupEnvironmentEvidence
+import com.androidperformancestudio.startup.model.StartupMetricEvidence
 import com.androidperformancestudio.startup.model.StartupMilestone
 import com.androidperformancestudio.startup.model.StartupMilestoneKind
 import com.androidperformancestudio.startup.model.StartupPerfettoPhaseAttribution
@@ -16,14 +19,17 @@ import com.androidperformancestudio.startup.model.StartupPerfettoSlice
 import com.androidperformancestudio.startup.model.StartupProfileSource
 import com.androidperformancestudio.startup.model.StartupRawEvidence
 import com.androidperformancestudio.startup.model.StartupRun
+import com.androidperformancestudio.startup.model.StartupRunContext
 import com.androidperformancestudio.startup.model.StartupSource
 import com.androidperformancestudio.startup.model.StartupTraceEvidence
 import com.androidperformancestudio.startup.model.StartupType
 import java.nio.file.Files
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 
 class StartupExportersTest {
     @Test
@@ -58,6 +64,11 @@ class StartupExportersTest {
         val original = startupAnalysisFixture()
         val report = Files.createTempFile("startup-import", ".json")
         StartupJsonExporter().export(original, report)
+        val exported = Files.readString(report)
+
+        assertContains(exported, "\"deviceLocalId\"")
+        assertFalse(exported.contains("fixture-device-serial"))
+        assertFalse(exported.contains("\"deviceSerial\""))
 
         val imported = StartupJsonImporter().import(report)
 
@@ -78,6 +89,12 @@ class StartupExportersTest {
             assertEquals("event", rawEvidence.eventLogOutput)
             assertEquals("compile", rawEvidence.compilationOutput)
             assertEquals(true, rawEvidence.agentAvailable)
+            assertEquals(
+                DeviceIdentityPseudonymizer().localId("fixture-device-serial").value,
+                context?.deviceSerial,
+            )
+            assertEquals("dev.sample", context?.packageName)
+            assertEquals("dev.sample/.MainActivity", context?.componentName)
             assertEquals(StartupProfileSource.BASELINE_PROFILE_PLUGIN, compilationEvidence?.profileSource)
             assertEquals("baseline-prof.txt#abc", compilationEvidence?.baselineProfileArtifact)
             assertEquals("Pixel", environmentEvidence?.deviceModel)
@@ -117,6 +134,117 @@ class StartupExportersTest {
         assertEquals(null, run.context)
         assertEquals(null, run.compilationEvidence)
     }
+
+    @Test
+    fun `imports legacy raw device identity as a local pseudonym and preserves it on reexport`() {
+        val report = Files.createTempFile("startup-import-legacy-identity", ".json")
+        Files.writeString(
+            report,
+            """{"schemaVersion":1,"runs":[{"iteration":1,"runId":"legacy","requestedType":"COLD","observedType":"COLD","rawEvidence":{"amStartOutput":"raw"},"context":{"deviceSerial":"legacy-device-serial","packageName":"dev.sample","componentName":"dev.sample/.MainActivity"}}]}""",
+        )
+
+        val imported = StartupJsonImporter().import(report)
+        val expectedId = DeviceIdentityPseudonymizer().localId("legacy-device-serial").value
+        assertEquals(
+            expectedId,
+            imported.runs
+                .single()
+                .context
+                ?.deviceSerial,
+        )
+
+        StartupJsonExporter().export(imported, report)
+
+        val reexported = Files.readString(report)
+        assertContains(reexported, expectedId)
+        assertFalse(reexported.contains("legacy-device-serial"))
+        assertFalse(reexported.contains("\"deviceSerial\""))
+        assertEquals(
+            expectedId,
+            StartupJsonImporter()
+                .import(report)
+                .runs
+                .single()
+                .context
+                ?.deviceSerial,
+        )
+    }
+
+    @Test
+    fun `current device local identity takes precedence over a legacy raw serial`() {
+        val localId = DeviceIdentityPseudonymizer().localId("current-device").value
+        val report = Files.createTempFile("startup-import-current-identity", ".json")
+        Files.writeString(
+            report,
+            """{"schemaVersion":1,"runs":[{"iteration":1,"runId":"current","requestedType":"COLD","observedType":"COLD","rawEvidence":{"amStartOutput":"raw"},"context":{"deviceLocalId":"$localId","deviceSerial":"legacy-device-serial","packageName":"dev.sample","componentName":"dev.sample/.MainActivity"}}]}""",
+        )
+
+        assertEquals(
+            localId,
+            StartupJsonImporter()
+                .import(report)
+                .runs
+                .single()
+                .context
+                ?.deviceSerial,
+        )
+    }
+
+    @Test
+    fun `rejects malformed current device identity instead of falling back to a raw serial`() {
+        val report = Files.createTempFile("startup-import-invalid-identity", ".json")
+        Files.writeString(
+            report,
+            """{"schemaVersion":1,"runs":[{"iteration":1,"runId":"invalid","requestedType":"COLD","observedType":"COLD","rawEvidence":{"amStartOutput":"raw"},"context":{"deviceLocalId":"not-a-pseudonym","deviceSerial":"legacy-device-serial","packageName":"dev.sample","componentName":"dev.sample/.MainActivity"}}]}""",
+        )
+
+        assertFailsWith<IllegalArgumentException> { StartupJsonImporter().import(report) }
+    }
+
+    @Test
+    fun `rejects a context whose device identity is missing`() {
+        val report = Files.createTempFile("startup-import-missing-identity", ".json")
+        Files.writeString(
+            report,
+            """{"schemaVersion":1,"runs":[{"iteration":1,"runId":"missing","requestedType":"COLD","observedType":"COLD","rawEvidence":{"amStartOutput":"raw"},"context":{"packageName":"dev.sample","componentName":"dev.sample/.MainActivity"}}]}""",
+        )
+
+        val error = assertFailsWith<IllegalArgumentException> { StartupJsonImporter().import(report) }
+        assertContains(error.message.orEmpty(), "Startup context device identity is missing")
+    }
+
+    @Test
+    fun `live startup compares with its own exported and imported cohort`() {
+        val analyzer = StartupAnalyzer()
+        val fixture = startupAnalysisFixture().runs.single()
+        val live =
+            analyzer.analyze(
+                List(3) { index ->
+                    fixture.copy(
+                        id = "comparable-$index",
+                        iteration = index + 1,
+                        observedType = StartupType.COLD,
+                        platform = PlatformLaunchMetrics(totalTimeMs = 100L + index, displayedTimeMs = 100L + index),
+                        ttidEvidence = StartupMetricEvidence(StartupSource.EVENT_LOG, EvidenceConfidence.EXACT),
+                        environmentEvidence = StartupEnvironmentEvidence("Pixel", 35, false, 80, true, 0, Instant.EPOCH),
+                    )
+                },
+            )
+        val report = Files.createTempFile("startup-live-import-comparison", ".json")
+        StartupJsonExporter().export(live, report)
+
+        val imported = StartupJsonImporter().import(report)
+
+        assertEquals(StartupComparisonStatus.NO_CHANGE, analyzer.compare(live, imported).status)
+        assertEquals(StartupComparisonStatus.NO_CHANGE, analyzer.compare(imported, live).status)
+        assertEquals(
+            "fixture-device-serial",
+            live.runs
+                .first()
+                .context
+                ?.deviceSerial,
+        )
+    }
 }
 
 private fun startupAnalysisFixture() =
@@ -155,6 +283,7 @@ private fun startupAnalysisFixture() =
                         ),
                     ),
                 warnings = listOf("Warm launch observed"),
+                context = StartupRunContext("fixture-device-serial", "dev.sample", "dev.sample/.MainActivity"),
                 rawEvidence =
                     StartupRawEvidence(
                         amStartOutput = "Status: ok",

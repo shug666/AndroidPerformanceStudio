@@ -4,12 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,12 +16,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -41,6 +37,7 @@ import com.androidperformancestudio.adb.AndroidTargetMonitors
 import com.androidperformancestudio.model.ErrorCategory
 import com.androidperformancestudio.model.StudioError
 import com.androidperformancestudio.model.StudioResult
+import com.androidperformancestudio.perfetto.analysis.DiagnosticCategory
 import com.androidperformancestudio.perfetto.analysis.DiagnosticQuery
 import com.androidperformancestudio.perfetto.analysis.DiagnosticResult
 import com.androidperformancestudio.perfetto.analysis.PerfettoDiagnostics
@@ -59,80 +56,55 @@ import com.androidperformancestudio.perfetto.presentation.PerfettoCapturePage
 import com.androidperformancestudio.perfetto.presentation.PerfettoCompactButton
 import com.androidperformancestudio.perfetto.presentation.PerfettoCompactTextField
 import com.androidperformancestudio.perfetto.presentation.PerfettoStatusDot
-import com.androidperformancestudio.perfetto.presentation.PerfettoWorkspacePanel
+import com.androidperformancestudio.perfetto.presentation.TraceAnalyzerWorkspace
+import com.androidperformancestudio.perfetto.presentation.TraceAnalyzerWorkspaceActions
+import com.androidperformancestudio.perfetto.presentation.TraceAnalyzerWorkspaceState
+import com.androidperformancestudio.perfetto.presentation.TraceInsightCategory
+import com.androidperformancestudio.perfetto.presentation.TraceInsightEvidence
+import com.androidperformancestudio.perfetto.presentation.TraceInsightSeverity
+import com.androidperformancestudio.perfetto.presentation.TraceWorkspaceArtifact
+import com.androidperformancestudio.perfetto.presentation.TraceWorkspaceSession
 import com.androidperformancestudio.perfetto.storage.TraceSessionStore
 import com.androidperformancestudio.perfetto.uiserver.PerfettoUiServer
 import com.androidperformancestudio.perfetto_app.generated.resources.Res
 import com.androidperformancestudio.perfetto_app.generated.resources.adb
 import com.androidperformancestudio.perfetto_app.generated.resources.adb_path
-import com.androidperformancestudio.perfetto_app.generated.resources.captured_traces_will_appear_here
-import com.androidperformancestudio.perfetto_app.generated.resources.delete
 import com.androidperformancestudio.perfetto_app.generated.resources.device_connected
 import com.androidperformancestudio.perfetto_app.generated.resources.device_refresh_failed
 import com.androidperformancestudio.perfetto_app.generated.resources.device_status
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_art_allocation_churn_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_art_allocation_churn_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_art_class_loading_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_art_class_loading_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_art_class_verification_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_art_class_verification_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_art_gc_events_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_art_gc_events_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_art_jit_dex2oat_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_art_jit_dex2oat_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_binder_frame_alignment_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_binder_frame_alignment_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_binder_ipc_long_tail_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_binder_ipc_long_tail_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_binder_latency_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_binder_latency_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_binder_system_server_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_binder_system_server_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_block_io_pressure_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_block_io_pressure_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_cpu_frequency_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_cpu_frequency_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_cpu_hotspots_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_cpu_hotspots_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_dvfs_residency_description
+import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_data_source_limitation
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_dvfs_residency_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_file_io_syscalls_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_file_io_syscalls_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_frame_jank_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_frame_jank_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_fsync_calls_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_fsync_calls_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_gpu_frequency_residency_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_gpu_frequency_residency_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_input_latency_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_input_latency_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_main_thread_blocked_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_main_thread_blocked_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_memory_timeline_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_memory_timeline_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_page_faults_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_page_faults_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_power_frame_alignment_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_power_frame_alignment_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_power_rails_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_power_rails_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_run_queue_description
+import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_result_rows
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_run_queue_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_sched_switch_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_sched_switch_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_sched_waking_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_sched_waking_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_sqlite_activity_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_sqlite_activity_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_sqlite_lock_wait_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_sqlite_lock_wait_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_thermal_throttling_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_thermal_throttling_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_thread_states_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_thread_states_title
-import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_wakeup_latency_description
 import com.androidperformancestudio.perfetto_app.generated.resources.diagnostic_wakeup_latency_title
-import com.androidperformancestudio.perfetto_app.generated.resources.export
 import com.androidperformancestudio.perfetto_app.generated.resources.export_trace
 import com.androidperformancestudio.perfetto_app.generated.resources.export_config_dialog
 import com.androidperformancestudio.perfetto_app.generated.resources.failed_to_export_trace
@@ -142,12 +114,8 @@ import com.androidperformancestudio.perfetto_app.generated.resources.no_online_d
 import com.androidperformancestudio.perfetto_app.generated.resources.open
 import com.androidperformancestudio.perfetto_app.generated.resources.open_perfetto_trace
 import com.androidperformancestudio.perfetto_app.generated.resources.perfetto_traces
-import com.androidperformancestudio.perfetto_app.generated.resources.recent_sessions
 import com.androidperformancestudio.perfetto_app.generated.resources.refresh
-import com.androidperformancestudio.perfetto_app.generated.resources.running_diagnostic
-import com.androidperformancestudio.perfetto_app.generated.resources.select_a_diagnostic_on_the_left_to_view_its_result
 import com.androidperformancestudio.perfetto_app.generated.resources.select_device
-import com.androidperformancestudio.perfetto_app.generated.resources.trace_diagnostics
 import com.androidperformancestudio.platform.adb.AdbCommandFailedException
 import com.androidperformancestudio.platform.adb.AdbCommandTimeoutException
 import com.androidperformancestudio.platform.adb.AdbException
@@ -181,6 +149,11 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 import kotlin.io.path.fileSize
+
+private data class DiagnosticOutcome(
+    val result: DiagnosticResult? = null,
+    val error: String? = null,
+)
 
 internal fun formatRecentSessionTimestamp(
     capturedAt: Instant,
@@ -270,8 +243,11 @@ fun FrameWindowScope.PerfettoMainPage(
     var analysisContext by remember { mutableStateOf<TraceAnalysisContext?>(null) }
     var analysisContexts by remember { mutableStateOf<TraceAnalysisContexts?>(null) }
     var diagnosticQuery by remember { mutableStateOf<DiagnosticQuery?>(null) }
-    var diagnosticResult by remember { mutableStateOf<String?>(null) }
+    var diagnosticOutcomes by remember { mutableStateOf<Map<String, DiagnosticOutcome>>(emptyMap()) }
     var diagnosticError by remember { mutableStateOf<String?>(null) }
+    var sessionSearchQuery by remember { mutableStateOf("") }
+    var selectedSessionId by remember { mutableStateOf<String?>(null) }
+    var captureVisible by remember { mutableStateOf(false) }
     var fileDialogOpen by remember { mutableStateOf(false) }
     var traceOpenJob by remember { mutableStateOf<Job?>(null) }
     val traceOpenMutex = remember { Mutex() }
@@ -293,7 +269,7 @@ fun FrameWindowScope.PerfettoMainPage(
     // Opening a trace has no side effects; launching a browser-side Perfetto UI is an explicit
     // user action via these entry points. The server, once started, stays up until the page
     // deactivates so the browser can refresh or switch between the official and local UI.
-    val launchInUi: (Path?, PerfettoUiServer.ServeMode) -> Unit = { requestedTraceFile, mode ->
+    val launchInUi: (Path?, PerfettoUiServer.ServeMode, Long?) -> Unit = { requestedTraceFile, mode, timestamp ->
         coroutineScope.launch(Dispatchers.IO) {
             val traceFile = requestedTraceFile ?: activeTraceFile ?: run {
                 diagnosticError = localizedStringResource(Res.string.no_active_trace, language)
@@ -302,18 +278,18 @@ fun FrameWindowScope.PerfettoMainPage(
             when (val started = uiServer.start(PerfettoUiServer.tryFindUiAssetsDir(), mode)) {
                 is StudioResult.Failure -> diagnosticError = started.error.message
                 is StudioResult.Success ->
-                    when (val opened = uiServer.openTrace(traceFile)) {
+                    when (val opened = uiServer.openTrace(traceFile, timestamp)) {
                         is StudioResult.Failure -> diagnosticError = opened.error.message
                         is StudioResult.Success -> diagnosticError = null
                     }
             }
         }
     }
-    val openInPerfettoUi: (Path?) -> Unit = { traceFile ->
-        launchInUi(traceFile, PerfettoUiServer.ServeMode.TRACE_ONLY)
+    val openInPerfettoUi: (Path?, Long?) -> Unit = { traceFile, timestamp ->
+        launchInUi(traceFile, PerfettoUiServer.ServeMode.TRACE_ONLY, timestamp)
     }
     val openInLocalPerfettoUi: () -> Unit = {
-        launchInUi(null, PerfettoUiServer.ServeMode.TRACE_AND_UI)
+        launchInUi(null, PerfettoUiServer.ServeMode.TRACE_AND_UI, null)
     }
     val exportRawTrace: (Path) -> Unit = { traceFile ->
         coroutineScope.launch(Dispatchers.IO) {
@@ -405,6 +381,7 @@ fun FrameWindowScope.PerfettoMainPage(
     }
     LaunchedEffect(captureState) {
         val completed = captureState as? PerfettoCaptureState.Completed ?: return@LaunchedEffect
+        captureVisible = false
         activeTraceFile = completed.traceFile
         activeArtifact = completed.metadata.artifact
         recentFiles = (listOf(completed.traceFile) + recentFiles).distinct().take(10)
@@ -422,16 +399,84 @@ fun FrameWindowScope.PerfettoMainPage(
                 artifact = completed.metadata.artifact,
             )
         when (val saved = sessionStore.save(session)) {
-            is StudioResult.Success -> sessions = listOf(session) + sessions.filterNot { it.id == session.id }
+            is StudioResult.Success -> {
+                when (val reloaded = sessionStore.listRecent()) {
+                    is StudioResult.Success -> {
+                        sessions = reloaded.value
+                        reloaded.value.firstOrNull { it.id == session.id }?.let { stored ->
+                            selectedSessionId = stored.id
+                            activeTraceFile = stored.traceFile
+                            activeArtifact = stored.artifact
+                        }
+                    }
+                    is StudioResult.Failure -> diagnosticError = reloaded.error.message
+                }
+            }
             is StudioResult.Failure -> diagnosticError = saved.error.message
         }
     }
     LaunchedEffect(activeTraceFile, activeArtifact) {
         val contextToClose = analysisContext
         analysisContext = null
-        diagnosticResult = null
+        diagnosticOutcomes = emptyMap()
+        diagnosticQuery = null
         diagnosticError = null
         withContext(Dispatchers.IO) { contextToClose?.close() }
+    }
+    val runDiagnostic: (DiagnosticQuery) -> Unit = { query ->
+        diagnosticQuery = query
+        diagnosticOutcomes = diagnosticOutcomes + (query.id to DiagnosticOutcome())
+        val artifact = activeArtifact
+        val traceFile = activeTraceFile
+        if (artifact == null || traceFile == null) {
+            diagnosticOutcomes =
+                diagnosticOutcomes +
+                (query.id to DiagnosticOutcome(error = "Trace evidence was not registered"))
+        } else {
+            coroutineScope.launch(Dispatchers.IO) {
+                fun recordFailure(message: String) {
+                    if (activeArtifact?.id == artifact.id) {
+                        diagnosticOutcomes =
+                            diagnosticOutcomes +
+                            (query.id to DiagnosticOutcome(error = message))
+                    }
+                }
+
+                val context =
+                    analysisContext ?: when (val located = TraceProcessorToolResolver().resolve()) {
+                        is StudioResult.Failure -> {
+                            recordFailure(located.error.message)
+                            return@launch
+                        }
+                        is StudioResult.Success -> {
+                            val registry =
+                                analysisContexts ?: TraceAnalysisContexts(located.value).also { analysisContexts = it }
+                            when (val opened = registry.open(artifact, traceFile)) {
+                                is StudioResult.Failure -> {
+                                    recordFailure(opened.error.message)
+                                    return@launch
+                                }
+                                is StudioResult.Success -> opened.value.also { analysisContext = it }
+                            }
+                        }
+                    }
+                when (val queryResult = context.query(query.typedQuery())) {
+                    is StudioResult.Success -> {
+                        if (activeArtifact?.id == artifact.id) {
+                            diagnosticOutcomes =
+                                diagnosticOutcomes +
+                                (
+                                    query.id to
+                                        DiagnosticOutcome(
+                                            result = DiagnosticResult(query.columns, queryResult.value),
+                                        )
+                                )
+                        }
+                    }
+                    is StudioResult.Failure -> recordFailure(queryResult.error.message)
+                }
+            }
+        }
     }
 
     PerfettoFileMenuBar(
@@ -492,10 +537,126 @@ fun FrameWindowScope.PerfettoMainPage(
         onExportRawTrace = { activeTraceFile?.let(exportRawTrace) },
         onOpenRecent = { path ->
             openTrace(path, sessions.firstOrNull { it.traceFile == path }?.artifact)
-            openInPerfettoUi(path)
+            openInPerfettoUi(path, null)
         },
         onClearRecent = { recentFiles = emptyList() },
     )
+
+    val workspaceArtifact =
+        activeArtifact?.let { artifact ->
+            TraceWorkspaceArtifact(
+                artifactId = artifact.id.value,
+                displayName =
+                    activeTraceFile
+                        ?.fileName
+                        ?.toString()
+                        .orEmpty()
+                        .ifBlank { artifact.id.value },
+                locationLabel = activeTraceFile?.toString().orEmpty(),
+                completenessLabel = artifact.completeness.name,
+                limitations = artifact.limitations.map { it.message } + artifact.warnings,
+                viewerAvailable = activeTraceFile?.let(Files::isRegularFile) == true,
+            )
+        }
+    val workspaceSessions =
+        sessions.map { session ->
+            TraceWorkspaceSession(
+                sessionId = session.id,
+                title = session.captureConfig.targetPackage ?: session.captureConfig.template.displayName,
+                capturedAtLabel = formatRecentSessionTimestamp(session.capturedAt),
+                durationLabel = formatTraceDuration(session.durationNanos),
+                artifact =
+                    session.artifact?.let { artifact ->
+                        TraceWorkspaceArtifact(
+                            artifactId = artifact.id.value,
+                            displayName =
+                                session.traceFile.fileName
+                                    ?.toString()
+                                    .orEmpty(),
+                            locationLabel = session.traceFile.toString(),
+                            completenessLabel = artifact.completeness.name,
+                            limitations = artifact.limitations.map { it.message } + artifact.warnings,
+                            viewerAvailable = Files.isRegularFile(session.traceFile),
+                        )
+                    },
+            )
+        }
+    val workspaceInsights =
+        activeArtifact
+            ?.let { artifact ->
+                PerfettoDiagnostics.all.map { query ->
+                    val outcome = diagnosticOutcomes[query.id]
+                    val result = outcome?.result
+                    TraceInsightEvidence(
+                        queryId = query.id,
+                        artifactId = artifact.id.value,
+                        title = query.localizedTitle(language),
+                        resultRowsSummary =
+                            result?.let {
+                                localizedStringResource(Res.string.diagnostic_result_rows, language, it.rows.size)
+                            },
+                        limitations =
+                            (artifact.limitations.map { it.message } + artifact.warnings).ifEmpty {
+                                listOf(localizedStringResource(Res.string.diagnostic_data_source_limitation, language))
+                            },
+                        error = outcome?.error,
+                        timestampNanos = result?.firstTimelineTimestampNanos(query),
+                        severity = if (outcome?.error != null) TraceInsightSeverity.WARNING else TraceInsightSeverity.INFO,
+                        category = query.workspaceCategory(),
+                    )
+                }
+            }.orEmpty()
+    val workspaceState =
+        TraceAnalyzerWorkspaceState(
+            sessions = workspaceSessions,
+            selectedSessionId = selectedSessionId,
+            searchQuery = sessionSearchQuery,
+            activeTrace = workspaceArtifact,
+            insights = workspaceInsights,
+            selectedQueryId = diagnosticQuery?.id,
+            captureVisible = captureVisible,
+            status = activeTraceFile?.fileName?.toString(),
+            error = diagnosticError,
+        )
+    val workspaceActions =
+        TraceAnalyzerWorkspaceActions(
+            onSearchChange = { sessionSearchQuery = it },
+            onSelectSession = { selectedSessionId = it },
+            onOpenSession = { sessionId ->
+                sessions.firstOrNull { it.id == sessionId }?.let { session ->
+                    selectedSessionId = session.id
+                    openTrace(session.traceFile, session.artifact)
+                }
+            },
+            onDeleteSession = { sessionId ->
+                coroutineScope.launch {
+                    when (val deleted = sessionStore.delete(sessionId)) {
+                        is StudioResult.Success -> {
+                            sessions = sessions.filterNot { it.id == sessionId }
+                            if (selectedSessionId == sessionId) selectedSessionId = null
+                        }
+                        is StudioResult.Failure -> diagnosticError = deleted.error.message
+                    }
+                }
+            },
+            onToggleCapture = { captureVisible = !captureVisible },
+            onRunDiagnostic = { queryId ->
+                PerfettoDiagnostics.all.firstOrNull { it.id == queryId }?.let(runDiagnostic)
+            },
+            onOpenInTimeline = { insight ->
+                val traceFile = activeTraceFile
+                val artifact = activeArtifact
+                if (traceFile != null && artifact?.id?.value == insight.artifactId) {
+                    openTrace(traceFile, artifact)
+                    insight.timestampNanos?.let { timestamp -> openInPerfettoUi(traceFile, timestamp) }
+                }
+            },
+            onOpenViewer = {
+                val traceFile = activeTraceFile
+                if (traceFile != null) openTrace(traceFile, activeArtifact)
+            },
+            onExport = { activeTraceFile?.let(exportRawTrace) },
+        )
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -531,12 +692,12 @@ fun FrameWindowScope.PerfettoMainPage(
                     modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 8.dp, end = 8.dp),
                 )
             }
-            Column(
+            TraceAnalyzerWorkspace(
+                state = workspaceState,
+                actions = workspaceActions,
+                language = language,
                 modifier = Modifier.fillMaxWidth().weight(1f),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().weight(if (activeTraceFile == null) 1f else 0.62f),
-                ) {
+                captureContent = {
                     PerfettoCapturePage(
                         captureState = captureState,
                         language = language,
@@ -550,81 +711,13 @@ fun FrameWindowScope.PerfettoMainPage(
                         onStopCapture = { coroutineScope.launch { captureSession.stopCapture() } },
                         onOpenTrace = { traceFile ->
                             openTrace(traceFile, sessions.firstOrNull { it.traceFile == traceFile }?.artifact)
-                            openInPerfettoUi(traceFile)
+                            openInPerfettoUi(traceFile, null)
                         },
                         onExportConfig = exportConfig,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.fillMaxSize(),
                     )
-                    VerticalDivider(
-                        modifier = Modifier.fillMaxHeight(),
-                        color = MaterialTheme.colorScheme.outline,
-                    )
-                    RecentSessionsPanel(
-                        language = language,
-                        sessions = sessions,
-                        onOpen = { session ->
-                            openTrace(session.traceFile, session.artifact)
-                            openInPerfettoUi(session.traceFile)
-                        },
-                        onDelete = { session ->
-                            coroutineScope.launch {
-                                when (val deleted = sessionStore.delete(session.id)) {
-                                    is StudioResult.Success -> sessions = sessions.filter { it.id != session.id }
-                                    is StudioResult.Failure -> diagnosticError = deleted.error.message
-                                }
-                            }
-                        },
-                        onExport = { session -> exportRawTrace(session.traceFile) },
-                        modifier = Modifier.width(240.dp).fillMaxHeight(),
-                    )
-                }
-                activeTraceFile?.let { traceFile ->
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-                    TraceDiagnosticsWorkspacePanel(
-                        language = language,
-                        traceFile = traceFile,
-                        selectedQuery = diagnosticQuery,
-                        result = diagnosticResult,
-                        error = diagnosticError,
-                        onRun = { query ->
-                            diagnosticQuery = query
-                            diagnosticResult = null
-                            diagnosticError = null
-                            coroutineScope.launch(Dispatchers.IO) {
-                                val artifact =
-                                    activeArtifact ?: run {
-                                        diagnosticError = "Trace evidence was not registered"
-                                        return@launch
-                                    }
-                                val context =
-                                    analysisContext ?: when (val located = TraceProcessorToolResolver().resolve()) {
-                                        is StudioResult.Failure -> {
-                                            diagnosticError = located.error.message
-                                            return@launch
-                                        }
-                                        is StudioResult.Success -> {
-                                            val registry =
-                                                analysisContexts ?: TraceAnalysisContexts(located.value).also { analysisContexts = it }
-                                            when (val opened = registry.open(artifact, traceFile)) {
-                                                is StudioResult.Failure -> {
-                                                    diagnosticError = opened.error.message
-                                                    return@launch
-                                                }
-                                                is StudioResult.Success -> opened.value.also { analysisContext = it }
-                                            }
-                                        }
-                                    }
-                                when (val queryResult = context.query(query.typedQuery())) {
-                                    is StudioResult.Success ->
-                                        diagnosticResult = DiagnosticResult(query.columns, queryResult.value).toPlainText()
-                                    is StudioResult.Failure -> diagnosticError = queryResult.error.message
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth().weight(0.38f),
-                    )
-                }
-            }
+                },
+            )
             PerfettoStatusBar(
                 devices = devices,
                 selectedDeviceSerial = selectedDeviceSerial,
@@ -651,7 +744,7 @@ fun FrameWindowScope.PerfettoMainPage(
             activeTraceFile = null
             activeArtifact = null
             diagnosticQuery = null
-            diagnosticResult = null
+            diagnosticOutcomes = emptyMap()
             diagnosticError = null
         }
     }
@@ -805,89 +898,6 @@ private fun InitialTraceNotice(
     }
 }
 
-@Composable
-@Suppress("ktlint:standard:function-naming")
-private fun RecentSessionsPanel(
-    language: UiLanguage,
-    sessions: List<TraceSession>,
-    onOpen: (TraceSession) -> Unit,
-    onDelete: (TraceSession) -> Unit,
-    onExport: (TraceSession) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    PerfettoWorkspacePanel(
-        title = localizedStringResource(Res.string.recent_sessions, language),
-        modifier = modifier,
-    ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            if (sessions.isEmpty()) {
-                Text(
-                    text = localizedStringResource(Res.string.captured_traces_will_appear_here, language),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = ViewerTypography.secondary.fontSize,
-                )
-            }
-            sessions.take(10).forEach { session ->
-                RecentSessionRow(
-                    session = session,
-                    onOpen = { onOpen(session) },
-                    onDelete = { onDelete(session) },
-                    onExport = { onExport(session) },
-                    language = language,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-@Suppress("ktlint:standard:function-naming")
-private fun RecentSessionRow(
-    session: TraceSession,
-    onOpen: () -> Unit,
-    onDelete: () -> Unit,
-    onExport: () -> Unit,
-    language: UiLanguage,
-) {
-    val shape = RoundedCornerShape(4.dp)
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(shape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(1.dp, MaterialTheme.colorScheme.outline, shape)
-                .padding(7.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text(
-            text = session.captureConfig.template.displayName,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontSize = ViewerTypography.secondary.fontSize,
-        )
-        Text(
-            text =
-                localizedStringResource(Res.string.mb_n, language, session.deviceModel, session.fileSizeBytes / 1024 / 1024) +
-                    formatRecentSessionTimestamp(session.capturedAt),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = ViewerTypography.label.fontSize,
-            lineHeight = ViewerTypography.secondary.lineHeight,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            PerfettoCompactButton(text = localizedStringResource(Res.string.open, language), onClick = onOpen)
-            PerfettoCompactButton(text = localizedStringResource(Res.string.export, language), onClick = onExport)
-            PerfettoCompactButton(text = localizedStringResource(Res.string.delete, language), onClick = onDelete)
-        }
-    }
-}
-
 internal suspend fun discoverPerfettoDevices(
     adbPath: String,
     deviceDiscovery: suspend (Path) -> StudioResult<List<AndroidDeviceInfo>> = { executable ->
@@ -984,135 +994,6 @@ internal fun preferredDeviceSerial(
     selectedSerial?.takeIf { serial -> devices.any { it.serial == serial && it.online } }
         ?: devices.filter(PerfettoDevice::online).singleOrNull()?.serial
 
-@Composable
-@Suppress("ktlint:standard:function-naming")
-private fun TraceDiagnosticsWorkspacePanel(
-    language: UiLanguage,
-    traceFile: Path,
-    selectedQuery: DiagnosticQuery?,
-    result: String?,
-    error: String?,
-    onRun: (DiagnosticQuery) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    PerfettoWorkspacePanel(
-        title = localizedStringResource(Res.string.trace_diagnostics, language, traceFile.fileName),
-        modifier = modifier,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            TraceDiagnosticNavigation(
-                language = language,
-                queries = PerfettoDiagnostics.all,
-                selectedQuery = selectedQuery,
-                onSelect = onRun,
-                modifier = Modifier.width(240.dp).fillMaxHeight(),
-            )
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxHeight()
-                        .width(1.dp)
-                        .background(MaterialTheme.colorScheme.outlineVariant),
-            )
-            TraceDiagnosticContent(
-                language = language,
-                selectedQuery = selectedQuery,
-                result = result,
-                error = error,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-            )
-        }
-    }
-}
-
-@Composable
-@Suppress("ktlint:standard:function-naming")
-private fun TraceDiagnosticNavigation(
-    language: UiLanguage,
-    queries: List<DiagnosticQuery>,
-    selectedQuery: DiagnosticQuery?,
-    onSelect: (DiagnosticQuery) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier =
-            modifier
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .verticalScroll(rememberScrollState())
-                .padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        queries.forEach { query ->
-            PerfettoCompactButton(
-                text = query.localizedTitle(language),
-                onClick = { onSelect(query) },
-                modifier = Modifier.fillMaxWidth(),
-                selected = selectedQuery == query,
-            )
-        }
-    }
-}
-
-@Composable
-@Suppress("ktlint:standard:function-naming")
-private fun TraceDiagnosticContent(
-    language: UiLanguage,
-    selectedQuery: DiagnosticQuery?,
-    result: String?,
-    error: String?,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier =
-            modifier
-                .verticalScroll(rememberScrollState())
-                .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        if (selectedQuery == null) {
-            Text(
-                text = localizedStringResource(Res.string.select_a_diagnostic_on_the_left_to_view_its_result, language),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = ViewerTypography.secondary.fontSize,
-            )
-            return@Column
-        }
-        Text(
-            text = selectedQuery.localizedTitle(language),
-            color = MaterialTheme.colorScheme.onSurface,
-            fontSize = ViewerTypography.bodyCompact.fontSize,
-        )
-        Text(
-            text = selectedQuery.localizedDescription(language),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = ViewerTypography.label.fontSize,
-        )
-        when {
-            error != null ->
-                Text(
-                    text = error,
-                    color = MaterialTheme.colorScheme.error,
-                    fontSize = ViewerTypography.secondary.fontSize,
-                )
-            result != null ->
-                Text(
-                    text = result.take(8_000),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = ViewerTypography.label.fontSize,
-                    lineHeight = ViewerTypography.secondary.lineHeight,
-                )
-            else ->
-                Text(
-                    text = localizedStringResource(Res.string.running_diagnostic, language),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = ViewerTypography.label.fontSize,
-                )
-        }
-    }
-}
-
 private fun DiagnosticQuery.localizedTitle(language: UiLanguage): String =
     when (id) {
         "cpu_hotspots" -> localizedStringResource(Res.string.diagnostic_cpu_hotspots_title, language)
@@ -1149,38 +1030,30 @@ private fun DiagnosticQuery.localizedTitle(language: UiLanguage): String =
         else -> title
     }
 
-private fun DiagnosticQuery.localizedDescription(language: UiLanguage): String =
-    when (id) {
-        "cpu_hotspots" -> localizedStringResource(Res.string.diagnostic_cpu_hotspots_description, language)
-        "sched_switch" -> localizedStringResource(Res.string.diagnostic_sched_switch_description, language)
-        "sched_waking" -> localizedStringResource(Res.string.diagnostic_sched_waking_description, language)
-        "run_queue" -> localizedStringResource(Res.string.diagnostic_run_queue_description, language)
-        "main_thread_blocked" -> localizedStringResource(Res.string.diagnostic_main_thread_blocked_description, language)
-        "cpu_freq_dist" -> localizedStringResource(Res.string.diagnostic_cpu_frequency_description, language)
-        "binder_latency" -> localizedStringResource(Res.string.diagnostic_binder_latency_description, language)
-        "binder_ipc_long_tail" -> localizedStringResource(Res.string.diagnostic_binder_ipc_long_tail_description, language)
-        "binder_system_server" -> localizedStringResource(Res.string.diagnostic_binder_system_server_description, language)
-        "binder_frame_alignment" -> localizedStringResource(Res.string.diagnostic_binder_frame_alignment_description, language)
-        "frame_jank" -> localizedStringResource(Res.string.diagnostic_frame_jank_description, language)
-        "file_io_syscalls" -> localizedStringResource(Res.string.diagnostic_file_io_syscalls_description, language)
-        "fsync_calls" -> localizedStringResource(Res.string.diagnostic_fsync_calls_description, language)
-        "block_io_pressure" -> localizedStringResource(Res.string.diagnostic_block_io_pressure_description, language)
-        "page_faults" -> localizedStringResource(Res.string.diagnostic_page_faults_description, language)
-        "sqlite_activity" -> localizedStringResource(Res.string.diagnostic_sqlite_activity_description, language)
-        "sqlite_lock_wait" -> localizedStringResource(Res.string.diagnostic_sqlite_lock_wait_description, language)
-        "art_gc_events" -> localizedStringResource(Res.string.diagnostic_art_gc_events_description, language)
-        "art_allocation_churn" -> localizedStringResource(Res.string.diagnostic_art_allocation_churn_description, language)
-        "art_jit_dex2oat" -> localizedStringResource(Res.string.diagnostic_art_jit_dex2oat_description, language)
-        "art_class_loading" -> localizedStringResource(Res.string.diagnostic_art_class_loading_description, language)
-        "art_class_verification" -> localizedStringResource(Res.string.diagnostic_art_class_verification_description, language)
-        "thermal_throttling" -> localizedStringResource(Res.string.diagnostic_thermal_throttling_description, language)
-        "dvfs_residency" -> localizedStringResource(Res.string.diagnostic_dvfs_residency_description, language)
-        "gpu_frequency_residency" -> localizedStringResource(Res.string.diagnostic_gpu_frequency_residency_description, language)
-        "power_rails" -> localizedStringResource(Res.string.diagnostic_power_rails_description, language)
-        "power_frame_alignment" -> localizedStringResource(Res.string.diagnostic_power_frame_alignment_description, language)
-        "mem_counters" -> localizedStringResource(Res.string.diagnostic_memory_timeline_description, language)
-        "input_latency" -> localizedStringResource(Res.string.diagnostic_input_latency_description, language)
-        "thread_states" -> localizedStringResource(Res.string.diagnostic_thread_states_description, language)
-        "wakeup_latency" -> localizedStringResource(Res.string.diagnostic_wakeup_latency_description, language)
-        else -> description
+internal fun formatTraceDuration(durationNanos: Long): String {
+    val totalSeconds = (durationNanos / 1_000_000_000L).coerceAtLeast(0L)
+    val minutes = totalSeconds / 60L
+    val seconds = totalSeconds % 60L
+    return if (minutes > 0L) "${minutes}m ${seconds}s" else "${seconds}s"
+}
+
+internal fun DiagnosticResult.firstTimelineTimestampNanos(query: DiagnosticQuery): Long? {
+    val timestampColumn =
+        query.columns.indexOfFirst { column ->
+            column == "timestamp_ns" || column == "ts" || column.endsWith("_timestamp_ns")
+        }
+    if (timestampColumn < 0) return null
+    return rows.firstNotNullOfOrNull { row -> row.values.getOrNull(timestampColumn)?.toLongOrNull() }
+}
+
+internal fun DiagnosticQuery.workspaceCategory(): TraceInsightCategory =
+    when {
+        id == "frame_jank" -> TraceInsightCategory.FRAME
+        id == "main_thread_blocked" -> TraceInsightCategory.LONG_TASK
+        category == DiagnosticCategory.BINDER -> TraceInsightCategory.BINDER
+        category == DiagnosticCategory.GRAPHICS -> TraceInsightCategory.RENDERING
+        category == DiagnosticCategory.CPU -> TraceInsightCategory.CPU
+        category == DiagnosticCategory.MEMORY -> TraceInsightCategory.MEMORY
+        category == DiagnosticCategory.INPUT -> TraceInsightCategory.INPUT
+        else -> TraceInsightCategory.OTHER
     }

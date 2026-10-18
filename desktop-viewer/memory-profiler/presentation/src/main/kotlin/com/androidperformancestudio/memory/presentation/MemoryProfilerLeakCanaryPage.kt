@@ -77,6 +77,7 @@ import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerDimensions
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
+import com.androidperformancestudio.ui.studio.StudioCard
 
 @Composable
 public fun MemoryProfilerLeakCanaryPage(
@@ -205,58 +206,56 @@ private fun LiveEventsSection(
 ) {
     val colors = LocalViewerColors.current
     if (session.status == LeakCanaryLiveStatus.DISCONNECTED && session.events.isEmpty()) return
-    Surface(
+    StudioCard(
         modifier = Modifier.fillMaxWidth().testTag("memory-profiler-live-events"),
-        color = colors.panel,
-        shape = RoundedCornerShape(ViewerDimensions.controlRadius),
-        tonalElevation = 1.dp,
+        containerColor = colors.panel,
+        borderColor = colors.transparent,
+        contentSpacing = 6.dp,
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    localizedStringResource(Res.string.live_events, language),
-                    style = ViewerTypography.subsectionTitle,
-                    color = colors.primaryText,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    localizedStringResource(
-                        Res.string.live_event_summary,
-                        language,
-                        session.events.size,
-                        session.droppedEvents,
-                    ),
-                    style = ViewerTypography.label,
-                    color = colors.secondaryText,
-                )
-            }
-            if (session.events.isEmpty()) {
-                Text(
-                    if (session.message.isNullOrBlank()) {
-                        localizedStringResource(Res.string.no_live_events, language)
-                    } else {
-                        session.message.orEmpty()
-                    },
-                    style = ViewerTypography.secondary,
-                    color = colors.secondaryText,
-                )
-            } else {
-                session.events.takeLast(12).asReversed().forEach { event ->
-                    Row(verticalAlignment = Alignment.Top) {
-                        Text(
-                            text = event.kind,
-                            style = ViewerTypography.label,
-                            color = if (event.retained == true) colors.error else colors.accent,
-                            modifier = Modifier.width(150.dp),
-                        )
-                        Text(
-                            text = event.className ?: event.description.orEmpty(),
-                            style = ViewerTypography.secondary,
-                            color = colors.primaryText,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                localizedStringResource(Res.string.live_events, language),
+                style = ViewerTypography.subsectionTitle,
+                color = colors.primaryText,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                localizedStringResource(
+                    Res.string.live_event_summary,
+                    language,
+                    session.events.size,
+                    session.droppedEvents,
+                ),
+                style = ViewerTypography.label,
+                color = colors.secondaryText,
+            )
+        }
+        if (session.events.isEmpty()) {
+            Text(
+                if (session.message.isNullOrBlank()) {
+                    localizedStringResource(Res.string.no_live_events, language)
+                } else {
+                    session.message.orEmpty()
+                },
+                style = ViewerTypography.secondary,
+                color = colors.secondaryText,
+            )
+        } else {
+            session.events.takeLast(12).asReversed().forEach { event ->
+                Row(verticalAlignment = Alignment.Top) {
+                    Text(
+                        text = event.kind,
+                        style = ViewerTypography.label,
+                        color = if (event.retained == true) colors.error else colors.accent,
+                        modifier = Modifier.width(150.dp),
+                    )
+                    Text(
+                        text = event.className ?: event.description.orEmpty(),
+                        style = ViewerTypography.secondary,
+                        color = colors.primaryText,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
@@ -302,17 +301,14 @@ private fun LeakMetricCard(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalViewerColors.current
-    Surface(
+    StudioCard(
         modifier = modifier,
-        color = colors.panel,
-        shape = RoundedCornerShape(ViewerDimensions.controlRadius),
-        tonalElevation = 1.dp,
+        containerColor = colors.panel,
+        borderColor = colors.transparent,
+        contentSpacing = 3.dp,
     ) {
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp)) {
-            Text(label, style = ViewerTypography.label, color = colors.secondaryText, maxLines = 1)
-            Spacer(Modifier.height(3.dp))
-            Text(value, style = ViewerTypography.metric, color = colors.accent, fontWeight = FontWeight.SemiBold)
-        }
+        Text(label, style = ViewerTypography.label, color = colors.secondaryText, maxLines = 1)
+        Text(value, style = ViewerTypography.metric, color = colors.accent, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -333,62 +329,60 @@ private fun LeakCanaryFindingCard(
     language: UiLanguage,
 ) {
     val colors = LocalViewerColors.current
-    Surface(
+    StudioCard(
         modifier = Modifier.fillMaxWidth().testTag("memory-profiler-leak-finding-$index"),
-        color = colors.panel,
-        shape = RoundedCornerShape(ViewerDimensions.controlRadius),
-        tonalElevation = 1.dp,
+        containerColor = colors.panel,
+        borderColor = colors.transparent,
+        contentSpacing = 6.dp,
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.Top) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = leak.shortDescription,
-                        style = ViewerTypography.cardTitle,
-                        color = colors.primaryText,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = leak.leakingClassName,
-                        style = ViewerTypography.bodyCompact,
-                        color = colors.accent,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Text("#$index", style = ViewerTypography.label, color = colors.mutedText)
+        Row(verticalAlignment = Alignment.Top) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = leak.shortDescription,
+                    style = ViewerTypography.cardTitle,
+                    color = colors.primaryText,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = leak.leakingClassName,
+                    style = ViewerTypography.bodyCompact,
+                    color = colors.accent,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                leak.retainedHeapByteSize?.let { bytes ->
-                    Text(
-                        localizedStringResource(Res.string.retained_bytes, language, formatBytes(bytes.toLong())),
-                        style = ViewerTypography.secondary,
-                        color = colors.warning,
-                    )
-                }
-                leak.retainedObjectCount?.let { count ->
-                    Text(
-                        localizedStringResource(Res.string.retained_objects, language, integer(count)),
-                        style = ViewerTypography.secondary,
-                        color = colors.secondaryText,
-                    )
-                }
-                leak.gcRootType?.let { root ->
-                    Text(
-                        localizedStringResource(Res.string.gc_root, language, root),
-                        style = ViewerTypography.secondary,
-                        color = colors.secondaryText,
-                    )
-                }
+            Text("#$index", style = ViewerTypography.label, color = colors.mutedText)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            leak.retainedHeapByteSize?.let { bytes ->
+                Text(
+                    localizedStringResource(Res.string.retained_bytes, language, formatBytes(bytes.toLong())),
+                    style = ViewerTypography.secondary,
+                    color = colors.warning,
+                )
             }
-            Text(
-                localizedStringResource(Res.string.leak_trace, language),
-                style = ViewerTypography.subsectionTitle,
-                color = colors.primaryText,
-            )
-            leak.trace.forEachIndexed { traceIndex, element ->
-                LeakTraceRow(traceIndex, element, language)
+            leak.retainedObjectCount?.let { count ->
+                Text(
+                    localizedStringResource(Res.string.retained_objects, language, integer(count)),
+                    style = ViewerTypography.secondary,
+                    color = colors.secondaryText,
+                )
             }
+            leak.gcRootType?.let { root ->
+                Text(
+                    localizedStringResource(Res.string.gc_root, language, root),
+                    style = ViewerTypography.secondary,
+                    color = colors.secondaryText,
+                )
+            }
+        }
+        Text(
+            localizedStringResource(Res.string.leak_trace, language),
+            style = ViewerTypography.subsectionTitle,
+            color = colors.primaryText,
+        )
+        leak.trace.forEachIndexed { traceIndex, element ->
+            LeakTraceRow(traceIndex, element, language)
         }
     }
 }

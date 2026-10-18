@@ -13,10 +13,10 @@ class AppHomePageLayoutTest {
         get() = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/AppHomePage.kt"))
 
     @Test
-    fun `home dashboard renders on the shell canvas background`() {
-        assertTrue(source.contains("color = colors.canvasBackground"))
-        assertEquals(viewerColors(darkTheme = false).canvasBackground, viewerColors(darkTheme = false).workspace)
-        assertEquals(viewerColors(darkTheme = true).canvasBackground, viewerColors(darkTheme = true).workspace)
+    fun `home dashboard renders on the shared sidebar background`() {
+        assertTrue(source.contains("color = colors.workspace"))
+        assertEquals(viewerColors(darkTheme = false).toolbar, viewerColors(darkTheme = false).workspace)
+        assertEquals(viewerColors(darkTheme = true).toolbar, viewerColors(darkTheme = true).workspace)
     }
 
     @Test
@@ -36,7 +36,7 @@ class AppHomePageLayoutTest {
         assertEquals(2, homeGridColumnCount(600))
         assertEquals(1, homeGridColumnCount(420))
         assertTrue(HOME_MODULE_CARD_HEIGHT_DP < 120)
-        assertEquals(10, HOME_CARD_CORNER_RADIUS_DP)
+        assertTrue(source.contains("RoundedCornerShape(StudioTokens.cardRadius)"))
         assertTrue(source.contains("entries.chunked(columnCount)"))
         assertTrue(source.contains("height(HOME_MODULE_CARD_HEIGHT_DP.dp)"))
         assertTrue(source.contains("entry.destination.navigationIconResource"))

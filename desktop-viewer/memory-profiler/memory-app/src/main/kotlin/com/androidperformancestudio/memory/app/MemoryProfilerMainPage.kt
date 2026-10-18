@@ -45,6 +45,8 @@ import com.androidperformancestudio.memory.presentation.MemoryProfilerScreen
 import com.androidperformancestudio.memory.presentation.MemoryProfilerSnapshotTabs
 import com.androidperformancestudio.memory.presentation.MemoryProfilerToolbarSelectors
 import com.androidperformancestudio.memory.presentation.MemoryProfilerViewMode
+import com.androidperformancestudio.memory.presentation.MemoryWorkspaceActions
+import com.androidperformancestudio.memory.presentation.MemoryWorkspaceExport
 import com.androidperformancestudio.ui.DesktopOpenFileDialog
 import com.androidperformancestudio.ui.HeaderSpacer
 import com.androidperformancestudio.ui.HeaderToolbar
@@ -62,9 +64,10 @@ import java.nio.file.Path
 
 private val MEMORY_PROFILER_PRIMARY_VIEW_MODES =
     listOf(
-        MemoryProfilerViewMode.Dashboard,
         MemoryProfilerViewMode.ClassList,
         MemoryProfilerViewMode.Dominators,
+        MemoryProfilerViewMode.Diff,
+        MemoryProfilerViewMode.Dashboard,
     )
 
 private fun MemoryProfilerViewMode.primaryViewLabel(language: UiLanguage): String =
@@ -73,6 +76,7 @@ private fun MemoryProfilerViewMode.primaryViewLabel(language: UiLanguage): Strin
             MemoryProfilerViewMode.Dashboard -> Res.string.dashboard_view
             MemoryProfilerViewMode.ClassList -> Res.string.class_list_view
             MemoryProfilerViewMode.Dominators -> Res.string.dominators_view
+            MemoryProfilerViewMode.Diff -> Res.string.diff_view
             else -> error("Not a primary memory profiler view: $this")
         },
         language,
@@ -159,58 +163,91 @@ fun FrameWindowScope.MemoryProfilerMainPage(
         onImportNativeHeap = { showNativeHeapFileDialog = true },
         onImportJavaHeap = { showJavaHeapFileDialog = true },
         onExportNativeHeap = {
-            chooseSaveFile(window, localizedStringResource(Res.string.export_memory_profiler_data, language), "native-heap.pb")
-                ?.toPath()
+            chooseSaveFile(
+                window,
+                localizedStringResource(Res.string.export_memory_profiler_data, language),
+                "native-heap.pb",
+            )?.toPath()
                 ?.let(controller::exportNativeHeap)
         },
         onExportRawHprof = {
-            chooseSaveFile(window, localizedStringResource(Res.string.export_memory_profiler_data, language), "heap-raw.hprof")
-                ?.toPath()
+            chooseSaveFile(
+                window,
+                localizedStringResource(Res.string.export_memory_profiler_data, language),
+                "heap-raw.hprof",
+            )?.toPath()
                 ?.let(controller::exportRaw)
         },
         onExportStandardHprof = {
-            chooseSaveFile(window, localizedStringResource(Res.string.export_memory_profiler_data, language), "heap-standard.hprof")
-                ?.toPath()
+            chooseSaveFile(
+                window,
+                localizedStringResource(Res.string.export_memory_profiler_data, language),
+                "heap-standard.hprof",
+            )?.toPath()
                 ?.let(controller::exportConverted)
         },
         onExportCsv = {
-            chooseSaveFile(window, localizedStringResource(Res.string.export_memory_profiler_data, language), "class-histogram.csv")
-                ?.toPath()
+            chooseSaveFile(
+                window,
+                localizedStringResource(Res.string.export_memory_profiler_data, language),
+                "class-histogram.csv",
+            )?.toPath()
                 ?.let(controller::exportHistogram)
         },
         onExportClassInstances = {
-            chooseSaveFile(window, localizedStringResource(Res.string.export_memory_profiler_data, language), "class-instances.csv")
-                ?.toPath()
+            chooseSaveFile(
+                window,
+                localizedStringResource(Res.string.export_memory_profiler_data, language),
+                "class-instances.csv",
+            )?.toPath()
                 ?.let(controller::exportSelectedClassInstances)
         },
         onExportObjectInvestigation = {
-            chooseSaveFile(window, localizedStringResource(Res.string.export_memory_profiler_data, language), "object-investigation.json")
-                ?.toPath()
+            chooseSaveFile(
+                window,
+                localizedStringResource(Res.string.export_memory_profiler_data, language),
+                "object-investigation.json",
+            )?.toPath()
                 ?.let(controller::exportObjectInvestigation)
         },
         onExportDiff = {
-            chooseSaveFile(window, localizedStringResource(Res.string.export_memory_profiler_data, language), "class-diff.csv")
-                ?.toPath()
+            chooseSaveFile(
+                window,
+                localizedStringResource(Res.string.export_memory_profiler_data, language),
+                "class-diff.csv",
+            )?.toPath()
                 ?.let(controller::exportHeapDiff)
         },
         onExportSnapshotJson = {
-            chooseSaveFile(window, localizedStringResource(Res.string.export_memory_profiler_data, language), "heap-snapshot.json")
-                ?.toPath()
+            chooseSaveFile(
+                window,
+                localizedStringResource(Res.string.export_memory_profiler_data, language),
+                "heap-snapshot.json",
+            )?.toPath()
                 ?.let(controller::exportHeapSnapshotJson)
         },
         onExportInvestigationReport = {
-            chooseSaveFile(window, localizedStringResource(Res.string.export_memory_profiler_data, language), "memory-investigation.md")
-                ?.toPath()
+            chooseSaveFile(
+                window,
+                localizedStringResource(Res.string.export_memory_profiler_data, language),
+                "memory-investigation.md",
+            )?.toPath()
                 ?.let(controller::exportInvestigationReport)
         },
         onExportBitmapDump = {
-            chooseSaveFile(window, localizedStringResource(Res.string.export_memory_profiler_data, language), "bitmap-dump.zip")
-                ?.toPath()
+            chooseSaveFile(
+                window,
+                localizedStringResource(Res.string.export_memory_profiler_data, language),
+                "bitmap-dump.zip",
+            )?.toPath()
                 ?.let(controller::exportBitmapSession)
         },
         onExportBitmapComparison = {
-            chooseSaveFile(window, localizedStringResource(Res.string.export_memory_profiler_data, language), "bitmap-comparison.md")
-                ?.toPath()
+            chooseSaveFile(
+                window,
+                localizedStringResource(Res.string.export_memory_profiler_data, language),
+                "bitmap-comparison.md",
+            )?.toPath()
                 ?.let(controller::exportBitmapComparison)
         },
         onLoadSession = { metadata ->
@@ -251,12 +288,6 @@ fun FrameWindowScope.MemoryProfilerMainPage(
                     style = SegmentedSelectorStyle.COMPACT_OUTLINED,
                 )
                 ProfilerCompactButton(
-                    text = localizedStringResource(Res.string.diff_view, language),
-                    selected = state.viewMode == MemoryProfilerViewMode.Diff,
-                    enabled = state.heapDiff != null,
-                    onClick = { controller.changeViewMode(MemoryProfilerViewMode.Diff) },
-                )
-                ProfilerCompactButton(
                     text = localizedStringResource(Res.string.bitmap_dump_view, language),
                     selected = state.viewMode == MemoryProfilerViewMode.BitmapDump,
                     enabled = state.bitmapDumpSession != null || state.isDumping,
@@ -293,7 +324,7 @@ fun FrameWindowScope.MemoryProfilerMainPage(
             MemoryProfilerDumpHeapButton(
                 state = state,
                 onDumpHeap = {
-                    controller.changeViewMode(MemoryProfilerViewMode.Dashboard)
+                    controller.changeViewMode(MemoryProfilerViewMode.ClassList)
                     scope.launch { controller.dumpHeap() }
                 },
                 language = language,
@@ -319,17 +350,51 @@ fun FrameWindowScope.MemoryProfilerMainPage(
             HeaderSpacer()
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+        MemoryWorkspaceActions(
+            state = state,
+            language = language,
+            onImport = { showHprofFileDialog = true },
+            onMapping = { showMappingFileDialog = true },
+            onCompare = { controller.changeViewMode(MemoryProfilerViewMode.Diff) },
+            onExport = { kind ->
+                val fileName =
+                    when (kind) {
+                        MemoryWorkspaceExport.REPORT -> "memory-investigation.md"
+                        MemoryWorkspaceExport.SNAPSHOT -> "heap-snapshot.json"
+                        MemoryWorkspaceExport.HISTOGRAM -> "class-histogram.csv"
+                        MemoryWorkspaceExport.DIFF -> "class-diff.csv"
+                        MemoryWorkspaceExport.OBJECT -> "object-investigation.json"
+                    }
+                chooseSaveFile(
+                    window,
+                    localizedStringResource(Res.string.export_memory_profiler_data, language),
+                    fileName,
+                )?.toPath()
+                    ?.let { output ->
+                        when (kind) {
+                            MemoryWorkspaceExport.REPORT -> controller.exportInvestigationReport(output)
+                            MemoryWorkspaceExport.SNAPSHOT -> controller.exportHeapSnapshotJson(output)
+                            MemoryWorkspaceExport.HISTOGRAM -> controller.exportHistogram(output)
+                            MemoryWorkspaceExport.DIFF -> controller.exportHeapDiff(output)
+                            MemoryWorkspaceExport.OBJECT -> controller.exportObjectInvestigation(output)
+                        }
+                    }
+            },
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline)
         MemoryProfilerSnapshotTabs(
             state = state,
             onSelectSnapshot = controller::selectSnapshot,
             onCloseSnapshot = controller::closeSnapshot,
             language = language,
+            onAddSnapshot = { showHprofFileDialog = true },
         )
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
         MemoryProfilerScreen(
             state = state,
             actions =
                 MemoryProfilerActions(
+                    onCompareSnapshots = controller::compareSnapshots,
                     onSortHistogram = controller::sort,
                     onRetry = { scope.launch { controller.refreshDevices() } },
                     onCancelOperation = controller::cancelActiveOperation,

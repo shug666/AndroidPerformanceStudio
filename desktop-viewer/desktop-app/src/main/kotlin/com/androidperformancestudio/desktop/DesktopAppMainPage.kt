@@ -46,13 +46,11 @@ import com.androidperformancestudio.desktop.SimpleperfCaptureSettingsContext
 import com.androidperformancestudio.desktop.SimpleperfThemePreference
 import com.androidperformancestudio.desktop.SimpleperfUiSettings
 import com.androidperformancestudio.desktop.SimpleperfMainPage
-import com.androidperformancestudio.battery.app.BatteryProfilerMainPage
 import com.androidperformancestudio.benchmark.app.BenchmarkRegressionMainPage
 import com.androidperformancestudio.frame.app.FrameProfilerMainPage
 import com.androidperformancestudio.gpu.app.GpuIntegrationMainPage
 import com.androidperformancestudio.memory.app.MemoryProfilerMainPage
 import com.androidperformancestudio.methodrecording.app.MethodRecordingMainPage
-import com.androidperformancestudio.network.app.NetworkProfilerMainPage
 import com.androidperformancestudio.perfetto.app.PerfettoMainPage
 import com.androidperformancestudio.presentation.CaptureSettingsSection
 import com.androidperformancestudio.startup.app.StartupProfilerMainPage
@@ -184,7 +182,7 @@ fun FrameWindowScope.DesktopAppMainPage(
     Column(modifier = Modifier.fillMaxSize()) {
         MacOsTitleBar(
             title = windowTitle?.value ?: APP_DISPLAY_NAME,
-            background = windowColors.canvasBackground,
+            background = windowColors.toolbar,
             // The title text inverts against its own strip so it stays legible in either theme.
             contentColor = windowColors.primaryText,
             dividerColor = windowColors.border,
@@ -227,8 +225,7 @@ fun FrameWindowScope.DesktopAppMainPage(
                                     onOpenMemoryProfiler = { navigator.open(AppDestination.MEMORY_PROFILER) },
                                     onOpenFrameProfiler = { navigator.open(AppDestination.FRAME_PROFILER) },
                                     onOpenStartupProfiler = { navigator.open(AppDestination.STARTUP_PROFILER) },
-                                    onOpenBatteryProfiler = { navigator.open(AppDestination.BATTERY_PROFILER) },
-                                    onOpenNetworkProfiler = { navigator.open(AppDestination.NETWORK_PROFILER) },
+                                    onOpenBatteryNetwork = { navigator.open(AppDestination.BATTERY_NETWORK) },
                                     onOpenGpuInspector = { navigator.open(AppDestination.GPU_INSPECTOR) },
                                     onOpenBenchmarkRegression = { navigator.open(AppDestination.BENCHMARK_REGRESSION) },
                                     onOpenRecentArtifact = { item ->
@@ -359,6 +356,7 @@ fun FrameWindowScope.DesktopAppMainPage(
                             AppDestination.FRAME_PROFILER ->
                                 FrameProfilerMainPage(
                                     language = language,
+                                    isActive = active,
                                     onBack = { navigator.open(AppDestination.HOME) },
                                     onOpenLayoutInspector = { request ->
                                         val activity =
@@ -388,6 +386,7 @@ fun FrameWindowScope.DesktopAppMainPage(
                                         navigator.openPerfettoTrace(
                                             request.traceFile,
                                             localizedStringResource(Res.string.frame_perfetto_correlation, language, correlation),
+                                            request.intendedVsyncNs,
                                         )
                                     },
                                 )
@@ -406,20 +405,17 @@ fun FrameWindowScope.DesktopAppMainPage(
                                         )
                                     },
                                 )
-                            AppDestination.BATTERY_PROFILER ->
-                                BatteryProfilerMainPage(
+                            AppDestination.BATTERY_NETWORK ->
+                                BatteryNetworkMainPage(
                                     language = language,
                                     onBack = { navigator.open(AppDestination.HOME) },
-                                )
-                            AppDestination.NETWORK_PROFILER ->
-                                NetworkProfilerMainPage(
-                                    language = language,
-                                    onBack = { navigator.open(AppDestination.HOME) },
+                                    isActive = active,
                                 )
                             AppDestination.GPU_INSPECTOR ->
                                 GpuIntegrationMainPage(
                                     language = language,
                                     onBack = { navigator.open(AppDestination.HOME) },
+                                    onOpenTraceAnalyzer = { navigator.open(AppDestination.PERFETTO) },
                                     onOpenTrace = { path ->
                                         navigator.openPerfettoTrace(
                                             path,

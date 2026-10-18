@@ -100,6 +100,15 @@ internal class DesktopFrameOnlineBackend(
     ): FrameBackendResult<OnlineFrameCapture> {
         val adb = adbLocator() ?: return missingAdb()
         val apiLevel = readApiLevel(adb, serial)
+        val displayRates = readDisplayRefreshRates(adb, serial)
+        val provenanceWarnings =
+            (
+                if (apiLevel == null) {
+                    listOf("Unable to read the device Android API level.")
+                } else {
+                    emptyList()
+                }
+            ) + displayRates.warning.orEmpty()
         val metadata =
             FrameCaptureSession(
                 id = sessionId,
@@ -108,14 +117,10 @@ internal class DesktopFrameOnlineBackend(
                 packageName = process.packageName,
                 deviceSerial = serial,
                 deviceApiLevel = apiLevel,
+                observedRefreshRatesHz = displayRates.rates,
                 sourceCapabilities = GFXINFO_CAPABILITIES,
                 provenanceComplete = apiLevel != null,
-                provenanceWarnings =
-                    if (apiLevel == null) {
-                        listOf("Unable to read the device Android API level.")
-                    } else {
-                        emptyList()
-                    },
+                provenanceWarnings = provenanceWarnings,
             )
         val target = GfxInfoCaptureTarget(serial, process.packageName, process.pid)
         val gfxInfoDelegate =
@@ -173,11 +178,39 @@ internal class DesktopFrameOnlineBackend(
         (AndroidDevicePropertyClient(DefaultAdbClient(adb)).sdkInt(serial) as? StudioResult.Success)
             ?.value
 
+    private suspend fun readDisplayRefreshRates(
+        adb: Path,
+        serial: String,
+    ): DisplayRefreshRateReadResult =
+        runCatching {
+            val output = DefaultAdbClient(adb).shell(serial, listOf("dumpsys", "display")).stdout
+            val rates = parseDisplayRefreshRates(output)
+            DisplayRefreshRateReadResult(
+                rates = rates,
+                warning = if (rates.isEmpty()) "Unable to determine the active display refresh rate from dumpsys display." else null,
+            )
+        }.getOrElse { error ->
+            DisplayRefreshRateReadResult(
+                warning = "Unable to read display refresh rate: ${error.message ?: error::class.simpleName}",
+            )
+        }
+
     private companion object {
         val FRAME_METRICS_CAPABILITIES = FrameSourceCapabilities(true, true, true, true, true)
         val GFXINFO_CAPABILITIES = FrameSourceCapabilities(true, true, false, true, false)
     }
 }
+
+private data class DisplayRefreshRateReadResult(
+    val rates: Set<Double> = emptySet(),
+    val warning: String? = null,
+)
+
+internal fun parseDisplayRefreshRates(output: String): Set<Double> =
+    Regex("(?im)\\b(?:mRefreshRate|mRenderFrameRate|refreshRate|renderFrameRate)\\s*(?:[=:]\\s*|\\s+)(\\d+(?:\\.\\d+)?)")
+        .findAll(output)
+        .mapNotNull { it.groupValues[1].toDoubleOrNull()?.takeIf { rate -> rate > 0.0 } }
+        .toSet()
 
 internal fun AdbTargetSnapshot.frameCaptureProcesses(): List<FrameProcessOption> =
     profileableOrDebuggableProcesses().map { process ->

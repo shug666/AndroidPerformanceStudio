@@ -9,6 +9,7 @@
 
 package com.androidperformancestudio.battery.storage
 
+import com.androidperformancestudio.battery.model.AttributionScope
 import com.androidperformancestudio.battery.model.BatteryRun
 import com.androidperformancestudio.battery.model.BatteryRunDelta
 import com.androidperformancestudio.battery.model.BatterySession
@@ -29,6 +30,7 @@ public data class StoredBatterySession(
     val createdAt: String,
     val runCount: Int,
     val status: BatterySessionStatus,
+    val attributionScope: AttributionScope? = null,
 )
 
 public class SqliteBatterySessionStore private constructor(
@@ -94,11 +96,13 @@ public class SqliteBatterySessionStore private constructor(
             statement.executeUpdate()
         }
 
+    public fun loadEvidence(sessionId: String): StoredBatteryEvidence? = loadStoredBatteryEvidence(connection, sessionId)
+
     public fun listSessions(limit: Int = 50): List<StoredBatterySession> {
         require(limit in 1..1000) { "limit must be between 1 and 1000" }
         return connection
             .prepareStatement(
-                "SELECT s.id, s.package_name, s.uid, s.created_at, COUNT(r.id), s.status FROM battery_sessions s LEFT JOIN battery_runs r ON r.session_id=s.id GROUP BY s.id ORDER BY s.created_at DESC LIMIT ?",
+                "SELECT s.id, s.package_name, s.uid, s.created_at, COUNT(r.id), s.status, s.attribution_scope FROM battery_sessions s LEFT JOIN battery_runs r ON r.session_id=s.id GROUP BY s.id ORDER BY s.created_at DESC, s.id ASC LIMIT ?",
             ).use { statement ->
                 statement.setInt(1, limit)
                 statement.executeQuery().use { rows ->
@@ -112,6 +116,7 @@ public class SqliteBatterySessionStore private constructor(
                                     rows.getString(4),
                                     rows.getInt(5),
                                     BatterySessionStatus.valueOf(rows.getString(6)),
+                                    AttributionScope.valueOf(rows.getString(7)),
                                 ),
                             )
                         }
@@ -159,13 +164,13 @@ public class SqliteBatterySessionStore private constructor(
                 statement.setInt(6, run.samples.size)
                 statement.executeUpdate()
             }
-        (listOf(run.baseline) + run.samples + run.finalSnapshot).forEach { snapshot ->
+        (listOf(run.baseline) + run.samples + run.finalSnapshot).forEachIndexed { index, snapshot ->
             connection
                 .prepareStatement(
                     "INSERT OR REPLACE INTO battery_snapshots " +
                         "(id, run_id, sequence, captured_at, stats_period_id, boot_id, level, temperature, powered, " +
                         "checkin, report, battery, history, warnings, conditions, thermal_raw, thermal_status, " +
-                        "thermal_throttling, thermal_temperatures) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "thermal_throttling, thermal_temperatures, snapshot_index) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 ).use { statement ->
                     statement.setString(1, snapshot.id)
                     statement.setString(2, run.id)
@@ -193,6 +198,7 @@ public class SqliteBatterySessionStore private constructor(
                         snapshot.thermalEvidence.temperaturesCelsius.entries
                             .joinToString("\n") { (name, value) -> "$name=$value" },
                     )
+                    statement.setInt(20, index)
                     statement.executeUpdate()
                 }
         }
@@ -219,13 +225,14 @@ public class SqliteBatterySessionStore private constructor(
             ).use { statement ->
                 statement.setString(1, delta.runId)
                 statement.setLong(2, delta.durationMs)
-                statement.setLong(3, delta.network.totalBytes)
+                statement.setLong(3, delta.networkTotalBytes)
                 statement.setString(4, delta.warnings.joinToString("\n"))
                 statement.setNullableDouble(5, delta.peakTemperatureCelsius)
                 statement.setNullableInt(6, delta.maxThermalStatus)
                 statement.setInt(7, delta.throttledSamples)
                 statement.executeUpdate()
             }
+        saveNetworkAndHistory(connection, delta)
         saveTimers(delta.runId, "wakelock", delta.wakelocks)
         saveTimers(delta.runId, "alarm", delta.alarms)
         saveTimers(delta.runId, "job", delta.jobs)
@@ -320,6 +327,7 @@ public class SqliteBatterySessionStore private constructor(
                 statement.execute(
                     "CREATE TABLE IF NOT EXISTS battery_performance_windows (run_id TEXT NOT NULL REFERENCES battery_runs(id) ON DELETE CASCADE, window_index INTEGER NOT NULL, started_at TEXT NOT NULL, ended_at TEXT NOT NULL, duration_ms INTEGER NOT NULL, peak_temperature_c REAL, max_thermal_status INTEGER, throttled INTEGER NOT NULL, PRIMARY KEY(run_id, window_index))",
                 )
+                createEvidenceSchema(connection)
                 if (!connection.hasColumn("battery_sessions", "status")) {
                     statement.execute("ALTER TABLE battery_sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'COMPLETED'")
                 }

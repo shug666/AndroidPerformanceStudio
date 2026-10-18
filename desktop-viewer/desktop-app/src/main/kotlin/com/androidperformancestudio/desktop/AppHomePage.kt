@@ -1,7 +1,6 @@
 package com.androidperformancestudio.desktop
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -19,7 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -37,9 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.desktop.dashboard.DeviceOverviewSource
@@ -57,6 +53,7 @@ import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
+import com.androidperformancestudio.ui.studio.StudioCard
 import com.androidperformancestudio.ui.studio.StudioDataTable
 import com.androidperformancestudio.ui.studio.StudioEmptyState
 import com.androidperformancestudio.ui.studio.StudioErrorState
@@ -85,7 +82,6 @@ import org.jetbrains.compose.resources.painterResource
 
 internal const val HOME_MODULE_CARD_HEIGHT_DP = 78
 internal const val HOME_QUICK_ACTION_HEIGHT_DP = 92
-internal const val HOME_CARD_CORNER_RADIUS_DP = 10
 internal const val HOME_RAIL_WIDTH_DP = 320
 internal const val HOME_TWO_COLUMN_MIN_WIDTH_DP = 900
 
@@ -125,8 +121,7 @@ internal fun AppHomePage(
     onOpenMemoryProfiler: () -> Unit,
     onOpenFrameProfiler: () -> Unit,
     onOpenStartupProfiler: () -> Unit,
-    onOpenBatteryProfiler: () -> Unit,
-    onOpenNetworkProfiler: () -> Unit,
+    onOpenBatteryNetwork: () -> Unit,
     onOpenGpuInspector: () -> Unit,
     onOpenBenchmarkRegression: () -> Unit,
     onOpenRecentArtifact: (StudioRecentItem) -> Unit,
@@ -219,24 +214,14 @@ internal fun AppHomePage(
                 onClick = onOpenStartupProfiler,
             ),
             HomeFeatureEntry(
-                destination = AppDestination.BATTERY_PROFILER,
-                title = localizedStringResource(Res.string.battery_profiler, language),
+                destination = AppDestination.BATTERY_NETWORK,
+                title = localizedStringResource(Res.string.battery_network, language),
                 description =
                     localizedStringResource(
-                        Res.string.batterystats_analysis_with_wakelock_alarm_and_network_usage_stats,
+                        Res.string.battery_network_description,
                         language,
                     ),
-                onClick = onOpenBatteryProfiler,
-            ),
-            HomeFeatureEntry(
-                destination = AppDestination.NETWORK_PROFILER,
-                title = localizedStringResource(Res.string.network_profiler, language),
-                description =
-                    localizedStringResource(
-                        Res.string.http_https_traffic_capture_and_request_timeline_analysis,
-                        language,
-                    ),
-                onClick = onOpenNetworkProfiler,
+                onClick = onOpenBatteryNetwork,
             ),
             HomeFeatureEntry(
                 destination = AppDestination.GPU_INSPECTOR,
@@ -298,19 +283,20 @@ internal fun AppHomePage(
         )
 
     val colors = LocalViewerColors.current
-    Surface(modifier = Modifier.fillMaxSize(), color = colors.canvasBackground) {
+    Surface(modifier = Modifier.fillMaxSize(), color = colors.workspace) {
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 22.dp),
+                    .padding(StudioTokens.compactContentPadding),
+            verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
         ) {
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 if (maxWidth.value >= HOME_TWO_COLUMN_MIN_WIDTH_DP) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
+                        horizontalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
                         verticalAlignment = Alignment.Top,
                     ) {
                         HomeMainColumn(
@@ -333,7 +319,7 @@ internal fun AppHomePage(
                 } else {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
+                        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
                     ) {
                         HomeMainColumn(
                             entries = entries,
@@ -371,9 +357,8 @@ private fun HomeMainColumn(
 ) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
     ) {
-        HomeHero(language)
         HomeMetrics(
             deviceOverview = deviceOverview,
             recentSnapshot = recentSnapshot,
@@ -404,7 +389,7 @@ private fun HomeRailColumn(
 ) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
+        verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
     ) {
         HomeDateCard(language)
         HomeDeviceSummary(
@@ -416,69 +401,13 @@ private fun HomeRailColumn(
 }
 
 @Composable
-private fun HomeHero(language: UiLanguage) {
-    val colors = LocalViewerColors.current
-    val shape = RoundedCornerShape(StudioTokens.cardRadius)
-    Box(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(shape)
-                .background(
-                    Brush.horizontalGradient(
-                        listOf(
-                            colors.accent.copy(alpha = if (colors.isDark) 0.22f else 0.12f),
-                            colors.panel,
-                        ),
-                    ),
-                )
-                .border(StudioTokens.borderWidth, colors.border, shape)
-                .padding(horizontal = 22.dp, vertical = 20.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    text = localizedStringResource(Res.string.home_hero_title, language),
-                    color = colors.primaryText,
-                    fontSize = ViewerTypography.pageTitle.fontSize,
-                    lineHeight = ViewerTypography.pageTitle.lineHeight,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = localizedStringResource(Res.string.home_hero_subtitle, language),
-                    color = colors.secondaryText,
-                    fontSize = ViewerTypography.body.fontSize,
-                    lineHeight = ViewerTypography.body.lineHeight,
-                )
-            }
-            Text(
-                text = localizedStringResource(Res.string.home_hero_quote, language),
-                modifier = Modifier.widthIn(max = 280.dp),
-                color = colors.secondaryText,
-                fontSize = ViewerTypography.secondary.fontSize,
-                lineHeight = ViewerTypography.secondary.lineHeight,
-                textAlign = TextAlign.End,
-            )
-        }
-    }
-}
-
-@Composable
 private fun HomeMetrics(
     deviceOverview: StudioDeviceOverview?,
     recentSnapshot: WorkspaceOverviewSnapshot?,
     loadingRecentItems: Boolean,
     language: UiLanguage,
 ) {
+    val colors = LocalViewerColors.current
     val devicesValue = (deviceOverview as? StudioDeviceOverview.Available)?.connectedCount?.toString() ?: "—"
     val recentValue =
         recentSnapshot
@@ -489,13 +418,14 @@ private fun HomeMetrics(
             ?: "—"
     Row(
         modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
-        horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
+        horizontalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
     ) {
         StudioMetricCard(
             label = localizedStringResource(Res.string.connected_devices, language),
             value = devicesValue,
             modifier = Modifier.weight(1f).fillMaxHeight(),
             icon = UiComponentsRes.drawable.ic_stat_device,
+            tone = colors.info,
         )
         StudioMetricCard(
             label = localizedStringResource(Res.string.recent_artifacts_shown, language),
@@ -503,6 +433,7 @@ private fun HomeMetrics(
             supportingText = localizedStringResource(Res.string.recent_artifacts_scope, language),
             modifier = Modifier.weight(1f).fillMaxHeight(),
             icon = UiComponentsRes.drawable.ic_stat_history,
+            tone = colors.accent,
         )
     }
 }
@@ -529,11 +460,11 @@ private fun HomeSection(
 private fun HomeQuickActionGrid(actions: List<HomeQuickAction>) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val columnCount = homeQuickActionColumnCount(maxWidth.value.toInt())
-        Column(verticalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap)) {
+        Column(verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding)) {
             actions.chunked(columnCount).forEach { rowActions ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
+                    horizontalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
                 ) {
                     rowActions.forEach { action ->
                         QuickActionCard(action = action, modifier = Modifier.weight(1f))
@@ -554,11 +485,11 @@ private fun HomeModuleGrid(
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val columnCount = homeGridColumnCount(maxWidth.value.toInt())
-        Column(verticalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap)) {
+        Column(verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding)) {
             entries.chunked(columnCount).forEach { rowEntries ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
+                    horizontalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
                 ) {
                     rowEntries.forEach { entry ->
                         FeatureEntryCard(entry = entry, modifier = Modifier.weight(1f))
@@ -834,62 +765,61 @@ private fun QuickActionCard(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalViewerColors.current
-    val shape = RoundedCornerShape(HOME_CARD_CORNER_RADIUS_DP.dp)
+    val shape = RoundedCornerShape(StudioTokens.cardRadius)
     val interactionSource = remember { MutableInteractionSource() }
     val hovered by interactionSource.collectIsHoveredAsState()
-    Row(
+    StudioCard(
         modifier =
             modifier
                 .height(HOME_QUICK_ACTION_HEIGHT_DP.dp)
                 .shadow(elevation = if (hovered) 6.dp else 1.dp, shape = shape, clip = false)
-                .clip(shape)
-                .background(if (hovered) colors.selectedRow else colors.panel)
-                .border(
-                    StudioTokens.borderWidth,
-                    if (hovered) colors.accent.copy(alpha = 0.42f) else colors.border.copy(alpha = 0.72f),
-                    shape,
-                )
-                .clickable(interactionSource = interactionSource, indication = null, onClick = action.onClick)
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
+                .clickable(interactionSource = interactionSource, indication = null, onClick = action.onClick),
+        containerColor = if (hovered) colors.selectedRow else colors.panel,
+        borderColor = if (hovered) colors.accent.copy(alpha = 0.42f) else colors.border.copy(alpha = 0.72f),
+        contentPadding = 0.dp,
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(colors.accent.copy(alpha = if (colors.isDark) 0.24f else 0.12f)),
-            contentAlignment = Alignment.Center,
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
         ) {
-            Icon(
-                painter = painterResource(action.icon),
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = colors.accent,
-            )
-        }
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
-        ) {
-            Text(
-                text = action.label,
-                color = colors.primaryText,
-                fontSize = ViewerTypography.cardTitle.fontSize,
-                lineHeight = ViewerTypography.cardTitle.lineHeight,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = action.description,
-                color = colors.secondaryText,
-                fontSize = ViewerTypography.secondary.fontSize,
-                lineHeight = ViewerTypography.secondary.lineHeight,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Box(
+                modifier =
+                    Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.accent.copy(alpha = if (colors.isDark) 0.24f else 0.12f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(action.icon),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = colors.accent,
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text(
+                    text = action.label,
+                    color = colors.primaryText,
+                    fontSize = ViewerTypography.cardTitle.fontSize,
+                    lineHeight = ViewerTypography.cardTitle.lineHeight,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = action.description,
+                    color = colors.secondaryText,
+                    fontSize = ViewerTypography.secondary.fontSize,
+                    lineHeight = ViewerTypography.secondary.lineHeight,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
@@ -900,62 +830,61 @@ private fun FeatureEntryCard(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalViewerColors.current
-    val shape = RoundedCornerShape(HOME_CARD_CORNER_RADIUS_DP.dp)
+    val shape = RoundedCornerShape(StudioTokens.cardRadius)
     val interactionSource = remember { MutableInteractionSource() }
     val hovered by interactionSource.collectIsHoveredAsState()
-    Row(
+    StudioCard(
         modifier =
             modifier
                 .height(HOME_MODULE_CARD_HEIGHT_DP.dp)
                 .shadow(elevation = if (hovered) 6.dp else 1.dp, shape = shape, clip = false)
-                .clip(shape)
-                .background(if (hovered) colors.selectedRow else colors.panel)
-                .border(
-                    StudioTokens.borderWidth,
-                    if (hovered) colors.accent.copy(alpha = 0.42f) else colors.border.copy(alpha = 0.72f),
-                    shape,
-                )
-                .clickable(interactionSource = interactionSource, indication = null, onClick = entry.onClick)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(11.dp),
+                .clickable(interactionSource = interactionSource, indication = null, onClick = entry.onClick),
+        containerColor = if (hovered) colors.selectedRow else colors.panel,
+        borderColor = if (hovered) colors.accent.copy(alpha = 0.42f) else colors.border.copy(alpha = 0.72f),
+        contentPadding = 0.dp,
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(34.dp)
-                    .clip(RoundedCornerShape(9.dp))
-                    .background(colors.accent.copy(alpha = if (colors.isDark) 0.22f else 0.12f)),
-            contentAlignment = Alignment.Center,
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(11.dp),
         ) {
-            Icon(
-                painter = painterResource(entry.destination.navigationIconResource),
-                contentDescription = null,
-                modifier = Modifier.size(StudioTokens.navigationIconSize),
-                tint = colors.accent,
-            )
-        }
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                text = entry.title,
-                color = colors.primaryText,
-                fontSize = ViewerTypography.cardTitle.fontSize,
-                lineHeight = ViewerTypography.cardTitle.lineHeight,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = entry.description,
-                color = colors.secondaryText,
-                fontSize = ViewerTypography.secondary.fontSize,
-                lineHeight = ViewerTypography.secondary.lineHeight,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Box(
+                modifier =
+                    Modifier
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(colors.accent.copy(alpha = if (colors.isDark) 0.22f else 0.12f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(entry.destination.navigationIconResource),
+                    contentDescription = null,
+                    modifier = Modifier.size(StudioTokens.navigationIconSize),
+                    tint = colors.accent,
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = entry.title,
+                    color = colors.primaryText,
+                    fontSize = ViewerTypography.cardTitle.fontSize,
+                    lineHeight = ViewerTypography.cardTitle.lineHeight,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = entry.description,
+                    color = colors.secondaryText,
+                    fontSize = ViewerTypography.secondary.fontSize,
+                    lineHeight = ViewerTypography.secondary.lineHeight,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

@@ -14,30 +14,84 @@ class StartupProfilerWorkspaceSourceTest {
         )
 
     @Test
-    fun `workspace separates actions from experiment configuration without changing startup screen`() {
+    fun `compact header shares file and refresh actions with the commercial workspace`() {
         assertTrue(source.contains("StartupProfilerFileMenuBar("))
-        assertTrue(source.contains("onImport ="))
-        assertTrue(source.contains("controller.importJson"))
         assertTrue(source.contains("HeaderToolbar"))
-        assertTrue(source.contains("HeaderDivider"))
-        assertTrue(source.contains("DropdownSelector"))
+        val toolbar = toolbarSource()
+        for (action in listOf("onRefresh", "onImport", "onExportCsv", "onExportJson")) {
+            assertTrue(toolbar.contains("onClick = actions.$action"), "The header must use $action")
+        }
+        assertTrue(toolbar.contains("ProfilerToolbarStatus("))
+        assertTrue(toolbar.contains("SelectionContainer"))
+        assertFalse(toolbar.contains("DropdownSelector"))
+        assertFalse(toolbar.contains("Checkbox"))
+        assertFalse(toolbar.contains("onStartStop"))
         assertFalse(source.contains("ProfilerCompactSelector"))
         assertTrue(source.contains("StartupProfilerStatusBar("))
-        assertFalse(source.contains("text = localizedStringResource(Res.string.export_csv"))
-        assertFalse(source.contains("text = localizedStringResource(Res.string.export_json"))
+        assertTrue(source.contains("onImport = actions.onImport"))
+        assertTrue(source.contains("onExportCsv = actions.onExportCsv"))
+        assertTrue(source.contains("onExportJson = actions.onExportJson"))
         assertFalse(source.contains("private fun Selector("))
         assertFalse(source.contains("import androidx.compose.material3.OutlinedButton"))
         assertFalse(source.contains("import androidx.compose.material3.Button"))
         assertTrue(source.contains("StartupProfilerScreen("))
-        assertTrue(source.contains("controller.runExperiment()"))
+        assertTrue(source.contains("actions = actions"))
     }
 
     @Test
-    fun `operation status moves from the toolbar into a Layout Inspector style footer`() {
-        val toolbarStart = source.indexOf("HeaderToolbar(")
-        val toolbar = source.substring(toolbarStart, source.indexOf("HorizontalDivider(", toolbarStart))
-        assertFalse(toolbar.contains("ProfilerToolbarStatus("))
+    fun `all experiment configuration actions are forwarded to the existing controller`() {
+        val controllerActions =
+            mapOf(
+                "onSelectRun" to "selectRun",
+                "onSelectTarget" to "selectTarget",
+                "onSelectStartupType" to "selectStartupType",
+                "onSelectCompilationMode" to "selectCompilationMode",
+                "onSelectProfileSource" to "selectProfileSource",
+                "onUpdateBaselineProfileArtifact" to "updateBaselineProfileArtifact",
+                "onUpdateCounts" to "updateCounts",
+                "onUpdateTimeout" to "updateTimeout",
+                "onSetPerfettoTraceEnabled" to "setPerfettoTraceEnabled",
+                "onUpdatePracticalThreshold" to "updatePracticalThreshold",
+            )
+        for ((action, method) in controllerActions) {
+            assertTrue(source.contains("$action = controller::$method"), "Missing $action wiring")
+        }
+        assertTrue(source.contains("onSelectDevice = { serial -> scope.launch { controller.selectDevice(serial) } }"))
+        assertTrue(source.contains("onRefresh = { scope.launch { controller.refreshDevices() } }"))
+    }
 
+    @Test
+    fun `start stop and compilation confirmation preserve cancellation and duplicate launch safety`() {
+        val startStopStart = source.indexOf("onStartStop =")
+        val startStop = source.substring(source.blockRangeStartingAt(startStopStart))
+        assertTrue(startStop.contains("if (state.isRunning)"))
+        assertTrue(startStop.contains("experimentJob?.cancel()"))
+        assertTrue(startStop.contains("experimentJob?.isActive != true"))
+        assertTrue(startStop.contains("state.selectedComponentName != null"))
+        assertTrue(source.contains("controller.runExperiment()"))
+        assertTrue(source.contains("controller.runExperiment(compilationChangeConfirmed = true)"))
+        assertTrue(source.contains("onDismissRequest = controller::dismissCompilationConfirmation"))
+        val navigateStart = source.indexOf("onNavigateHome =")
+        val navigate = source.substring(source.blockRangeStartingAt(navigateStart))
+        assertTrue(navigate.indexOf("experimentJob?.cancel()") < navigate.indexOf("onBack()"))
+    }
+
+    @Test
+    fun `file dialogs keep asynchronous controller operations and guarded local trace navigation`() {
+        assertTrue(source.contains("chooseOpenFile("))
+        assertTrue(source.contains("acceptAllFiles = false"))
+        assertEquals(2, Regex("chooseSaveFile\\(").findAll(source).count())
+        assertTrue(source.contains("scope.launch { controller.importJson(file.toPath()) }"))
+        assertTrue(source.contains("scope.launch { controller.exportCsv(file.toPath()) }"))
+        assertTrue(source.contains("scope.launch { controller.exportJson(file.toPath()) }"))
+        assertTrue(
+            source.contains("onOpenTrace = onOpenTrace?.let { open -> { file -> openStartupTraceFile(file, open) } }"),
+        )
+        assertTrue(source.contains("Files.isRegularFile(path) && runCatching { onOpenTrace(path) }.isSuccess"))
+    }
+
+    @Test
+    fun `operation status remains selectable in a Layout Inspector style footer`() {
         val contentStart = source.indexOf("StartupProfilerScreen(")
         val footerStart = source.indexOf("StartupProfilerStatusBar(", contentStart)
         assertTrue(footerStart > contentStart, "The footer must render below the workspace content")
@@ -51,35 +105,37 @@ class StartupProfilerWorkspaceSourceTest {
 
     @Test
     fun `toolbar controls remain reachable in narrow windows`() {
-        val toolbarStart = source.indexOf("HeaderToolbar(")
-        val toolbar = source.substring(toolbarStart, source.indexOf("HorizontalDivider(", toolbarStart))
+        val toolbar = toolbarSource()
         val scrollingControlRow =
             Regex(
-                """Row\(\s*modifier\s*=\s*Modifier\s*\.fillMaxWidth\(\)\s*\.horizontalScroll\(rememberScrollState\(\)\),\s*verticalAlignment\s*=\s*Alignment\.CenterVertically,""",
+                """Row\(\s*modifier\s*=\s*Modifier\s*\.fillMaxWidth\(\)\s*""" +
+                    """\.horizontalScroll\(rememberScrollState\(\)\),\s*""" +
+                    """verticalAlignment\s*=\s*Alignment\.CenterVertically,""",
             )
 
         assertTrue(scrollingControlRow.containsMatchIn(toolbar))
     }
 
     @Test
-    fun `stacked toolbar rows have ordered one dp outline separators before progress and content`() {
+    fun `compact toolbar boundary and running progress precede workspace content`() {
         val toolbar = source.indexOf("HeaderToolbar(")
         val progressCondition = source.indexOf("if (state.isRunning && state.totalRuns > 0)")
         val progressBlockRange = source.blockRangeStartingAt(progressCondition)
         val progressBlock = source.substring(progressBlockRange)
-        val progress = progressBlock.indexOf("LinearProgressIndicator(")
         val screen = source.indexOf("StartupProfilerScreen(")
         val dividers = outlineDivider.findAll(source).map { it.range.first }.toList()
-        val conditionalDividers = outlineDivider.findAll(progressBlock).map { it.range.first }.toList()
-        val contentBoundary = source.substring(progressBlockRange.last + 1, screen)
 
-        assertEquals(3, dividers.size)
+        assertEquals(1, dividers.size)
         assertTrue(toolbar < dividers[0])
         assertTrue(dividers[0] < progressCondition)
-        assertEquals(1, conditionalDividers.size)
-        assertTrue(conditionalDividers.single() < progress)
-        assertEquals(1, outlineDivider.findAll(contentBoundary).count())
-        assertTrue(dividers[2] < screen)
+        assertTrue(progressBlock.contains("LinearProgressIndicator("))
+        assertTrue(progressBlock.contains("state.completedRuns.toFloat() / state.totalRuns.toFloat()"))
+        assertTrue(progressBlockRange.last < screen)
+    }
+
+    private fun toolbarSource(): String {
+        val toolbarStart = source.indexOf("HeaderToolbar(")
+        return source.substring(toolbarStart, source.indexOf("HorizontalDivider(", toolbarStart))
     }
 
     private fun String.blockRangeStartingAt(startIndex: Int): IntRange {

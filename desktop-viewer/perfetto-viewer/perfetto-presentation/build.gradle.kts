@@ -14,4 +14,5 @@ dependencies {
     implementation(compose.material3)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.compose.components.resources)
+    testImplementation(libs.compose.ui.test.junit4)
 }

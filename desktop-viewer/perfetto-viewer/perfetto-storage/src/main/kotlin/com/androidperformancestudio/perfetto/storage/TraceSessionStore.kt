@@ -1,5 +1,6 @@
 package com.androidperformancestudio.perfetto.storage
 
+import com.androidperformancestudio.contracts.ArtifactLocation
 import com.androidperformancestudio.contracts.CaptureArtifactJson
 import com.androidperformancestudio.model.ErrorCategory
 import com.androidperformancestudio.model.StudioError
@@ -24,6 +25,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
 import java.time.Instant
+import java.util.UUID
 
 /** Durable, version-tolerant index for locally captured traces. */
 class TraceSessionStore(
@@ -31,6 +33,7 @@ class TraceSessionStore(
     initializeStorage: Boolean = true,
 ) {
     private val indexFile: Path = storageDir.resolve("sessions.json")
+    private val tracesDir: Path = storageDir.resolve("traces")
     private val lock = Any()
     private val json =
         Json {
@@ -41,6 +44,7 @@ class TraceSessionStore(
     init {
         if (initializeStorage) {
             Files.createDirectories(storageDir)
+            Files.createDirectories(tracesDir)
             if (!Files.exists(indexFile)) Files.writeString(indexFile, "[]")
         }
     }
@@ -49,7 +53,7 @@ class TraceSessionStore(
         synchronized(lock) {
             execute("SESSION_SAVE_FAILED") {
                 val sessions = readSessions().filterNot { it.id == session.id }
-                writeSessions(listOf(session) + sessions)
+                writeSessions(listOf(preserveTrace(session)) + sessions)
             }
         }
 
@@ -61,9 +65,48 @@ class TraceSessionStore(
     fun delete(sessionId: String): StudioResult<Unit> =
         synchronized(lock) {
             execute("SESSION_DELETE_FAILED") {
-                writeSessions(readSessions().filterNot { it.id == sessionId })
+                val sessions = readSessions()
+                val deleted = sessions.firstOrNull { it.id == sessionId }
+                writeSessions(sessions.filterNot { it.id == sessionId })
+                deleted?.traceFile?.takeIf(::isManagedTrace)?.let(Files::deleteIfExists)
+                Unit
             }
         }
+
+    private fun preserveTrace(session: TraceSession): TraceSession {
+        require(Files.isRegularFile(session.traceFile)) { "Perfetto trace does not exist: ${session.traceFile}" }
+        Files.createDirectories(tracesDir)
+        val destination = tracesDir.resolve("${UUID.nameUUIDFromBytes(session.id.toByteArray())}.pftrace")
+        if (!sameNormalizedPath(session.traceFile, destination)) {
+            val temporary = Files.createTempFile(tracesDir, "trace", ".pftrace.tmp")
+            try {
+                Files.copy(session.traceFile, temporary, StandardCopyOption.REPLACE_EXISTING)
+                try {
+                    Files.move(temporary, destination, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+                } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+                    Files.move(temporary, destination, StandardCopyOption.REPLACE_EXISTING)
+                }
+            } finally {
+                Files.deleteIfExists(temporary)
+            }
+        }
+        val normalizedDestination = destination.toAbsolutePath().normalize()
+        return session.copy(
+            traceFile = normalizedDestination,
+            fileSizeBytes = Files.size(normalizedDestination),
+            artifact =
+                session.artifact?.copy(
+                    location = ArtifactLocation(normalizedDestination.toString()),
+                ),
+        )
+    }
+
+    private fun isManagedTrace(path: Path): Boolean = path.toAbsolutePath().normalize().parent == tracesDir.toAbsolutePath().normalize()
+
+    private fun sameNormalizedPath(
+        first: Path,
+        second: Path,
+    ): Boolean = first.toAbsolutePath().normalize() == second.toAbsolutePath().normalize()
 
     private fun readSessions(): List<TraceSession> {
         val content = Files.readString(indexFile).trim()

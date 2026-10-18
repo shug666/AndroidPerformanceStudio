@@ -68,6 +68,7 @@ import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.button.MacOSTextButton
 import com.androidperformancestudio.ui.localizedStringResource
 import com.androidperformancestudio.ui.radiobutton.MacOSChoiceChip
+import com.androidperformancestudio.ui.studio.StudioCard
 
 enum class CaptureSettingsSection {
     SAMPLING_TEMPLATE,
@@ -413,7 +414,11 @@ private fun UserGuideSettingsPanel(
     locale: java.util.Locale,
     showHeader: Boolean = true,
 ) {
-    MacOsPanel(Modifier.fillMaxWidth(), style) {
+    StudioCard(
+        modifier = Modifier.fillMaxWidth(),
+        containerColor = style.panel,
+        borderColor = style.border,
+    ) {
         if (showHeader) {
             Text(
                 localizedStringResource(SimpleperfViewerRes.sp_settings_user_guide, locale),
@@ -443,7 +448,11 @@ private fun FlameGraphSettingsPanel(
     style: ViewerColors,
     locale: java.util.Locale,
 ) {
-    MacOsPanel(Modifier.fillMaxWidth(), style) {
+    StudioCard(
+        modifier = Modifier.fillMaxWidth(),
+        containerColor = style.panel,
+        borderColor = style.border,
+    ) {
         Text(
             localizedStringResource(SimpleperfViewerRes.sp_settings_frame_information_box, locale),
             color = style.text,
@@ -483,7 +492,11 @@ private fun SimpleperfEngineSettingsPanel(
     style: ViewerColors,
     locale: java.util.Locale,
 ) {
-    MacOsPanel(Modifier.fillMaxWidth(), style) {
+    StudioCard(
+        modifier = Modifier.fillMaxWidth(),
+        containerColor = style.panel,
+        borderColor = style.border,
+    ) {
         Text(
             localizedStringResource(SimpleperfViewerRes.sp_settings_analysis_engine_options_description, locale),
             color = style.secondaryText,
@@ -527,7 +540,11 @@ private fun SamplingTemplatePanel(
     locale: java.util.Locale,
     modifier: Modifier,
 ) {
-    MacOsPanel(modifier, style) {
+    StudioCard(
+        modifier = modifier,
+        containerColor = style.panel,
+        borderColor = style.border,
+    ) {
         SamplingTemplate.entries.forEach { template ->
             TemplateChoice(template, setup?.template == template, enabled, { onSelectTemplate(template) }, style, locale)
         }
@@ -575,7 +592,11 @@ private fun CaptureConfigurationPanel(
         }
     }
 
-    MacOsPanel(modifier, style) {
+    StudioCard(
+        modifier = modifier,
+        containerColor = style.panel,
+        borderColor = style.border,
+    ) {
         Text(
             localizedStringResource(SimpleperfViewerRes.sp_capture_event_rate, locale),
             color = style.text,
@@ -660,7 +681,11 @@ private fun AdvancedCaptureParameters(
         EmptyParametersPanel(style, modifier, SimpleperfViewerRes.sp_settings_advanced_parameters, locale)
         return
     }
-    MacOsPanel(modifier, style) {
+    StudioCard(
+        modifier = modifier,
+        containerColor = style.panel,
+        borderColor = style.border,
+    ) {
         ParameterChoices(
             SimpleperfViewerRes.sp_capture_call_graph,
             CallGraphMode.entries,
@@ -684,7 +709,11 @@ private fun EmptyParametersPanel(
     title: org.jetbrains.compose.resources.StringResource,
     locale: java.util.Locale,
 ) {
-    MacOsPanel(modifier, style) {
+    StudioCard(
+        modifier = modifier,
+        containerColor = style.panel,
+        borderColor = style.border,
+    ) {
         Text(
             localizedStringResource(title, locale),
             color = style.text,
@@ -808,25 +837,6 @@ private fun TemplateChoice(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-    }
-}
-
-@Composable
-internal fun MacOsPanel(
-    modifier: Modifier,
-    style: ViewerColors,
-    content: @Composable () -> Unit,
-) {
-    Column(
-        modifier
-            .background(
-                style.panel,
-                RoundedCornerShape(9.dp),
-            ).border(ViewerDimensions.hairline, style.border, RoundedCornerShape(9.dp))
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        content()
     }
 }
 

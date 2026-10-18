@@ -246,6 +246,7 @@ dependencies {
     implementation(libs.compose.material3)
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
+    testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.aps.platform.perfetto)
     testImplementation(libs.aps.profiler.contracts)
     testImplementation(libs.aps.analysis.memory)

@@ -1,7 +1,5 @@
 package com.androidperformancestudio.perfetto.presentation
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -90,6 +88,7 @@ import com.androidperformancestudio.perfetto_presentation.generated.resources.tr
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
+import com.androidperformancestudio.ui.studio.StudioCard
 import java.nio.file.Path
 import java.time.Instant
 import java.time.ZoneId
@@ -276,16 +275,12 @@ private fun PerfettoDataSourceGroupCard(
     logBuffers: Set<PerfettoLogBuffer>,
     onLogBuffersChange: (Set<PerfettoLogBuffer>) -> Unit,
 ) {
-    val shape = RoundedCornerShape(4.dp)
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(shape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(1.dp, MaterialTheme.colorScheme.outline, shape)
-                .padding(7.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+    StudioCard(
+        modifier = Modifier.fillMaxWidth(),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        borderColor = MaterialTheme.colorScheme.outline,
+        contentPadding = 7.dp,
+        contentSpacing = 4.dp,
     ) {
         Text(
             text = group.displayName.uppercase(),
@@ -668,47 +663,50 @@ private fun PerfettoTemplateOption(
     onClick: () -> Unit,
     language: UiLanguage,
 ) {
-    val shape = RoundedCornerShape(4.dp)
-    Column(
+    StudioCard(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(shape)
-                .background(
-                    if (selected) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.surfaceVariant
-                    },
-                ).border(1.dp, MaterialTheme.colorScheme.primary, shape)
-                .clickable(onClick = onClick)
-                .padding(horizontal = 8.dp, vertical = 7.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+                .clickable(onClick = onClick),
+        containerColor =
+            if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            },
+        borderColor = MaterialTheme.colorScheme.primary,
+        contentPadding = 0.dp,
+        contentSpacing = 0.dp,
     ) {
-        Text(
-            text = template.displayName(language),
-            color =
-                if (selected) {
-                    MaterialTheme.colorScheme.onPrimary
-                } else {
-                    MaterialTheme.colorScheme.primary
-                },
-            fontSize = ViewerTypography.secondary.fontSize,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = template.description(language),
-            color =
-                if (selected) {
-                    MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.82f)
-                } else {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.78f)
-                },
-            fontSize = ViewerTypography.label.fontSize,
-            lineHeight = ViewerTypography.secondary.lineHeight,
-        )
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = template.displayName(language),
+                color =
+                    if (selected) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
+                fontSize = ViewerTypography.secondary.fontSize,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = template.description(language),
+                color =
+                    if (selected) {
+                        MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.82f)
+                    } else {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.78f)
+                    },
+                fontSize = ViewerTypography.label.fontSize,
+                lineHeight = ViewerTypography.secondary.lineHeight,
+            )
+        }
     }
 }
 

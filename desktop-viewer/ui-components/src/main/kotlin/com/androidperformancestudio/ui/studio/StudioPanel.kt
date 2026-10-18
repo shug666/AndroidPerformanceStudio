@@ -3,7 +3,6 @@
 package com.androidperformancestudio.ui.studio
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -13,17 +12,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.ViewerTypography
@@ -33,21 +33,12 @@ import org.jetbrains.compose.resources.painterResource
 @Composable
 public fun StudioPanel(
     modifier: Modifier = Modifier,
+    contentPadding: Dp = StudioTokens.compactContentPadding,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val colors = LocalViewerColors.current
-    Column(
-        modifier =
-            modifier
-                .clip(RoundedCornerShape(StudioTokens.panelRadius))
-                .background(colors.panel)
-                .border(
-                    width = StudioTokens.borderWidth,
-                    color = colors.border,
-                    shape = RoundedCornerShape(StudioTokens.panelRadius),
-                )
-                .padding(StudioTokens.contentPadding),
-        verticalArrangement = Arrangement.spacedBy(StudioTokens.panelGap),
+    StudioCard(
+        modifier = modifier,
+        contentPadding = contentPadding,
         content = content,
     )
 }
@@ -97,13 +88,19 @@ public fun StudioMetricCard(
     supportingText: String? = null,
     icon: DrawableResource? = null,
     iconContentDescription: String? = null,
+    description: String? = null,
+    tone: Color? = null,
 ) {
     val colors = LocalViewerColors.current
-    StudioPanel(
+    val metricTone = tone ?: colors.accent
+    StudioCard(
         modifier =
             modifier.semantics {
                 contentDescription = "$label: $value"
             },
+        containerColor = metricTone.copy(alpha = 0.10f).compositeOver(colors.panel),
+        borderColor = metricTone.copy(alpha = 0.5f),
+        contentSpacing = 4.dp,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -114,15 +111,19 @@ public fun StudioMetricCard(
                     painter = painterResource(it),
                     contentDescription = iconContentDescription,
                     modifier = Modifier.size(StudioTokens.navigationIconSize),
-                    tint = colors.accent,
+                    tint = metricTone,
                 )
             }
             Text(
                 text = label,
-                color = colors.secondaryText,
-                fontSize = ViewerTypography.secondary.fontSize,
-                lineHeight = ViewerTypography.secondary.lineHeight,
+                color = metricTone,
+                fontSize = ViewerTypography.subsectionTitle.fontSize,
+                lineHeight = ViewerTypography.subsectionTitle.lineHeight,
+                fontWeight = FontWeight.SemiBold,
             )
+        }
+        description?.let {
+            Text(text = it, color = colors.secondaryText, style = ViewerTypography.secondary)
         }
         Text(
             text = value,
@@ -147,11 +148,12 @@ public fun StudioDataTable(
     columns: List<StudioTableColumn>,
     modifier: Modifier = Modifier,
     title: String? = null,
+    contentPadding: Dp = StudioTokens.compactContentPadding,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     require(columns.isNotEmpty()) { "StudioDataTable requires at least one column" }
     val colors = LocalViewerColors.current
-    StudioPanel(modifier = modifier) {
+    StudioPanel(modifier = modifier, contentPadding = contentPadding) {
         title?.let { StudioPanelHeader(it) }
         Row(
             modifier =

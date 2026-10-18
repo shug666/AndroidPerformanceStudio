@@ -12,6 +12,7 @@ public data class FrameProfilerState(
     val selectedProcessId: Int? = null,
     val importedFileName: String? = null,
     val analysis: FrameAnalysisResult? = null,
+    val observedRefreshRatesHz: Set<Double> = emptySet(),
     val selectedFrameId: Long? = null,
     val perfettoTraceFile: Path? = null,
     val artifact: CaptureArtifact? = null,

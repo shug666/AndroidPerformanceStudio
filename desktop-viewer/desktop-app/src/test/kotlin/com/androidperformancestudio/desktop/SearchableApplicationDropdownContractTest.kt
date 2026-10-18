@@ -20,7 +20,7 @@ class SearchableApplicationDropdownContractTest {
                     listOf("items = state.processes,"),
                 "simpleperf-viewer/method-recording-app/src/main/kotlin/com/androidperformancestudio/methodrecording/app/MethodRecordingMainPage.kt" to
                     listOf("items = state.processes,"),
-                "startup-profiler/startup-app/src/main/kotlin/com/androidperformancestudio/startup/app/StartupProfilerMainPage.kt" to
+                "startup-profiler/presentation/src/main/kotlin/com/androidperformancestudio/startup/presentation/StartupWorkspaceControls.kt" to
                     listOf("items = state.targets,"),
                 "battery-profiler/battery-app/src/main/kotlin/com/androidperformancestudio/battery/app/BatteryProfilerMainPage.kt" to
                     listOf("items = state.targets,"),

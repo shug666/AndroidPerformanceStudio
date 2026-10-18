@@ -39,6 +39,7 @@ import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTypography
 import com.androidperformancestudio.ui.localizedStringResource
+import com.androidperformancestudio.ui.studio.StudioCard
 import com.androidperformancestudio.ui.studio.StudioPanel
 import com.androidperformancestudio.ui.studio.StudioPanelHeader
 import com.androidperformancestudio.ui.studio.StudioStatusChip
@@ -166,7 +167,7 @@ private fun SimpleperfAiFindingCard(
     onOpenSourceCandidate: ((String) -> Unit)?,
 ) {
     val colors = LocalViewerColors.current
-    StudioPanel(Modifier.fillMaxWidth()) {
+    StudioCard(Modifier.fillMaxWidth()) {
         Text(finding.title, color = colors.primaryText, fontSize = ViewerTypography.body.fontSize)
         StudioStatusChip(
             label =

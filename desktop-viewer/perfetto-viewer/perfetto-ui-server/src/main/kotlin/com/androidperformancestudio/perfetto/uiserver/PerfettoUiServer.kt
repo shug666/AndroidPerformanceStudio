@@ -121,7 +121,7 @@ class PerfettoUiServer(
      * browser targets the locally hosted UI at the same origin; otherwise it targets the official
      * https://ui.perfetto.dev via `?url=`.
      */
-    fun openTrace(traceFile: Path): StudioResult<Unit> =
+    fun openTrace(traceFile: Path, timestampNanos: Long? = null): StudioResult<Unit> =
         try {
             if (!Files.isRegularFile(traceFile)) {
                 return StudioResult.Failure(
@@ -152,11 +152,16 @@ class PerfettoUiServer(
             // Mirror record_android_trace: address the endpoint by 127.0.0.1, serve it under a
             // named path so the trace keeps a recognizable filename, and pass its referrer.
             val traceUrl = "http://127.0.0.1:$boundPort/trace_file.perfetto-trace"
+            val timeWindow =
+                timestampNanos?.let { timestamp ->
+                    val start = (timestamp - TIMESTAMP_WINDOW_NANOS).coerceAtLeast(0)
+                    "&visStart=$start&visEnd=${timestamp + TIMESTAMP_WINDOW_NANOS}"
+                }.orEmpty()
             val targetUrl =
                 if (hasUiAssets) {
-                    "http://127.0.0.1:$boundPort/#!/?url=$traceUrl&referrer=record_android_trace"
+                    "http://127.0.0.1:$boundPort/#!/?url=$traceUrl&referrer=record_android_trace$timeWindow"
                 } else {
-                    "https://ui.perfetto.dev/#!/?url=$traceUrl&referrer=record_android_trace"
+                    "https://ui.perfetto.dev/#!/?url=$traceUrl&referrer=record_android_trace$timeWindow"
                 }
             Desktop.getDesktop().browse(URI.create(targetUrl))
             StudioResult.Success(Unit)
@@ -194,6 +199,9 @@ class PerfettoUiServer(
         /** The only port ui.perfetto.dev's CSP allows fetching from; also used by trace_processor. */
         const val DEFAULT_PORT = 9001
         private const val LOOPBACK = "127.0.0.1"
+
+        /** Half-width of the visible window around a target timestamp, one second. */
+        private const val TIMESTAMP_WINDOW_NANOS = 1_000_000_000L
 
         fun tryFindUiAssetsDir(
             repoRoot: Path = Paths.get(".").toAbsolutePath(),
