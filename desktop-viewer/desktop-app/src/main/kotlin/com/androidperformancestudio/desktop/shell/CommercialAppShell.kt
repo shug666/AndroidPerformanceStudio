@@ -131,10 +131,10 @@ internal fun CommercialAppShell(
             AppDestination.FRAME_PROFILER,
             AppDestination.STARTUP_PROFILER,
             AppDestination.BATTERY_NETWORK,
-            AppDestination.REVERSE_NET,
             AppDestination.GPU_INSPECTOR,
             AppDestination.BENCHMARK_REGRESSION,
             AppDestination.SOURCE_WORKSPACES,
+            AppDestination.REVERSE_NET,
         ).map {
             StudioNavigationItem(
                 destination = it,

@@ -225,16 +225,6 @@ internal fun AppHomePage(
                 onClick = onOpenBatteryNetwork,
             ),
             HomeFeatureEntry(
-                destination = AppDestination.REVERSE_NET,
-                title = localizedStringResource(Res.string.reverse_net_title, language),
-                description =
-                    localizedStringResource(
-                        Res.string.reverse_net_home_description,
-                        language,
-                    ),
-                onClick = onOpenReverseNet,
-            ),
-            HomeFeatureEntry(
                 destination = AppDestination.GPU_INSPECTOR,
                 title = localizedStringResource(Res.string.gpu_inspector, language),
                 description =
@@ -259,6 +249,16 @@ internal fun AppHomePage(
                 title = localizedStringResource(Res.string.source_workspaces, language),
                 description = localizedStringResource(Res.string.source_home_description, language),
                 onClick = onOpenSourceWorkspaces,
+            ),
+            HomeFeatureEntry(
+                destination = AppDestination.REVERSE_NET,
+                title = localizedStringResource(Res.string.reverse_net_title, language),
+                description =
+                    localizedStringResource(
+                        Res.string.reverse_net_home_description,
+                        language,
+                    ),
+                onClick = onOpenReverseNet,
             ),
         )
     val quickActions =

@@ -116,11 +116,11 @@ class AppHomePageLayoutTest {
     }
 
     @Test
-    fun `source workspace is the last home entry`() {
+    fun `reverse net is the last home entry`() {
         val entries = source.substringAfter("val entries =").substringBefore("val quickActions =")
 
         val lastEntry = entries.substring(entries.lastIndexOf("HomeFeatureEntry("))
-        assertTrue(lastEntry.contains("onClick = onOpenSourceWorkspaces"))
+        assertTrue(lastEntry.contains("onClick = onOpenReverseNet"))
     }
 
     @Test
