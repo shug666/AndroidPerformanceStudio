@@ -15,4 +15,19 @@
     <string name="har">HAR</string>
     <string name="csv">CSV</string>
     <string name="http_archive">HTTP 归档</string>
+    <string name="reverse_net_title">反向供网</string>
+    <string name="reverse_net_device">设备</string>
+    <string name="reverse_net_start">启动供网</string>
+    <string name="reverse_net_start_isolated">反向供网（隔离）</string>
+    <string name="reverse_net_stop">停止供网</string>
+    <string name="reverse_net_idle">供网空闲。</string>
+    <string name="reverse_net_starting">供网启动中…</string>
+    <string name="reverse_net_awaiting_vpn">请在设备上确认 VPN 连接请求。</string>
+    <string name="reverse_net_sharing">供网中：设备流量正经过本机转发。</string>
+    <string name="reverse_net_stopping">供网停止中…</string>
+    <string name="reverse_net_error">供网错误：</string>
+    <string name="reverse_net_no_device">未检测到设备。请连接已开启 adb 调试的设备。</string>
+    <string name="reverse_net_refresh">刷新</string>
+    <string name="reverse_net_clear_log">清除日志</string>
+    <string name="reverse_net_copy_log">复制全部</string>
 </resources>

@@ -20,6 +20,7 @@ enum class AppDestination {
     FRAME_PROFILER,
     STARTUP_PROFILER,
     BATTERY_NETWORK,
+    REVERSE_NET,
     GPU_INSPECTOR,
     BENCHMARK_REGRESSION,
     METHOD_RECORDING,
@@ -61,6 +62,7 @@ internal val com.androidperformancestudio.desktop.AppDestination.titleResource: 
             AppDestination.FRAME_PROFILER -> Res.string.frame_profiler
             AppDestination.STARTUP_PROFILER -> Res.string.startup_profiler
             AppDestination.BATTERY_NETWORK -> Res.string.battery_network
+            AppDestination.REVERSE_NET -> Res.string.reverse_net_title
             AppDestination.GPU_INSPECTOR -> Res.string.gpu_inspector
             AppDestination.BENCHMARK_REGRESSION -> Res.string.benchmark_regression
             AppDestination.METHOD_RECORDING -> Res.string.method_recording

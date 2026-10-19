@@ -53,6 +53,7 @@ import com.androidperformancestudio.memory.app.MemoryProfilerMainPage
 import com.androidperformancestudio.methodrecording.app.MethodRecordingMainPage
 import com.androidperformancestudio.perfetto.app.PerfettoMainPage
 import com.androidperformancestudio.presentation.CaptureSettingsSection
+import com.androidperformancestudio.network.app.ReverseNetMainPage
 import com.androidperformancestudio.startup.app.StartupProfilerMainPage
 import com.androidperformancestudio.analysis.AiSourceCandidateReference
 import com.androidperformancestudio.source.ResolutionCandidate
@@ -226,6 +227,7 @@ fun FrameWindowScope.DesktopAppMainPage(
                                     onOpenFrameProfiler = { navigator.open(AppDestination.FRAME_PROFILER) },
                                     onOpenStartupProfiler = { navigator.open(AppDestination.STARTUP_PROFILER) },
                                     onOpenBatteryNetwork = { navigator.open(AppDestination.BATTERY_NETWORK) },
+                                    onOpenReverseNet = { navigator.open(AppDestination.REVERSE_NET) },
                                     onOpenGpuInspector = { navigator.open(AppDestination.GPU_INSPECTOR) },
                                     onOpenBenchmarkRegression = { navigator.open(AppDestination.BENCHMARK_REGRESSION) },
                                     onOpenRecentArtifact = { item ->
@@ -411,7 +413,12 @@ fun FrameWindowScope.DesktopAppMainPage(
                                     onBack = { navigator.open(AppDestination.HOME) },
                                     isActive = active,
                                 )
-                            AppDestination.GPU_INSPECTOR ->
+            AppDestination.REVERSE_NET ->
+                ReverseNetMainPage(
+                    language = language,
+                    onBack = { navigator.open(AppDestination.HOME) },
+                )
+            AppDestination.GPU_INSPECTOR ->
                                 GpuIntegrationMainPage(
                                     language = language,
                                     onBack = { navigator.open(AppDestination.HOME) },

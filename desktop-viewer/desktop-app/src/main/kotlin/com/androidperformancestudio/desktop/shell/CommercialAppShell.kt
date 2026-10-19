@@ -134,6 +134,7 @@ internal fun CommercialAppShell(
             AppDestination.GPU_INSPECTOR,
             AppDestination.BENCHMARK_REGRESSION,
             AppDestination.SOURCE_WORKSPACES,
+            AppDestination.REVERSE_NET,
         ).map {
             StudioNavigationItem(
                 destination = it,

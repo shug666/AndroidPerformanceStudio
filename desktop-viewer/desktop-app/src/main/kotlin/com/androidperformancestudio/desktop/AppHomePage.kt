@@ -122,6 +122,7 @@ internal fun AppHomePage(
     onOpenFrameProfiler: () -> Unit,
     onOpenStartupProfiler: () -> Unit,
     onOpenBatteryNetwork: () -> Unit,
+    onOpenReverseNet: () -> Unit,
     onOpenGpuInspector: () -> Unit,
     onOpenBenchmarkRegression: () -> Unit,
     onOpenRecentArtifact: (StudioRecentItem) -> Unit,
@@ -248,6 +249,16 @@ internal fun AppHomePage(
                 title = localizedStringResource(Res.string.source_workspaces, language),
                 description = localizedStringResource(Res.string.source_home_description, language),
                 onClick = onOpenSourceWorkspaces,
+            ),
+            HomeFeatureEntry(
+                destination = AppDestination.REVERSE_NET,
+                title = localizedStringResource(Res.string.reverse_net_title, language),
+                description =
+                    localizedStringResource(
+                        Res.string.reverse_net_home_description,
+                        language,
+                    ),
+                onClick = onOpenReverseNet,
             ),
         )
     val quickActions =
