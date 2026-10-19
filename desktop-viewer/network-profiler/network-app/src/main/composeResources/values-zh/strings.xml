@@ -28,4 +28,6 @@
     <string name="reverse_net_error">供网错误：</string>
     <string name="reverse_net_no_device">未检测到设备。请连接已开启 adb 调试的设备。</string>
     <string name="reverse_net_refresh">刷新</string>
+    <string name="reverse_net_clear_log">清除日志</string>
+    <string name="reverse_net_copy_log">复制全部</string>
 </resources>

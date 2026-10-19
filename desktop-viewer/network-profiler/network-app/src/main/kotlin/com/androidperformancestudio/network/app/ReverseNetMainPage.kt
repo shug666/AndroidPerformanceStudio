@@ -1,4 +1,5 @@
 @file:Suppress("FunctionName", "ktlint:standard:function-naming", "MagicNumber", "LongMethod", "SwallowedException", "ReturnCount", "UnusedParameter")
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 
 package com.androidperformancestudio.network.app
 
@@ -12,6 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,6 +30,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.FrameWindowScope
 import com.androidperformancestudio.adb.defaultAdbExecutable
@@ -51,6 +58,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.awt.Toolkit
+import java.awt.datatransfer.StringSelection
 
 /**
  * Standalone reverse-tethering page: share this computer's network with a connected
@@ -218,15 +227,66 @@ public fun FrameWindowScope.ReverseNetMainPage(
             Spacer(Modifier.height(16.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
             Spacer(Modifier.height(8.dp))
-            Text(
-                text = "Tunnel events (${collectedEvents.size})",
-                style = MaterialTheme.typography.labelLarge,
-            )
+            var showContextMenu by remember { mutableStateOf(false) }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Tunnel events (${collectedEvents.size})",
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Spacer(Modifier.weight(1f))
+                ProfilerCompactButton(
+                    text = localizedStringResource(Res.string.reverse_net_clear_log, language),
+                    enabled = collectedEvents.isNotEmpty(),
+                    onClick = { collectedEvents.clear() },
+                )
+            }
             Spacer(Modifier.height(4.dp))
-            LazyColumn(Modifier.fillMaxSize()) {
-                items(collectedEvents.size) { index ->
-                    EventRow(collectedEvents[collectedEvents.size - 1 - index])
+            SelectionContainer {
+                LazyColumn(
+                    Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Main)
+                                    if (event.type == PointerEventType.Press) {
+                                        val mouseEvent = event.nativeEvent as? java.awt.event.MouseEvent
+                                        if (mouseEvent?.button == java.awt.event.MouseEvent.BUTTON3) {
+                                            showContextMenu = true
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                ) {
+                    items(collectedEvents.size) { index ->
+                        EventRow(collectedEvents[collectedEvents.size - 1 - index])
+                    }
                 }
+            }
+            DropdownMenu(
+                expanded = showContextMenu,
+                onDismissRequest = { showContextMenu = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text(localizedStringResource(Res.string.reverse_net_clear_log, language)) },
+                    onClick = {
+                        collectedEvents.clear()
+                        showContextMenu = false
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(localizedStringResource(Res.string.reverse_net_copy_log, language)) },
+                    onClick = {
+                        val sb = StringBuilder()
+                        for (ev in collectedEvents) {
+                            if (sb.isNotEmpty()) sb.append('\n')
+                            sb.append(formatEvent(ev))
+                        }
+                        Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(sb.toString()), null)
+                        showContextMenu = false
+                    },
+                )
             }
         }
     }
@@ -286,34 +346,32 @@ private suspend fun listDevicesSafe(controller: SessionController): List<String>
     }
 }
 
+private fun formatEvent(event: ReverseNetEvent): String = when (event) {
+    is ReverseNetEvent.Connection -> {
+        val proto = if (event.transport == ReverseNetTransport.TCP) "TCP" else "UDP"
+        "$proto  ${event.dstAddress}:${event.dstPort}  (from ${event.srcAddress}:${event.srcPort})"
+    }
+    is ReverseNetEvent.State -> "  state ${event.state}"
+    is ReverseNetEvent.Bytes -> "  ${event.bytesSent}B out, ${event.bytesReceived}B in"
+    is ReverseNetEvent.Closed -> {
+        val seconds = event.durationNs / 1_000_000_000.0
+        "  closed  ${"%.1f".format(seconds)}s  ${event.bytesSent}B out ${event.bytesReceived}B in"
+    }
+    is ReverseNetEvent.DnsResolved -> {
+        val strip = if (event.aaaaStripped) " [AAAA stripped]" else ""
+        "DNS  ${event.domain} -> ${event.addresses.joinToString(",")}$strip"
+    }
+    is ReverseNetEvent.Alert -> "ALERT  ${event.message}"
+}
+
 @Composable
 private fun EventRow(event: ReverseNetEvent) {
-    val (text, color) = when (event) {
-        is ReverseNetEvent.Connection -> {
-            val arrow = if (event.transport == ReverseNetTransport.TCP) "TCP" else "UDP"
-            "$arrow  ${event.dstAddress}:${event.dstPort}  (from ${event.srcAddress}:${event.srcPort})" to
-                androidx.compose.ui.graphics.Color.Unspecified
-        }
-        is ReverseNetEvent.State ->
-            "  state ${event.state}" to
-                androidx.compose.ui.graphics.Color.Unspecified
-        is ReverseNetEvent.Bytes ->
-            "  ${event.bytesSent}B out, ${event.bytesReceived}B in" to
-                androidx.compose.ui.graphics.Color.Unspecified
-        is ReverseNetEvent.Closed -> {
-            val seconds = event.durationNs / 1_000_000_000.0
-            "  closed  ${"%.1f".format(seconds)}s  ${event.bytesSent}B out ${event.bytesReceived}B in" to
-                androidx.compose.ui.graphics.Color.Unspecified
-        }
-        is ReverseNetEvent.DnsResolved -> {
-            val strip = if (event.aaaaStripped) " [AAAA stripped]" else ""
-            "DNS  ${event.domain} -> ${event.addresses.joinToString(",")}$strip" to
-                MaterialTheme.colorScheme.primary
-        }
-        is ReverseNetEvent.Alert ->
-            "⚠ ${event.message}" to
-                MaterialTheme.colorScheme.error
+    val color = when (event) {
+        is ReverseNetEvent.DnsResolved -> MaterialTheme.colorScheme.primary
+        is ReverseNetEvent.Alert -> MaterialTheme.colorScheme.error
+        else -> androidx.compose.ui.graphics.Color.Unspecified
     }
+    val text = formatEvent(event)
     Text(
         text = text,
         style = MaterialTheme.typography.bodySmall,

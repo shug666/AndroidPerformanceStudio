@@ -28,4 +28,6 @@
     <string name="reverse_net_error">Reverse net error:</string>
     <string name="reverse_net_no_device">No device detected. Connect a device with adb debugging enabled.</string>
     <string name="reverse_net_refresh">Refresh</string>
+    <string name="reverse_net_clear_log">Clear Log</string>
+    <string name="reverse_net_copy_log">Copy All</string>
 </resources>
