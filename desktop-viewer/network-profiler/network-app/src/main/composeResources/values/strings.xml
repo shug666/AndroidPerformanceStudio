@@ -15,4 +15,13 @@
     <string name="har">HAR</string>
     <string name="csv">CSV</string>
     <string name="http_archive">HTTP Archive</string>
+    <string name="reverse_net_start">Reverse Net</string>
+    <string name="reverse_net_start_isolated">Reverse Net (Isolated)</string>
+    <string name="reverse_net_stop">Stop Reverse Net</string>
+    <string name="reverse_net_idle">Reverse net idle.</string>
+    <string name="reverse_net_starting">Reverse net starting…</string>
+    <string name="reverse_net_awaiting_vpn">Confirm the VPN connection request on the device.</string>
+    <string name="reverse_net_sharing">Reverse net sharing: device traffic flows through this computer.</string>
+    <string name="reverse_net_stopping">Reverse net stopping…</string>
+    <string name="reverse_net_error">Reverse net error:</string>
 </resources>

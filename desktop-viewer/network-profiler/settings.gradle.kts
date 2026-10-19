@@ -43,6 +43,7 @@ include(
     ":network-export-adapters",
     ":network-presentation",
     ":network-app",
+    ":reverse-net",
 )
 
 // The Android capture agent requires AGP and is not needed for desktop-only analysis/import work.

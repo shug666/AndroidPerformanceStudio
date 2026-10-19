@@ -13,6 +13,8 @@ dependencies {
     implementation(project(":network-storage-sqlite"))
     implementation(project(":network-export-adapters"))
     implementation(project(":network-presentation"))
+    implementation(project(":reverse-net"))
+    implementation(libs.aps.adb.core)
     implementation(compose.desktop.currentOs)
     implementation(libs.compose.material3)
     implementation(libs.kotlinx.coroutines.core)

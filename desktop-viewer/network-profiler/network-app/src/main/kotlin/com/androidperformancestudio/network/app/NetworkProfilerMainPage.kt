@@ -59,6 +59,7 @@ public fun FrameWindowScope.NetworkProfilerMainPage(
     val analyzer = remember { NetworkAnalyzer() }
     val exporter = remember { NetworkExporter() }
     val capture = remember { NetworkAgentCapture() }
+    val reverseNetSession = rememberReverseNetSession()
     val scope = rememberCoroutineScope()
     val db = remember { Path.of(System.getProperty("user.home"), ".android-performance-studio", "network", "network.db") }
     var active by remember { mutableStateOf<ActiveNetworkCapture?>(null) }
@@ -204,6 +205,13 @@ public fun FrameWindowScope.NetworkProfilerMainPage(
                         )
                     }
                 },
+            )
+            Spacer(Modifier.weight(1f))
+            ReverseNetControls(
+                deviceSerial = state.deviceSerial,
+                language = language,
+                controller = reverseNetSession.controller,
+                eventBus = reverseNetSession.eventBus,
             )
             Spacer(Modifier.weight(1f))
             ProfilerToolbarStatus(state.message, state.error)

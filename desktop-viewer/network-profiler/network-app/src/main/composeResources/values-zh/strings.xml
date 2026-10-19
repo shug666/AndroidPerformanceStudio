@@ -15,4 +15,13 @@
     <string name="har">HAR</string>
     <string name="csv">CSV</string>
     <string name="http_archive">HTTP 归档</string>
+    <string name="reverse_net_start">反向供网</string>
+    <string name="reverse_net_start_isolated">反向供网（隔离）</string>
+    <string name="reverse_net_stop">停止供网</string>
+    <string name="reverse_net_idle">供网空闲。</string>
+    <string name="reverse_net_starting">供网启动中…</string>
+    <string name="reverse_net_awaiting_vpn">请在设备上确认 VPN 连接请求。</string>
+    <string name="reverse_net_sharing">供网中：设备流量正经过本机转发。</string>
+    <string name="reverse_net_stopping">供网停止中…</string>
+    <string name="reverse_net_error">供网错误：</string>
 </resources>
