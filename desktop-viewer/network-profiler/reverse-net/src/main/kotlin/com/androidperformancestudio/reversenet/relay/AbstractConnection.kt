@@ -18,11 +18,29 @@ package com.androidperformancestudio.reversenet.relay
 
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.util.concurrent.atomic.AtomicLong
 
 public abstract class AbstractConnection(
     public final override val id: ConnectionId,
     protected val client: Client,
 ) : Connection {
+    private val sentBytes = AtomicLong()
+    private val receivedBytes = AtomicLong()
+
+    /** Record bytes forwarded from device to network (processSend path). */
+    protected fun addSent(bytes: Long) {
+        if (bytes > 0) sentBytes.addAndGet(bytes)
+    }
+
+    /** Record bytes forwarded from network to device (processReceive path). */
+    protected fun addReceived(bytes: Long) {
+        if (bytes > 0) receivedBytes.addAndGet(bytes)
+    }
+
+    override fun bytesSentToNetwork(): Long = sentBytes.get()
+
+    override fun bytesReceivedFromNetwork(): Long = receivedBytes.get()
+
     protected fun close() {
         disconnect()
         client.router.remove(this)

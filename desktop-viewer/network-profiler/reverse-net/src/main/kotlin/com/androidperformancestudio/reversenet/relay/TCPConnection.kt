@@ -127,6 +127,7 @@ public class TCPConnection(
                 eof()
                 return
             }
+            addReceived(packet.getPayloadLength().toLong())
             packetForClient = packet
             consume(this)
         } catch (e: IOException) {
@@ -138,6 +139,7 @@ public class TCPConnection(
         try {
             val w = clientToNetwork.writeTo(channel)
             if (w > 0) {
+                addSent(w.toLong())
                 acknowledgementNumber += w
 
                 if (finReceived && clientToNetwork.isEmpty()) {

@@ -63,8 +63,8 @@ public class TapEventBridge(
             ReverseNetEvent.Closed(
                 connectionId = id.hashCode().toLong(),
                 durationNs = System.nanoTime() - start,
-                bytesSent = 0,
-                bytesReceived = 0,
+                bytesSent = connection.bytesSentToNetwork(),
+                bytesReceived = connection.bytesReceivedFromNetwork(),
                 monotonicNs = System.nanoTime(),
             ),
         )

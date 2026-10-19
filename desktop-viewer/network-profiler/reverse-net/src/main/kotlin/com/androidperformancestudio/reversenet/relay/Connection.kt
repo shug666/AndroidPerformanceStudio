@@ -24,4 +24,10 @@ public interface Connection {
     public fun disconnect()
 
     public fun isExpired(): Boolean
+
+    /** Bytes forwarded from the device to the real network. */
+    public fun bytesSentToNetwork(): Long
+
+    /** Bytes forwarded from the real network back to the device. */
+    public fun bytesReceivedFromNetwork(): Long
 }

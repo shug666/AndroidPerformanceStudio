@@ -35,6 +35,7 @@ import com.androidperformancestudio.platform.adb.DefaultAdbClient
 import com.androidperformancestudio.reversenet.dns.DnsFilterMode
 import com.androidperformancestudio.reversenet.events.ReverseNetEvent
 import com.androidperformancestudio.reversenet.events.ReverseNetEventBus
+import com.androidperformancestudio.reversenet.events.ReverseNetTransport
 import com.androidperformancestudio.reversenet.session.DefaultReverseNetAdbOperations
 import com.androidperformancestudio.reversenet.session.ReverseNetPaths
 import com.androidperformancestudio.reversenet.session.ReverseNetSessionState
@@ -114,7 +115,7 @@ public fun FrameWindowScope.ReverseNetMainPage(
         }
     }
 
-    val collectedEvents = remember { mutableListOf<ReverseNetEvent>() }
+    val collectedEvents = remember { mutableStateListOf<ReverseNetEvent>() }
     LaunchedEffect(eventBus) {
         eventBus.events.collect { event ->
             collectedEvents.add(event)
@@ -223,7 +224,9 @@ public fun FrameWindowScope.ReverseNetMainPage(
             )
             Spacer(Modifier.height(4.dp))
             LazyColumn(Modifier.fillMaxSize()) {
-                items(collectedEvents.reversed()) { event -> EventRow(event) }
+                items(collectedEvents.size) { index ->
+                    EventRow(collectedEvents[collectedEvents.size - 1 - index])
+                }
             }
         }
     }
@@ -285,18 +288,36 @@ private suspend fun listDevicesSafe(controller: SessionController): List<String>
 
 @Composable
 private fun EventRow(event: ReverseNetEvent) {
-    val text = when (event) {
-        is ReverseNetEvent.Connection ->
-            "${event.transport} ${event.srcAddress}:${event.srcPort} -> ${event.dstAddress}:${event.dstPort}"
-        is ReverseNetEvent.State -> "state ${event.state}"
-        is ReverseNetEvent.Bytes -> "bytes sent=${event.bytesSent} recv=${event.bytesReceived}"
-        is ReverseNetEvent.Closed -> "closed duration=${event.durationNs / 1_000_000}ms"
-        is ReverseNetEvent.DnsResolved -> "dns ${event.domain} -> ${event.addresses.joinToString(",")} aaaaStripped=${event.aaaaStripped}"
-        is ReverseNetEvent.Alert -> "ALERT[${event.alertKind}] ${event.message}"
+    val (text, color) = when (event) {
+        is ReverseNetEvent.Connection -> {
+            val arrow = if (event.transport == ReverseNetTransport.TCP) "TCP" else "UDP"
+            "$arrow  ${event.dstAddress}:${event.dstPort}  (from ${event.srcAddress}:${event.srcPort})" to
+                androidx.compose.ui.graphics.Color.Unspecified
+        }
+        is ReverseNetEvent.State ->
+            "  state ${event.state}" to
+                androidx.compose.ui.graphics.Color.Unspecified
+        is ReverseNetEvent.Bytes ->
+            "  ${event.bytesSent}B out, ${event.bytesReceived}B in" to
+                androidx.compose.ui.graphics.Color.Unspecified
+        is ReverseNetEvent.Closed -> {
+            val seconds = event.durationNs / 1_000_000_000.0
+            "  closed  ${"%.1f".format(seconds)}s  ${event.bytesSent}B out ${event.bytesReceived}B in" to
+                androidx.compose.ui.graphics.Color.Unspecified
+        }
+        is ReverseNetEvent.DnsResolved -> {
+            val strip = if (event.aaaaStripped) " [AAAA stripped]" else ""
+            "DNS  ${event.domain} -> ${event.addresses.joinToString(",")}$strip" to
+                MaterialTheme.colorScheme.primary
+        }
+        is ReverseNetEvent.Alert ->
+            "⚠ ${event.message}" to
+                MaterialTheme.colorScheme.error
     }
     Text(
         text = text,
         style = MaterialTheme.typography.bodySmall,
+        color = color,
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
     )
 }

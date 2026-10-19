@@ -69,6 +69,7 @@ public class UDPConnection(
     }
 
     override fun sendToNetwork(packet: IPv4Packet) {
+        addSent(packet.getPayloadLength().toLong())
         if (!clientToNetwork.readFrom(packet.getPayload())) {
             // cannot send to network, dropping packet
             return
@@ -114,7 +115,9 @@ public class UDPConnection(
     }
 
     private fun read(): IPv4Packet? = try {
-        networkToClient.packetize(channel)
+        val pkt = networkToClient.packetize(channel)
+        if (pkt != null) addReceived(pkt.getPayloadLength().toLong())
+        pkt
     } catch (e: IOException) {
         null
     }
