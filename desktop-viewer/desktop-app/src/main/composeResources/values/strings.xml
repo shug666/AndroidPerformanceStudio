@@ -238,4 +238,13 @@
     <string name="quick_action_run_startup_test">Run Startup Test</string>
     <string name="quick_action_run_startup_test_description">Measure application launch performance.</string>
     <string name="home_focus_on_performance">Focus on Performance</string>
+    <string name="home_quick_action_edit">Edit</string>
+    <string name="quick_action_manage_title">Customize Quick Actions</string>
+    <string name="quick_action_manage_subtitle">Add or remove actions from the home screen.</string>
+    <string name="quick_action_shown">Shown</string>
+    <string name="quick_action_available">Available</string>
+    <string name="quick_action_add">Add</string>
+    <string name="quick_action_remove">Remove</string>
+    <string name="quick_action_done">Done</string>
+    <string name="home_module_drag_hint">Long-press a module card to drag and reorder.</string>
 </resources>

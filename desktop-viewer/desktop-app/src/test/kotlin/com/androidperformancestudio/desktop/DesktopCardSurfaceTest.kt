@@ -9,27 +9,27 @@ import java.nio.file.Path
 
 class DesktopCardSurfaceTest {
     @Test
-    fun `home entry cards retain hover feedback callbacks and fixed layouts`() {
+    fun `home entry cards are pure visuals with fixed layouts`() {
+        // Cards render content only; tap and long-press-drag are handled by the ReorderableGrid
+        // overlay, so the cards carry no clickable/hover handler of their own.
         listOf(
-            Triple("QuickActionCard", "action", "HOME_QUICK_ACTION_HEIGHT_DP"),
-            Triple("FeatureEntryCard", "entry", "HOME_MODULE_CARD_HEIGHT_DP"),
-        ).forEach { (name, item, height) ->
+            Triple("QuickActionCard", "HOME_QUICK_ACTION_HEIGHT_DP", "padding(horizontal = 16.dp, vertical = 14.dp)"),
+            Triple("FeatureEntryCard", "HOME_MODULE_CARD_HEIGHT_DP", "padding(horizontal = 14.dp, vertical = 12.dp)"),
+        ).forEach { (name, height, contentPadding) ->
             val card = functionSource("AppHomePage.kt", name)
-            assertTrue(card.contains("remember { MutableInteractionSource() }"), name)
-            assertTrue(card.contains("interactionSource.collectIsHoveredAsState()"), name)
-            assertTrue(card.contains(".height($height.dp)"), name)
-            assertTrue(card.contains(".shadow(elevation = if (hovered) 6.dp else 1.dp"), name)
-            assertTrue(
-                card.contains(".clickable(interactionSource = interactionSource, indication = null, onClick = $item.onClick)"),
-                name,
-            )
-            assertTrue(card.contains("if (hovered) colors.selectedRow else colors.panel"), name)
-            assertTrue(card.contains("if (hovered) colors.accent.copy(alpha = 0.42f) else colors.border.copy(alpha = 0.72f)"), name)
+            assertFalse(card.contains("MutableInteractionSource"), name)
+            assertFalse(card.contains("collectIsHoveredAsState"), name)
+            assertFalse(card.contains(".clickable("), name)
+            assertTrue(card.contains(".shadow(elevation = 1.dp"), name)
+            assertTrue(card.contains("containerColor = colors.panel"), name)
+            assertTrue(card.contains("borderColor = colors.border.copy(alpha = 0.72f)"), name)
+            assertTrue(card.contains("contentPadding = 0.dp"), name)
             assertTrue(card.contains("verticalAlignment = Alignment.CenterVertically"), name)
             assertTrue(card.contains("maxLines = 2"), name)
+            assertTrue(card.contains(contentPadding), name)
+            // The card's own height is supplied by the caller (the grid), not baked in.
+            assertFalse(card.contains(".height($height.dp)"), name)
         }
-        assertTrue(functionSource("AppHomePage.kt", "QuickActionCard").contains("padding(horizontal = 16.dp, vertical = 14.dp)"))
-        assertTrue(functionSource("AppHomePage.kt", "FeatureEntryCard").contains("padding(horizontal = 14.dp, vertical = 12.dp)"))
     }
 
     @Test
@@ -38,15 +38,11 @@ class DesktopCardSurfaceTest {
             val card = functionSource("AppHomePage.kt", name)
             assertEquals(1, Regex("StudioCard\\(").findAll(card).count(), name)
             val surface = card.substringAfter("StudioCard(").substringBefore(") {")
-            assertTrue(surface.contains(".clickable("), name)
-            assertTrue(surface.contains("containerColor = if (hovered)"), name)
-            assertTrue(surface.contains("borderColor = if (hovered)"), name)
             assertTrue(surface.contains("contentPadding = 0.dp"), name)
             assertTrue(card.contains("RoundedCornerShape(StudioTokens.cardRadius)"), name)
             assertTrue(card.contains("Modifier.fillMaxSize().padding("), name)
             assertFalse(card.contains(".clip(shape)"), name)
             assertFalse(card.contains(".border("), name)
-            assertFalse(card.contains(".background(if (hovered)"), name)
         }
     }
 

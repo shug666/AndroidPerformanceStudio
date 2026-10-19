@@ -29,8 +29,9 @@ class RecentArtifactNavigationWiringTest {
         val app = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/DesktopAppMainPage.kt"))
         val home = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/AppHomePage.kt"))
 
-        assertTrue(home.contains("onClick = onOpenTraceFile"))
-        assertTrue(home.contains("onClick = onAnalyzeHprof"))
+        // Quick actions are wired to the import flows through the catalog resolver.
+        assertTrue(home.contains("onOpenTraceFile = onOpenTraceFile"))
+        assertTrue(home.contains("onAnalyzeHprof = onAnalyzeHprof"))
         assertTrue(app.contains("chooseHomeArtifact()?.let { navigator.openPerfettoTrace(it) }"))
         assertTrue(app.contains("chooseHomeArtifact()?.let { navigator.openMemoryProfiler(it) }"))
         assertTrue(app.contains("initialTraceRequestId = navigator.perfettoTraceRequestId"))
