@@ -26,4 +26,6 @@
     <string name="reverse_net_sharing">供网中：设备流量正经过本机转发。</string>
     <string name="reverse_net_stopping">供网停止中…</string>
     <string name="reverse_net_error">供网错误：</string>
+    <string name="reverse_net_no_device">未检测到设备。请连接已开启 adb 调试的设备。</string>
+    <string name="reverse_net_refresh">刷新</string>
 </resources>

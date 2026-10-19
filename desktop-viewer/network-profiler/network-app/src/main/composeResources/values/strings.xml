@@ -26,4 +26,6 @@
     <string name="reverse_net_sharing">Reverse net sharing: device traffic flows through this computer.</string>
     <string name="reverse_net_stopping">Reverse net stopping…</string>
     <string name="reverse_net_error">Reverse net error:</string>
+    <string name="reverse_net_no_device">No device detected. Connect a device with adb debugging enabled.</string>
+    <string name="reverse_net_refresh">Refresh</string>
 </resources>
