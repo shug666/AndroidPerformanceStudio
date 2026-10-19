@@ -228,6 +228,7 @@ public fun FrameWindowScope.ReverseNetMainPage(
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
             Spacer(Modifier.height(8.dp))
             var showContextMenu by remember { mutableStateOf(false) }
+            var menuOffset by remember { mutableStateOf(androidx.compose.ui.unit.DpOffset.Zero) }
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "Tunnel events (${collectedEvents.size})",
@@ -252,6 +253,10 @@ public fun FrameWindowScope.ReverseNetMainPage(
                                     if (event.type == PointerEventType.Press) {
                                         val mouseEvent = event.nativeEvent as? java.awt.event.MouseEvent
                                         if (mouseEvent?.button == java.awt.event.MouseEvent.BUTTON3) {
+                                            val pos = event.changes.firstOrNull()?.position
+                                            if (pos != null) {
+                                                menuOffset = androidx.compose.ui.unit.DpOffset(pos.x.dp, pos.y.dp)
+                                            }
                                             showContextMenu = true
                                         }
                                     }
@@ -267,6 +272,7 @@ public fun FrameWindowScope.ReverseNetMainPage(
             DropdownMenu(
                 expanded = showContextMenu,
                 onDismissRequest = { showContextMenu = false },
+                offset = menuOffset,
             ) {
                 DropdownMenuItem(
                     text = { Text(localizedStringResource(Res.string.reverse_net_clear_log, language)) },
