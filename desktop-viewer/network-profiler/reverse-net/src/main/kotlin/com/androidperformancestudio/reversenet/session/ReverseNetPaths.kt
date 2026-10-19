@@ -13,28 +13,63 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:Suppress("ReturnCount")
+
 package com.androidperformancestudio.reversenet.session
 
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 
-/** Locates vendored resources of the reverse-net module. */
+/** Locates the vendored gnirehtet.apk for the reverse-net module. */
 public object ReverseNetPaths {
-    private val CANDIDATE_ROOTS = listOf(
+    private const val RESOURCE_PATH = "/gnirehtet.apk"
+    private const val APK_FILE_NAME = "gnirehtet.apk"
+
+    /** Dev-mode candidate roots (a checkout run, not an installed package). */
+    private val DEV_CANDIDATE_ROOTS = listOf(
         "third_party/gnirehtet",
         "../third_party/gnirehtet",
         "../../third_party/gnirehtet",
         "../../../third_party/gnirehtet",
     )
 
-    /** Path to the vendored official gnirehtet.apk; null when the checkout layout differs. */
+    /** Directory used to cache the extracted apk in an installed package. */
+    private val cacheDir: Path by lazy {
+        Path.of(System.getProperty("user.home"), ".android-performance-studio", "reverse-net")
+    }
+
+    /**
+     * Path to the vendored gnirehtet.apk.
+     *
+     * Dev mode (run from a checkout): returns the file under third_party/.
+     * Installed package: extracts the apk from the jar classpath resource into
+     * ~/.android-performance-studio/reverse-net/ on first use and returns the cached path.
+     */
     public fun vendoredApk(): Path? {
-        for (candidate in CANDIDATE_ROOTS) {
-            val path = Path.of(candidate, "gnirehtet.apk")
+        // 1. dev mode: read straight from the checkout
+        for (candidate in DEV_CANDIDATE_ROOTS) {
+            val path = Path.of(candidate, APK_FILE_NAME)
             if (Files.isRegularFile(path)) {
                 return path.toAbsolutePath().normalize()
             }
         }
-        return null
+        // 2. installed package: extract from classpath resource, cache on disk
+        return extractFromResource()
     }
+
+    private fun extractFromResource(): Path? {
+        val cached = cacheDir.resolve(APK_FILE_NAME)
+        if (Files.isRegularFile(cached) && Files.size(cached) == RESOURCE_SIZE) {
+            return cached
+        }
+        val resource = ReverseNetPaths::class.java.getResourceAsStream(RESOURCE_PATH) ?: return null
+        resource.use { input ->
+            Files.createDirectories(cacheDir)
+            Files.copy(input, cached, StandardCopyOption.REPLACE_EXISTING)
+        }
+        return cached.takeIf { Files.isRegularFile(it) }
+    }
+
+    private const val RESOURCE_SIZE: Long = 23_904L
 }

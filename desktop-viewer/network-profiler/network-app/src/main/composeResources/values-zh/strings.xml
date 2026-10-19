@@ -15,7 +15,9 @@
     <string name="har">HAR</string>
     <string name="csv">CSV</string>
     <string name="http_archive">HTTP 归档</string>
-    <string name="reverse_net_start">反向供网</string>
+    <string name="reverse_net_title">反向供网</string>
+    <string name="reverse_net_device">设备</string>
+    <string name="reverse_net_start">启动供网</string>
     <string name="reverse_net_start_isolated">反向供网（隔离）</string>
     <string name="reverse_net_stop">停止供网</string>
     <string name="reverse_net_idle">供网空闲。</string>

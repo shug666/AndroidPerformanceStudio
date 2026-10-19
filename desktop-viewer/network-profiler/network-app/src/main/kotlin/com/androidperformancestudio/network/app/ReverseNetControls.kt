@@ -2,6 +2,13 @@
 
 package com.androidperformancestudio.network.app
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -9,6 +16,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.androidperformancestudio.adb.defaultAdbExecutable
 import com.androidperformancestudio.network.network_app.generated.resources.*
 import com.androidperformancestudio.network.network_app.generated.resources.Res
@@ -17,6 +28,7 @@ import com.androidperformancestudio.reversenet.dns.DnsFilterMode
 import com.androidperformancestudio.reversenet.session.ReverseNetSessionState
 import com.androidperformancestudio.reversenet.session.SessionController
 import com.androidperformancestudio.ui.HeaderSpacer
+import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.ProfilerCompactButton
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.localizedStringResource
@@ -61,50 +73,70 @@ public fun ReverseNetControls(
 
     val active = sessionState !is ReverseNetSessionState.Idle && sessionState !is ReverseNetSessionState.Error
 
-    HeaderSpacer()
-    ProfilerCompactButton(
-        text = localizedStringResource(Res.string.reverse_net_start, language),
-        enabled = deviceSerial.isNotBlank() && !active,
-        onClick = {
-            scope.launch(Dispatchers.IO) {
-                controller.start(deviceSerial, DnsFilterMode.RELAXED)
-            }
-        },
-    )
-    HeaderSpacer()
-    ProfilerCompactButton(
-        text = localizedStringResource(Res.string.reverse_net_start_isolated, language),
-        enabled = deviceSerial.isNotBlank() && !active,
-        onClick = {
-            scope.launch(Dispatchers.IO) {
-                controller.start(deviceSerial, DnsFilterMode.ISOLATED)
-            }
-        },
-    )
-    HeaderSpacer()
-    ProfilerCompactButton(
-        text = localizedStringResource(Res.string.reverse_net_stop, language),
-        enabled = active,
-        onClick = {
-            scope.launch(Dispatchers.IO) {
-                controller.stop()
-            }
-        },
-    )
-    HeaderSpacer()
-    androidx.compose.material3.Text(
-        text = if (tunnelEventCount > 0) "$tunnelEventCount tunnel events" else "",
-        style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
-    )
-    androidx.compose.material3.Text(
-        text = alertText ?: statusText(sessionState),
-        style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
-        color = if (alertText != null) {
-            androidx.compose.material3.MaterialTheme.colorScheme.error
-        } else {
-            androidx.compose.material3.MaterialTheme.colorScheme.onSurface
-        },
-    )
+    Row(
+        modifier = Modifier.fillMaxWidth().background(LocalViewerColors.current.panel)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = localizedStringResource(Res.string.reverse_net_title, language),
+            style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = localizedStringResource(Res.string.reverse_net_device, language) + ": " +
+                if (deviceSerial.isNotBlank()) deviceSerial else "-",
+            style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+        )
+        Spacer(Modifier.width(12.dp))
+        ProfilerCompactButton(
+            text = localizedStringResource(Res.string.reverse_net_start, language),
+            enabled = deviceSerial.isNotBlank() && !active,
+            onClick = {
+                scope.launch(Dispatchers.IO) {
+                    controller.start(deviceSerial, DnsFilterMode.RELAXED)
+                }
+            },
+        )
+        HeaderSpacer()
+        ProfilerCompactButton(
+            text = localizedStringResource(Res.string.reverse_net_start_isolated, language),
+            enabled = deviceSerial.isNotBlank() && !active,
+            onClick = {
+                scope.launch(Dispatchers.IO) {
+                    controller.start(deviceSerial, DnsFilterMode.ISOLATED)
+                }
+            },
+        )
+        HeaderSpacer()
+        ProfilerCompactButton(
+            text = localizedStringResource(Res.string.reverse_net_stop, language),
+            enabled = active,
+            onClick = {
+                scope.launch(Dispatchers.IO) {
+                    controller.stop()
+                }
+            },
+        )
+        Spacer(Modifier.width(12.dp))
+        if (tunnelEventCount > 0) {
+            Text(
+                text = "$tunnelEventCount tunnel events",
+                style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(
+            text = alertText ?: statusText(sessionState),
+            style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+            color = if (alertText != null) {
+                androidx.compose.material3.MaterialTheme.colorScheme.error
+            } else {
+                androidx.compose.material3.MaterialTheme.colorScheme.onSurface
+            },
+        )
+    }
 }
 
 /** Bus + controller pair for the reverse-tethering session. */

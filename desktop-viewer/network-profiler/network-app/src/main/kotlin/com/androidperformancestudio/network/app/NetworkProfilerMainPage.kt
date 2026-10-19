@@ -207,15 +207,15 @@ public fun FrameWindowScope.NetworkProfilerMainPage(
                 },
             )
             Spacer(Modifier.weight(1f))
-            ReverseNetControls(
-                deviceSerial = state.deviceSerial,
-                language = language,
-                controller = reverseNetSession.controller,
-                eventBus = reverseNetSession.eventBus,
-            )
-            Spacer(Modifier.weight(1f))
             ProfilerToolbarStatus(state.message, state.error)
         }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+        ReverseNetControls(
+            deviceSerial = state.deviceSerial,
+            language = language,
+            controller = reverseNetSession.controller,
+            eventBus = reverseNetSession.eventBus,
+        )
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
         NetworkProfilerScreen(state, NetworkProfilerActions { state = state.copy(selectedCallId = it) }, language, Modifier.weight(1f))
     }
