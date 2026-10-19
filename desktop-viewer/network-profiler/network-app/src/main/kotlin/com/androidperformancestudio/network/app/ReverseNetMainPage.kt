@@ -251,10 +251,13 @@ public fun FrameWindowScope.ReverseNetMainPage(
                             .pointerInput(Unit) {
                                 awaitPointerEventScope {
                                     while (true) {
-                                        val event = awaitPointerEvent(PointerEventPass.Main)
+                                        val event = awaitPointerEvent(PointerEventPass.Initial)
                                         if (event.type == PointerEventType.Press) {
                                             val mouseEvent = event.nativeEvent as? java.awt.event.MouseEvent
                                             if (mouseEvent?.button == java.awt.event.MouseEvent.BUTTON3) {
+                                                // Consume on the Initial pass so SelectionContainer's built-in
+                                                // Copy popup (handled later on Main) never sees the right-click.
+                                                event.changes.forEach { it.consume() }
                                                 val pos = event.changes.firstOrNull()?.position
                                                 if (pos != null) {
                                                     menuOffset = androidx.compose.ui.unit.DpOffset(pos.x.dp, pos.y.dp)
