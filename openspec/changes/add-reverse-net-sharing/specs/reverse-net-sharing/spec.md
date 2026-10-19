@@ -50,3 +50,35 @@
 #### Scenario: 供网事件与 OkHttp 事件同轴展示
 - **WHEN** 被测 app 集成了 OkHttp agent 且供网会话活跃
 - **THEN** 网络事件时间轴同时展示 OkHttp 语义事件与供网隧道层连接事件
+
+### Requirement: 设备自动检测
+系统 SHALL 在反向供网页面进入时自动经 `adb devices` 列出已连接设备，每 2 秒轮询刷新；自动选中第一个设备；无设备时显示明确提示。用户 SHALL NOT 需要手动输入设备 serial。
+
+#### Scenario: 设备已连接
+- **WHEN** 用户进入反向供网页面且设备已连接
+- **THEN** 设备 serial 自动列出并选中，可直接启动会话
+
+#### Scenario: 无设备
+- **WHEN** 进入页面时无已连接设备
+- **THEN** 显示"未检测到设备"提示，启动按钮禁用
+
+### Requirement: 独立导航入口
+反向供网 SHALL 作为独立的左侧导航目的地与首页功能卡片存在，位于导航顺序末尾（Source Workspaces 之后），SHALL NOT 嵌入既有 profiler 工具栏。
+
+#### Scenario: 导航可达
+- **WHEN** 用户点击左侧导航栏的反向供网图标或首页卡片
+- **THEN** 进入独立的反向供网页面
+
+### Requirement: 初始化容错
+adb 或 vendored APK 解析失败时 SHALL 在页面内显示错误信息，SHALL NOT 导致页面组合崩溃。
+
+#### Scenario: adb 未找到
+- **WHEN** 平台工具未配置且系统 PATH 无 adb
+- **THEN** 页面显示初始化错误，不崩溃
+
+### Requirement: 设备选择与刷新
+系统 SHALL 提供刷新按钮手动重新查询设备列表。
+
+#### Scenario: 手动刷新
+- **WHEN** 用户点击刷新按钮
+- **THEN** 重新执行 `adb devices` 并更新设备列表

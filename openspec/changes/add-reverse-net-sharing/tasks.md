@@ -43,3 +43,16 @@
 - [x] 7.1 供网事件流接入 network-profiler 消费侧，与 OkHttp agent 事件时间轴同轴展示（连接事件 + DNS 事件 + 告警）
 - [x] 7.2 实机端到端验证（场景 A）：无网设备供网，浏览器访问网页，验证 relay 转发、DNS 事件、连接事件
 - [x] 7.3 实机端到端验证（场景 B 隔离模式）：有网设备强制走电脑，验证 AAAA 剥离（设备侧 `ping -6` 域名无 v6 结果）、泄漏审计命中（WiFi 有 v6 时告警）
+
+## 8. 实现修正（实机验证后回写）
+
+- [x] 8.1 APK 以 classpath 资源分发 + 运行时提取缓存（修复安装包找不到 APK 导致页面崩溃）
+- [x] 8.2 反向供网改为独立导航目的地 + 首页卡片（原嵌工具栏被裁剪不可见）
+- [x] 8.3 设备自动检测（adb devices 每 2s 轮询，自动选中第一个，无需手输 serial）
+- [x] 8.4 初始化容错（adb/apk 解析失败显示页内错误，不崩组合）
+- [x] 8.5 adb reverse 走 DefaultAdbCommandExecutor（AdbClient.forward 方向不符）
+- [x] 8.6 relay 同端口重启（SO_REUSEADDR + TunnelServer.close 修复 BindException）
+- [x] 8.7 隧道事件日志区：mutableStateListOf 实时刷新 + 选中复制 + 右键菜单（清除/复制全部）
+- [x] 8.8 Connection 字节计数（转发点累计，Closed 事件携带真实字节量）
+- [x] 8.9 抑制 SelectionContainer 内置 Copy 菜单（PointerEventPass.Initial 拦截 + consume）
+- [x] 8.10 导航与首页卡片移至末尾（Source Workspaces 之后）

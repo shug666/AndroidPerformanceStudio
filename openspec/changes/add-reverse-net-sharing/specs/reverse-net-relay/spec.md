@@ -58,3 +58,43 @@ relay SHALL 在会话停止或 JVM shutdown hook 触发时清理代开 socket、
 #### Scenario: 停止时资源清理
 - **WHEN** 用户停止供网会话
 - **THEN** relay 关闭所有代开 socket、释放 31416 端口，连接表清空
+
+### Requirement: relay 同端口重启
+relay 监听 socket SHALL 设 SO_REUSEADDR，会话停止时 SHALL 显式关闭监听 socket 与所有 client 连接。同端口二次启动 SHALL NOT 报 BindException。
+
+#### Scenario: 会话重启
+- **WHEN** 停止会话后立即以同端口启动新会话
+- **THEN** relay 成功绑定原端口，不报地址占用
+
+### Requirement: 连接字节计数
+每个连接 SHALL 累计设备→网络与网络→设备方向的字节数；Closed 事件 SHALL 携带真实字节总量。
+
+#### Scenario: 关闭事件含字节量
+- **WHEN** 一个转发连接关闭
+- **THEN** Closed 事件包含该连接生命周期内累计的 bytesSent 与 bytesReceived
+
+### Requirement: APK 运行时定位
+vendored gnirehtet.apk SHALL 以 classpath 资源形式打入 reverse-net 模块 jar；安装包运行时 SHALL 从 classpath 提取到 `~/.android-performance-studio/reverse-net/` 缓存；dev 模式 SHALL 优先使用 `third_party/` 源文件。
+
+#### Scenario: 安装包运行
+- **WHEN** 应用以安装包形式运行（CWD 非仓库根）
+- **THEN** relay 能从 classpath 资源提取 gnirehtet.apk 并安装到设备
+
+#### Scenario: dev 模式
+- **WHEN** 从仓库 checkout 运行
+- **THEN** 优先使用 `third_party/gnirehtet/gnirehtet.apk` 源文件
+
+### Requirement: 隧道事件日志交互
+事件日志区 SHALL 支持鼠标选中复制、右键弹出上下文菜单（清除日志 / 复制全部）；右键 SHALL 抑制 SelectionContainer 内置 Copy 菜单，只弹自定义菜单。
+
+#### Scenario: 选中复制
+- **WHEN** 用户在日志区拖选文本
+- **THEN** 选中文本可被复制到剪贴板
+
+#### Scenario: 右键菜单
+- **WHEN** 用户在日志区右键
+- **THEN** 弹出含"清除日志"和"复制全部"两项的菜单，紧贴光标位置
+
+#### Scenario: 抑制内置菜单
+- **WHEN** 日志区有选中文本时右键
+- **THEN** 只弹自定义菜单，SelectionContainer 内置 Copy 菜单不出现

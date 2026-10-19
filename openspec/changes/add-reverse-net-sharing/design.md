@@ -68,13 +68,57 @@
 - 内部结构：`session/`（编排 + 状态机）、`relay/`（数据面 + tap）、`dns/`（UDP:53 解析 + AAAA 过滤）、`leak/`（泄漏审计）、`events/`（事件模型与输出）、`status/`（授权状态机）。
 - 依赖 `platform-core/adb-core`（已通过 includeBuild 引用）。
 - 供网事件输出为独立事件流，network-profiler UI 消费（时间轴上与 OkHttp agent 事件互补）；不修改现有 agent 协议。
-- UI 控件落在 `desktop-app` 设备面板（开关 + 隔离模式选择 + 状态指示），订阅 SessionController 暴露的 StateFlow。
+- ~~UI 控件落在 `desktop-app` 设备面板（开关 + 隔离模式选择 + 状态指示），订阅 SessionController 暴露的 StateFlow。~~
+  **实现修正**：UI 改为独立导航目的地（见 D8），不嵌入既有 profiler 工具栏。
 
 ### D6: relay 线程模型与 tap 位置
 
 - 移植 relay-java 的阻塞式线程模型，移植保真度优先于性能重构。
 - tap 放在包解析 choke point（IPv4 头解析后、TCP/UDP 分发前），DNS 解析与 AAAA 过滤在 tap 通路内对 UDP:53 同步完成（代价低）。
 - tap 事件经有界队列异步发出（容量上限 + 丢弃计数，参考 `EventBuffer` 模式），不阻塞转发热路径。
+
+### D7: APK 以 classpath 资源分发，运行时提取缓存（修正 D2）
+
+D2 原设 vendor APK 仅按相对 CWD 路径 `third_party/gnirehtet/` 查找。实机验证发现安装包运行时 CWD 不是仓库根，找不到 APK 导致页面崩溃。
+
+修正：
+- 官方 gnirehtet.apk 2.5.1 同时作为 **reverse-net 模块的 classpath 资源**（`src/main/resources/gnirehtet.apk`）打进 jar。
+- `ReverseNetPaths.vendoredApk()`：dev 模式优先用 `third_party/` 源文件；安装包模式从 classpath 提取到 `~/.android-performance-studio/reverse-net/gnirehtet.apk` 缓存（按 23904 字节校验是否需重提）。
+- `third_party/` 仍保留源 APK + README（许可与来源说明）。
+
+### D8: UI 为独立导航目的地 + 首页卡片（修正 D5）
+
+D5 原设控件嵌在 network-profiler 工具栏。实机验证发现工具栏按钮链过长，控件被裁剪不可见，且不便于发现。
+
+修正：
+- `AppDestination.REVERSE_NET` 作为一等导航枚举，位于导航栏与首页功能卡片**末尾**（Source Workspaces 之后）。
+- 独立页面 `ReverseNetMainPage`（network-app）：HeaderToolbar（标题 + 状态）+ 设备区 + 控制按钮 + 可选择/可右键的隧道事件日志区。
+- 设备 serial **自动检测**（`adb devices` 每 2s 轮询，自动选中第一个），不需手输；无设备时显示明确提示。
+- 初始化容错：adb/apk 解析失败时在页面内显示错误，不崩组合（原 `remember{ error() }` 会让整页不渲染）。
+
+### D9: adb reverse 走 DefaultAdbCommandExecutor，不复用 AdbClient.forward
+
+实现时发现 `AdbClient.forward` 执行的是 `adb forward`（host→设备方向），而供网需要 `adb reverse`（设备→host）。AdbClient 不暴露 reverse。
+
+修正：`DefaultReverseNetAdbOperations` 的 reverse/反向列表/移除均经 `DefaultAdbCommandExecutor.executeText()` 直跑 `adb -s <serial> reverse ...`。forward/removeForward 仅作兼容保留。
+
+### D10: relay 监听 socket 支持同端口重启（SO_REUSEADDR + 显式 close）
+
+实机验证发现会话停止后同端口二次启动 BindException——`RelayEngine.stop()` 只关 selector，未关 listening socket，且未设 SO_REUSEADDR。
+
+修正：
+- `TunnelServer` 持有 `serverSocketChannel` 字段，`close()` 显式关闭监听 socket + 断开所有 client。
+- `RelayEngine.stop()` 调 `tunnelServer?.close()` 再关 selector。
+- 监听 socket 设 `reuseAddress = true`。
+- 3-cycle 同端口 start/stop 探针验证可重启。
+
+### D11: 隧道事件日志区可选/可复制/右键菜单
+
+UI 需求（实现时补充，原 spec 未列）：
+- 事件列表用 `mutableStateListOf`（Compose 可观察）实时刷新。
+- `SelectionContainer` 包裹列表支持鼠标选中复制；右键在 `PointerEventPass.Initial` 拦截并 `consume()`，抑制 SelectionContainer 内置 Copy 菜单，只弹自定义菜单（清除日志 / 复制全部）。
+- `DropdownMenu` 包在 `Box` 内 + `DpOffset` 锚定到右键点。
+- Connection 接口暴露 `bytesSentToNetwork()` / `bytesReceivedFromNetwork()`，TCP/UDP 在转发点累计，Closed 事件携带真实字节量。
 
 ## Risks / Trade-offs
 
