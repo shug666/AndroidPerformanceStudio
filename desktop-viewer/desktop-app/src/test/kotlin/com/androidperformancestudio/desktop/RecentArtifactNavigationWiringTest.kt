@@ -25,13 +25,11 @@ class RecentArtifactNavigationWiringTest {
     }
 
     @Test
-    fun `dashboard file quick actions hand selected artifacts to existing import flows`() {
+    fun `file picker hands selected artifacts to existing import flows`() {
         val app = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/DesktopAppMainPage.kt"))
-        val home = Files.readString(Path.of("src/main/kotlin/com/androidperformancestudio/desktop/AppHomePage.kt"))
 
-        // Quick actions are wired to the import flows through the catalog resolver.
-        assertTrue(home.contains("onOpenTraceFile = onOpenTraceFile"))
-        assertTrue(home.contains("onAnalyzeHprof = onAnalyzeHprof"))
+        // The fallback menu's file picker routes selected artifacts into the Perfetto and Memory
+        // import flows (the Quick Actions row that used to host these has been removed).
         assertTrue(app.contains("chooseHomeArtifact()?.let { navigator.openPerfettoTrace(it) }"))
         assertTrue(app.contains("chooseHomeArtifact()?.let { navigator.openMemoryProfiler(it) }"))
         assertTrue(app.contains("initialTraceRequestId = navigator.perfettoTraceRequestId"))

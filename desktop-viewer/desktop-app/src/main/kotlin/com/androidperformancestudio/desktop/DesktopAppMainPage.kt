@@ -245,8 +245,6 @@ fun FrameWindowScope.DesktopAppMainPage(
                                                 navigator.openMemoryProfiler(item.artifactPath)
                                         }
                                     },
-                                    onOpenTraceFile = openTraceFile,
-                                    onAnalyzeHprof = analyzeHprof,
                                     androidSdkPath = applicationSettings.androidSdkPath,
                                     active = active,
                                 )

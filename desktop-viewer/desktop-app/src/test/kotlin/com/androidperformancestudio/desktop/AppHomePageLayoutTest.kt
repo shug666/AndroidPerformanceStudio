@@ -77,15 +77,6 @@ class AppHomePageLayoutTest {
     }
 
     @Test
-    fun `quick actions stay a four up row until the column narrows`() {
-        assertEquals(4, homeQuickActionColumnCount(1020))
-        assertEquals(4, homeQuickActionColumnCount(720))
-        assertEquals(2, homeQuickActionColumnCount(680))
-        assertEquals(1, homeQuickActionColumnCount(360))
-        assertTrue(source.contains("homeQuickActionColumnCount(maxWidth.value.toInt())"))
-    }
-
-    @Test
     fun `home metrics only read the real device and recent projections`() {
         assertEquals(2, Regex("StudioMetricCard\\(").findAll(source).count())
         assertTrue(source.contains("connectedCount"))
@@ -108,18 +99,6 @@ class AppHomePageLayoutTest {
         assertFalse(source.contains("recent_column_device"))
         assertFalse(source.contains("recent_column_duration"))
         assertFalse(source.contains("recent_column_status"))
-    }
-
-    @Test
-    fun `quick actions reuse the shell navigation icons`() {
-        val homeLayout =
-            Files.readString(
-                Path.of("src/main/kotlin/com/androidperformancestudio/desktop/HomeLayout.kt"),
-            )
-        assertTrue(source.contains("HomeQuickAction("))
-        assertTrue(source.contains("HOME_QUICK_ACTION_HEIGHT_DP"))
-        assertTrue(homeLayout.contains("UiComponentsRes.drawable.ic_action_play"))
-        assertTrue(homeLayout.contains("UiComponentsRes.drawable.ic_action_import"))
     }
 
     @Test

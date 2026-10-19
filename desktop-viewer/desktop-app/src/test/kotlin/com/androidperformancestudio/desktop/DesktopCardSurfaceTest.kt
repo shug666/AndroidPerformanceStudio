@@ -12,38 +12,35 @@ class DesktopCardSurfaceTest {
     fun `home entry cards are pure visuals with fixed layouts`() {
         // Cards render content only; tap and long-press-drag are handled by the ReorderableGrid
         // overlay, so the cards carry no clickable/hover handler of their own.
-        listOf(
-            Triple("QuickActionCard", "HOME_QUICK_ACTION_HEIGHT_DP", "padding(horizontal = 16.dp, vertical = 14.dp)"),
-            Triple("FeatureEntryCard", "HOME_MODULE_CARD_HEIGHT_DP", "padding(horizontal = 14.dp, vertical = 12.dp)"),
-        ).forEach { (name, height, contentPadding) ->
-            val card = functionSource("AppHomePage.kt", name)
-            assertFalse(card.contains("MutableInteractionSource"), name)
-            assertFalse(card.contains("collectIsHoveredAsState"), name)
-            assertFalse(card.contains(".clickable("), name)
-            assertTrue(card.contains(".shadow(elevation = 1.dp"), name)
-            assertTrue(card.contains("containerColor = colors.panel"), name)
-            assertTrue(card.contains("borderColor = colors.border.copy(alpha = 0.72f)"), name)
-            assertTrue(card.contains("contentPadding = 0.dp"), name)
-            assertTrue(card.contains("verticalAlignment = Alignment.CenterVertically"), name)
-            assertTrue(card.contains("maxLines = 2"), name)
-            assertTrue(card.contains(contentPadding), name)
-            // The card's own height is supplied by the caller (the grid), not baked in.
-            assertFalse(card.contains(".height($height.dp)"), name)
-        }
+        val name = "FeatureEntryCard"
+        val height = "HOME_MODULE_CARD_HEIGHT_DP"
+        val contentPadding = "padding(horizontal = 14.dp, vertical = 12.dp)"
+        val card = functionSource("AppHomePage.kt", name)
+        assertFalse(card.contains("MutableInteractionSource"), name)
+        assertFalse(card.contains("collectIsHoveredAsState"), name)
+        assertFalse(card.contains(".clickable("), name)
+        assertTrue(card.contains(".shadow(elevation = 1.dp"), name)
+        assertTrue(card.contains("containerColor = colors.panel"), name)
+        assertTrue(card.contains("borderColor = colors.border.copy(alpha = 0.72f)"), name)
+        assertTrue(card.contains("contentPadding = 0.dp"), name)
+        assertTrue(card.contains("verticalAlignment = Alignment.CenterVertically"), name)
+        assertTrue(card.contains("maxLines = 2"), name)
+        assertTrue(card.contains(contentPadding), name)
+        // The card's own height is supplied by the caller (the grid), not baked in.
+        assertFalse(card.contains(".height($height.dp)"), name)
     }
 
     @Test
     fun `home entry cards share their outer surface without doubling padding`() {
-        listOf("QuickActionCard", "FeatureEntryCard").forEach { name ->
-            val card = functionSource("AppHomePage.kt", name)
-            assertEquals(1, Regex("StudioCard\\(").findAll(card).count(), name)
-            val surface = card.substringAfter("StudioCard(").substringBefore(") {")
-            assertTrue(surface.contains("contentPadding = 0.dp"), name)
-            assertTrue(card.contains("RoundedCornerShape(StudioTokens.cardRadius)"), name)
-            assertTrue(card.contains("Modifier.fillMaxSize().padding("), name)
-            assertFalse(card.contains(".clip(shape)"), name)
-            assertFalse(card.contains(".border("), name)
-        }
+        val name = "FeatureEntryCard"
+        val card = functionSource("AppHomePage.kt", name)
+        assertEquals(1, Regex("StudioCard\\(").findAll(card).count(), name)
+        val surface = card.substringAfter("StudioCard(").substringBefore(") {")
+        assertTrue(surface.contains("contentPadding = 0.dp"), name)
+        assertTrue(card.contains("RoundedCornerShape(StudioTokens.cardRadius)"), name)
+        assertTrue(card.contains("Modifier.fillMaxSize().padding("), name)
+        assertFalse(card.contains(".clip(shape)"), name)
+        assertFalse(card.contains(".border("), name)
     }
 
     @Test

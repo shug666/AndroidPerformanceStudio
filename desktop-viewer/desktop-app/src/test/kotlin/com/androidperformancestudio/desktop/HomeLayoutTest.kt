@@ -14,21 +14,8 @@ class HomeLayoutStoreTest {
         val values = mutableMapOf<String, String>()
         val s = store(values)
         val order = DEFAULT_MODULE_ORDER.reversed()
-        assertTrue(s.save(order, QuickActionType.DEFAULTS))
+        assertTrue(s.save(order))
         assertEquals(order, s.loadModuleOrder())
-    }
-
-    @Test
-    fun `quick actions round-trip and stay ordered`() {
-        val values = mutableMapOf<String, String>()
-        val s = store(values)
-        val actions = listOf(
-            QuickActionType.OPEN_PERFETTO,
-            QuickActionType.START_CAPTURE,
-            QuickActionType.OPEN_GPU_INSPECTOR,
-        )
-        assertTrue(s.save(DEFAULT_MODULE_ORDER, actions))
-        assertEquals(actions, s.loadQuickActions())
     }
 
     @Test
@@ -48,22 +35,9 @@ class HomeLayoutStoreTest {
     }
 
     @Test
-    fun `unknown quick action IDs are dropped on load`() {
-        val values = mutableMapOf<String, String>()
-        values["application.home.quickActions"] = "start_capture,unknown_action,import_trace"
-        val s = store(values)
-        val loaded = s.loadQuickActions()
-        assertEquals(
-            listOf(QuickActionType.START_CAPTURE, QuickActionType.IMPORT_TRACE),
-            loaded,
-        )
-    }
-
-    @Test
-    fun `a fresh install restores the default module order and four quick actions`() {
+    fun `a fresh install restores the default module order`() {
         val s = store(mutableMapOf())
         assertEquals(DEFAULT_MODULE_ORDER, s.loadModuleOrder())
-        assertEquals(QuickActionType.DEFAULTS, s.loadQuickActions())
     }
 
     @Test
@@ -79,15 +53,6 @@ class HomeLayoutStoreTest {
     }
 
     @Test
-    fun `non-default quick actions are not padded back to the four defaults`() {
-        val values = mutableMapOf<String, String>()
-        // User explicitly keeps only one non-default action; defaults must NOT be restored.
-        values["application.home.quickActions"] = "open_gpu_inspector"
-        val s = store(values)
-        assertEquals(listOf(QuickActionType.OPEN_GPU_INSPECTOR), s.loadQuickActions())
-    }
-
-    @Test
     fun `null-store reads degrade to defaults and writes report failure`() {
         // Mirrors the desktop() store when prefs are unavailable: reads return null, writes throw.
         val s = HomeLayoutPreferencesStore(
@@ -96,8 +61,7 @@ class HomeLayoutStoreTest {
             flush = {},
         )
         assertEquals(DEFAULT_MODULE_ORDER, s.loadModuleOrder())
-        assertEquals(QuickActionType.DEFAULTS, s.loadQuickActions())
-        assertFalse(s.save(DEFAULT_MODULE_ORDER, QuickActionType.DEFAULTS))
+        assertFalse(s.save(DEFAULT_MODULE_ORDER))
     }
 }
 
@@ -106,10 +70,9 @@ class HomeLayoutControllerTest {
         HomeLayoutController(HomeLayoutPreferencesStore(values::get, values::set))
 
     @Test
-    fun `a fresh controller mirrors the hardcoded default order and four actions`() {
+    fun `a fresh controller mirrors the hardcoded default order`() {
         val c = controller()
         assertEquals(DEFAULT_MODULE_ORDER, c.moduleOrder.toList())
-        assertEquals(QuickActionType.DEFAULTS, c.quickActions.toList())
     }
 
     @Test
@@ -134,41 +97,6 @@ class HomeLayoutControllerTest {
         c.moveModule(0, c.moduleOrder.size)
         c.moveModule(3, 3)
         assertEquals(before, c.moduleOrder.toList())
-    }
-
-    @Test
-    fun `moveQuickAction reorders the action row live and persists`() {
-        val values = mutableMapOf<String, String>()
-        val c = controller(values)
-        c.moveQuickAction(0, 1) // START_CAPTURE after IMPORT_TRACE
-        assertEquals(QuickActionType.IMPORT_TRACE, c.quickActions[0])
-        assertEquals(QuickActionType.START_CAPTURE, c.quickActions[1])
-        val reloaded = HomeLayoutController(HomeLayoutPreferencesStore(values::get, values::set))
-        assertEquals(c.quickActions.toList(), reloaded.quickActions.toList())
-    }
-
-    @Test
-    fun `addQuickAction appends a catalog action and persists, ignoring duplicates`() {
-        val values = mutableMapOf<String, String>()
-        val c = controller(values)
-        c.addQuickAction(QuickActionType.OPEN_GPU_INSPECTOR)
-        assertEquals(QuickActionType.OPEN_GPU_INSPECTOR, c.quickActions.last())
-        assertEquals(5, c.quickActions.size)
-        c.addQuickAction(QuickActionType.OPEN_GPU_INSPECTOR) // no-op
-        assertEquals(5, c.quickActions.size)
-        val reloaded = HomeLayoutController(HomeLayoutPreferencesStore(values::get, values::set))
-        assertEquals(c.quickActions.toList(), reloaded.quickActions.toList())
-    }
-
-    @Test
-    fun `removeQuickAction removes and persists`() {
-        val values = mutableMapOf<String, String>()
-        val c = controller(values)
-        c.removeQuickAction(QuickActionType.START_CAPTURE)
-        assertFalse(QuickActionType.START_CAPTURE in c.quickActions)
-        assertEquals(3, c.quickActions.size)
-        val reloaded = HomeLayoutController(HomeLayoutPreferencesStore(values::get, values::set))
-        assertEquals(c.quickActions.toList(), reloaded.quickActions.toList())
     }
 }
 

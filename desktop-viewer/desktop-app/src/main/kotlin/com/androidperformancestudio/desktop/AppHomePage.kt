@@ -20,14 +20,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyGridItemScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -80,10 +78,6 @@ import com.androidperformancestudio.ui.studio.StudioStatusTone
 import com.androidperformancestudio.ui.studio.StudioTableColumn
 import com.androidperformancestudio.ui.studio.StudioTokens
 import com.androidperformancestudio.ui_components.generated.resources.Res as UiComponentsRes
-import com.androidperformancestudio.ui_components.generated.resources.ic_action_import
-import com.androidperformancestudio.ui_components.generated.resources.ic_action_play
-import com.androidperformancestudio.ui_components.generated.resources.ic_nav_memory_profiler
-import com.androidperformancestudio.ui_components.generated.resources.ic_nav_startup_profiler
 import com.androidperformancestudio.ui_components.generated.resources.ic_stat_device
 import com.androidperformancestudio.ui_components.generated.resources.ic_stat_history
 import java.time.Instant
@@ -96,7 +90,6 @@ import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.painterResource
 
 internal const val HOME_MODULE_CARD_HEIGHT_DP = 78
-internal const val HOME_QUICK_ACTION_HEIGHT_DP = 92
 internal const val HOME_RAIL_WIDTH_DP = 320
 internal const val HOME_TWO_COLUMN_MIN_WIDTH_DP = 900
 
@@ -104,14 +97,6 @@ internal fun homeGridColumnCount(availableWidthDp: Int): Int =
     when {
         availableWidthDp >= 820 -> 3
         availableWidthDp >= 560 -> 2
-        else -> 1
-    }
-
-/** Quick actions stay a single four-up row until the column is too narrow for the descriptions. */
-internal fun homeQuickActionColumnCount(availableWidthDp: Int): Int =
-    when {
-        availableWidthDp >= 720 -> 4
-        availableWidthDp >= 380 -> 2
         else -> 1
     }
 
@@ -160,8 +145,6 @@ internal fun AppHomePage(
     onOpenGpuInspector: () -> Unit,
     onOpenBenchmarkRegression: () -> Unit,
     onOpenRecentArtifact: (StudioRecentItem) -> Unit,
-    onOpenTraceFile: () -> Unit,
-    onAnalyzeHprof: () -> Unit,
     androidSdkPath: String? = null,
     active: Boolean = true,
 ) {
@@ -212,23 +195,6 @@ internal fun AppHomePage(
                 onClick = { openDestination(destination) },
             )
         }
-    val quickActions =
-        homeLayout.quickActions.map { type ->
-            val descriptor = quickActionDescriptor(type, language)
-            HomeQuickAction(
-                label = descriptor.label,
-                description = descriptor.description,
-                icon = descriptor.icon,
-                onClick = type.resolveOnClick(
-                    onOpenPerfetto = onOpenPerfetto,
-                    onOpenTraceFile = onOpenTraceFile,
-                    onAnalyzeHprof = onAnalyzeHprof,
-                    onOpenStartupProfiler = onOpenStartupProfiler,
-                    openDestination = openDestination,
-                ),
-            )
-        }
-    var quickActionsDialog by remember { mutableStateOf(false) }
 
     val colors = LocalViewerColors.current
     Surface(modifier = Modifier.fillMaxSize(), color = colors.workspace) {
@@ -250,13 +216,11 @@ internal fun AppHomePage(
                         HomeMainColumn(
                             homeLayout = homeLayout,
                             entries = entries,
-                            quickActions = quickActions,
                             deviceOverview = deviceOverview,
                             recentSnapshot = recentSnapshot,
                             loadingRecentItems = loadingRecentItems,
                             language = language,
                             onOpenRecentArtifact = onOpenRecentArtifact,
-                            onEditQuickActions = { quickActionsDialog = true },
                             modifier = Modifier.weight(1f),
                         )
                         HomeRailColumn(
@@ -274,13 +238,11 @@ internal fun AppHomePage(
                         HomeMainColumn(
                             homeLayout = homeLayout,
                             entries = entries,
-                            quickActions = quickActions,
                             deviceOverview = deviceOverview,
                             recentSnapshot = recentSnapshot,
                             loadingRecentItems = loadingRecentItems,
                             language = language,
                             onOpenRecentArtifact = onOpenRecentArtifact,
-                            onEditQuickActions = { quickActionsDialog = true },
                             modifier = Modifier.fillMaxWidth(),
                         )
                         HomeRailColumn(
@@ -294,27 +256,17 @@ internal fun AppHomePage(
             }
         }
     }
-
-    if (quickActionsDialog) {
-        QuickActionsManageDialog(
-            controller = homeLayout,
-            language = language,
-            onDismiss = { quickActionsDialog = false },
-        )
-    }
 }
 
 @Composable
 private fun HomeMainColumn(
     homeLayout: HomeLayoutController,
     entries: List<HomeFeatureEntry>,
-    quickActions: List<HomeQuickAction>,
     deviceOverview: StudioDeviceOverview?,
     recentSnapshot: WorkspaceOverviewSnapshot?,
     loadingRecentItems: Boolean,
     language: UiLanguage,
     onOpenRecentArtifact: (StudioRecentItem) -> Unit,
-    onEditQuickActions: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -327,14 +279,6 @@ private fun HomeMainColumn(
             loadingRecentItems = loadingRecentItems,
             language = language,
         )
-        HomeSection(title = localizedStringResource(Res.string.quick_actions, language)) {
-            HomeQuickActionGrid(
-                controller = homeLayout,
-                actions = quickActions,
-                language = language,
-                onEditQuickActions = onEditQuickActions,
-            )
-        }
         HomeSection(title = localizedStringResource(Res.string.home_analysis_modules, language)) {
             HomeModuleGrid(
                 controller = homeLayout,
@@ -428,43 +372,6 @@ private fun HomeSection(
 }
 
 @Composable
-private fun HomeQuickActionGrid(
-    controller: HomeLayoutController,
-    actions: List<HomeQuickAction>,
-    language: UiLanguage,
-    onEditQuickActions: () -> Unit,
-) {
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        val columnCount = homeQuickActionColumnCount(maxWidth.value.toInt())
-        ReorderableGrid(
-            items = controller.quickActions,
-            key = { type -> type.id },
-            columnCount = columnCount,
-            cardHeightDp = HOME_QUICK_ACTION_HEIGHT_DP,
-            reorderableCount = actions.size,
-            onMove = { from, to -> controller.moveQuickAction(from, to) },
-            onTap = { index ->
-                if (index < actions.size) actions[index].onClick()
-                else onEditQuickActions()
-            },
-            trailingItem = {
-                QuickActionEditCard(
-                    language = language,
-                    modifier = Modifier.fillMaxWidth().height(HOME_QUICK_ACTION_HEIGHT_DP.dp),
-                    onClick = onEditQuickActions,
-                )
-            },
-            itemContent = { index, _ ->
-                QuickActionCard(
-                    action = actions[index],
-                    modifier = Modifier.fillMaxWidth().height(HOME_QUICK_ACTION_HEIGHT_DP.dp),
-                )
-            },
-        )
-    }
-}
-
-@Composable
 private fun HomeModuleGrid(
     controller: HomeLayoutController,
     entries: List<HomeFeatureEntry>,
@@ -495,9 +402,8 @@ private fun HomeModuleGrid(
  *
  * Pointer handling lives on a transparent overlay (a stable coordinate space), so the dragged
  * card follows the pointer across reorders without node-local-coordinate drift. Taps route to
- * [onTap]; the [trailingItem] (e.g. the quick-action "＋ Edit" card) occupies the last slot and is
- * not reorderable. The column count is frozen for the duration of a drag so the grid does not
- * reflow mid-gesture.
+ * [onTap]. The column count is frozen for the duration of a drag so the grid does not reflow
+ * mid-gesture.
  */
 @Composable
 private fun <T> ReorderableGrid(
@@ -509,8 +415,6 @@ private fun <T> ReorderableGrid(
     onTap: (index: Int) -> Unit,
     itemContent: @Composable (index: Int, item: T) -> Unit,
     modifier: Modifier = Modifier,
-    reorderableCount: Int = items.size,
-    trailingItem: (@Composable () -> Unit)? = null,
 ) {
     if (columnCount <= 0) return
     val gridState = rememberLazyGridState()
@@ -520,8 +424,7 @@ private fun <T> ReorderableGrid(
     var frozenColumns by remember { mutableStateOf<Int?>(null) }
     val cols = frozenColumns ?: columnCount
     val gapDp = StudioTokens.compactContentPadding
-    val trailingCount = if (trailingItem != null) 1 else 0
-    val totalSlots = reorderableCount + trailingCount
+    val totalSlots = items.size
     val rows = if (cols <= 0) 0 else (totalSlots + cols - 1) / cols
     val gridHeightDp: Dp = (cardHeightDp * rows).dp + gapDp * (rows - 1)
 
@@ -535,7 +438,6 @@ private fun <T> ReorderableGrid(
 
     fun reorderableRects() =
         gridState.layoutInfo.visibleItemsInfo
-            .filter { it.index < reorderableCount }
             .map { IntRect(it.offset.x, it.offset.y, it.offset.x + it.size.width, it.offset.y + it.size.height) }
 
     Box(modifier = modifier.fillMaxWidth().height(gridHeightDp)) {
@@ -570,9 +472,6 @@ private fun <T> ReorderableGrid(
                     }
                 Box(modifier = cellModifier) { itemContent(index, item) }
             }
-            if (trailingItem != null) {
-                item(key = "trailing") { trailingItem() }
-            }
         }
 
         // Transparent overlay: single pointer authority over the grid. Taps open the item under the
@@ -589,7 +488,7 @@ private fun <T> ReorderableGrid(
                         detectDragGesturesAfterLongPress(
                             onDragStart = { offset ->
                                 val slot = slotAt(offset)
-                                if (slot != null && slot.index < reorderableCount) {
+                                if (slot != null) {
                                     draggedIndex = slot.index
                                     frozenColumns = columnCount
                                     grabLocal = Offset(
@@ -611,7 +510,7 @@ private fun <T> ReorderableGrid(
                                             change.position.y.toInt(),
                                             cols,
                                         )
-                                    if (target != di && target in 0 until reorderableCount) {
+                                    if (target != di && target in items.indices) {
                                         onMove(di, target)
                                         draggedIndex = target
                                     }
@@ -874,132 +773,6 @@ private data class HomeFeatureEntry(
     val onClick: () -> Unit,
 )
 
-private data class HomeQuickAction(
-    val label: String,
-    val description: String,
-    val icon: DrawableResource,
-    val onClick: () -> Unit,
-)
-
-@Composable
-private fun QuickActionCard(
-    action: HomeQuickAction,
-    modifier: Modifier = Modifier,
-) {
-    val colors = LocalViewerColors.current
-    val shape = RoundedCornerShape(StudioTokens.cardRadius)
-    StudioCard(
-        modifier = modifier.shadow(elevation = 1.dp, shape = shape, clip = false),
-        containerColor = colors.panel,
-        borderColor = colors.border.copy(alpha = 0.72f),
-        contentPadding = 0.dp,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
-        ) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(colors.accent.copy(alpha = if (colors.isDark) 0.24f else 0.12f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    painter = painterResource(action.icon),
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = colors.accent,
-                )
-            }
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
-            ) {
-                Text(
-                    text = action.label,
-                    color = colors.primaryText,
-                    fontSize = ViewerTypography.cardTitle.fontSize,
-                    lineHeight = ViewerTypography.cardTitle.lineHeight,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = action.description,
-                    color = colors.secondaryText,
-                    fontSize = ViewerTypography.secondary.fontSize,
-                    lineHeight = ViewerTypography.secondary.lineHeight,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun QuickActionEditCard(
-    language: UiLanguage,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val colors = LocalViewerColors.current
-    val shape = RoundedCornerShape(StudioTokens.cardRadius)
-    // Dashed-look border to read as an "add/manage" affordance rather than a normal action card.
-    StudioCard(
-        modifier = modifier
-            .shadow(elevation = 1.dp, shape = shape, clip = false)
-            .pointerInput(Unit) { detectTapGestures { onClick() } },
-        containerColor = colors.panel,
-        borderColor = colors.accent.copy(alpha = 0.42f),
-        contentPadding = 0.dp,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
-        ) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(colors.accent.copy(alpha = if (colors.isDark) 0.24f else 0.12f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "＋",
-                    color = colors.accent,
-                    fontSize = ViewerTypography.sectionTitle.fontSize,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = localizedStringResource(Res.string.home_quick_action_edit, language),
-                    color = colors.primaryText,
-                    fontSize = ViewerTypography.cardTitle.fontSize,
-                    lineHeight = ViewerTypography.cardTitle.lineHeight,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = localizedStringResource(Res.string.quick_action_manage_subtitle, language),
-                    color = colors.secondaryText,
-                    fontSize = ViewerTypography.secondary.fontSize,
-                    lineHeight = ViewerTypography.secondary.lineHeight,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
 @Composable
 private fun FeatureEntryCard(
     entry: HomeFeatureEntry,
@@ -1057,79 +830,4 @@ private fun FeatureEntryCard(
             }
         }
     }
-}
-
-@Composable
-private fun QuickActionsManageDialog(
-    controller: HomeLayoutController,
-    language: UiLanguage,
-    onDismiss: () -> Unit,
-) {
-    val colors = LocalViewerColors.current
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(localizedStringResource(Res.string.quick_action_manage_title, language)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = localizedStringResource(Res.string.quick_action_manage_subtitle, language),
-                    color = colors.secondaryText,
-                    fontSize = ViewerTypography.secondary.fontSize,
-                    lineHeight = ViewerTypography.secondary.lineHeight,
-                )
-                QuickActionType.entries.forEach { type ->
-                    val descriptor = quickActionDescriptor(type, language)
-                    val shown = type in controller.quickActions
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Icon(
-                            painter = painterResource(descriptor.icon),
-                            contentDescription = null,
-                            modifier = Modifier.size(22.dp),
-                            tint = colors.accent,
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = descriptor.label,
-                                color = colors.primaryText,
-                                fontSize = ViewerTypography.body.fontSize,
-                                lineHeight = ViewerTypography.body.lineHeight,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                text = descriptor.description,
-                                color = colors.secondaryText,
-                                fontSize = ViewerTypography.secondary.fontSize,
-                                lineHeight = ViewerTypography.secondary.lineHeight,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        TextButton(onClick = {
-                            if (shown) controller.removeQuickAction(type) else controller.addQuickAction(type)
-                        }) {
-                            Text(
-                                text = localizedStringResource(
-                                    if (shown) Res.string.quick_action_remove else Res.string.quick_action_add,
-                                    language,
-                                ),
-                                color = colors.accent,
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(localizedStringResource(Res.string.quick_action_done, language))
-            }
-        },
-        dismissButton = {},
-    )
 }
