@@ -3,6 +3,7 @@
 
 package com.androidperformancestudio.network.app
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -242,57 +243,59 @@ public fun FrameWindowScope.ReverseNetMainPage(
                 )
             }
             Spacer(Modifier.height(4.dp))
-            SelectionContainer {
-                LazyColumn(
-                    Modifier
-                        .fillMaxSize()
-                        .pointerInput(Unit) {
-                            awaitPointerEventScope {
-                                while (true) {
-                                    val event = awaitPointerEvent(PointerEventPass.Main)
-                                    if (event.type == PointerEventType.Press) {
-                                        val mouseEvent = event.nativeEvent as? java.awt.event.MouseEvent
-                                        if (mouseEvent?.button == java.awt.event.MouseEvent.BUTTON3) {
-                                            val pos = event.changes.firstOrNull()?.position
-                                            if (pos != null) {
-                                                menuOffset = androidx.compose.ui.unit.DpOffset(pos.x.dp, pos.y.dp)
+            Box(Modifier.fillMaxSize()) {
+                SelectionContainer {
+                    LazyColumn(
+                        Modifier
+                            .fillMaxSize()
+                            .pointerInput(Unit) {
+                                awaitPointerEventScope {
+                                    while (true) {
+                                        val event = awaitPointerEvent(PointerEventPass.Main)
+                                        if (event.type == PointerEventType.Press) {
+                                            val mouseEvent = event.nativeEvent as? java.awt.event.MouseEvent
+                                            if (mouseEvent?.button == java.awt.event.MouseEvent.BUTTON3) {
+                                                val pos = event.changes.firstOrNull()?.position
+                                                if (pos != null) {
+                                                    menuOffset = androidx.compose.ui.unit.DpOffset(pos.x.dp, pos.y.dp)
+                                                }
+                                                showContextMenu = true
                                             }
-                                            showContextMenu = true
                                         }
                                     }
                                 }
-                            }
-                        },
-                ) {
-                    items(collectedEvents.size) { index ->
-                        EventRow(collectedEvents[collectedEvents.size - 1 - index])
+                            },
+                    ) {
+                        items(collectedEvents.size) { index ->
+                            EventRow(collectedEvents[collectedEvents.size - 1 - index])
+                        }
                     }
                 }
-            }
-            DropdownMenu(
-                expanded = showContextMenu,
-                onDismissRequest = { showContextMenu = false },
-                offset = menuOffset,
-            ) {
-                DropdownMenuItem(
-                    text = { Text(localizedStringResource(Res.string.reverse_net_clear_log, language)) },
-                    onClick = {
-                        collectedEvents.clear()
-                        showContextMenu = false
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text(localizedStringResource(Res.string.reverse_net_copy_log, language)) },
-                    onClick = {
-                        val sb = StringBuilder()
-                        for (ev in collectedEvents) {
-                            if (sb.isNotEmpty()) sb.append('\n')
-                            sb.append(formatEvent(ev))
-                        }
-                        Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(sb.toString()), null)
-                        showContextMenu = false
-                    },
-                )
+                DropdownMenu(
+                    expanded = showContextMenu,
+                    onDismissRequest = { showContextMenu = false },
+                    offset = menuOffset,
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(localizedStringResource(Res.string.reverse_net_clear_log, language)) },
+                        onClick = {
+                            collectedEvents.clear()
+                            showContextMenu = false
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(localizedStringResource(Res.string.reverse_net_copy_log, language)) },
+                        onClick = {
+                            val sb = StringBuilder()
+                            for (ev in collectedEvents) {
+                                if (sb.isNotEmpty()) sb.append('\n')
+                                sb.append(formatEvent(ev))
+                            }
+                            Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(sb.toString()), null)
+                            showContextMenu = false
+                        },
+                    )
+                }
             }
         }
     }
