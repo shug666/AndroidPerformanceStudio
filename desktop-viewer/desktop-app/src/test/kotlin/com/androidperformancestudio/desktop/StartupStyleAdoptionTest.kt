@@ -14,6 +14,7 @@ class StartupStyleAdoptionTest {
             AppDestination.SOURCE_WORKSPACES to sourcePath("desktop-app", "desktop/SourceWorkspacesPage.kt"),
             AppDestination.SETTINGS to sourcePath("desktop-app", "desktop/DesktopAppSettingsPage.kt"),
             AppDestination.BATTERY_NETWORK to sourcePath("desktop-app", "desktop/BatteryNetworkMainPage.kt"),
+            AppDestination.REVERSE_NET to sourcePath("network-profiler/network-app", "network/app/ReverseNetMainPage.kt"),
             AppDestination.LAYOUT_INSPECTOR to
                 sourcePath("layout-inspector/presentation", "desktop/LayoutInspectorMainPage.kt"),
             AppDestination.SIMPLEPERF to

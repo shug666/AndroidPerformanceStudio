@@ -79,6 +79,8 @@
     <string name="battery_profiler">Battery Profiler</string>
     <string name="network_profiler">Network Profiler</string>
     <string name="battery_network">Battery &amp; Network</string>
+    <string name="reverse_net_title">Reverse Tethering</string>
+    <string name="reverse_net_home_description">Share this computer's network with a connected Android device over adb, with tunnel-level observability and IPv6 leak protection.</string>
     <string name="battery_network_description">Analyze wakelocks, alarms, jobs, sensors, energy evidence, and redacted HTTP request timing in one workspace.</string>
     <string name="battery_network_subtitle">Inspect battery drain and network evidence independently. Correlate only when their clocks can be proven compatible.</string>
     <string name="battery_tab">Battery</string>

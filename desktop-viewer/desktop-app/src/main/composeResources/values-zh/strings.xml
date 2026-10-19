@@ -79,6 +79,8 @@
     <string name="battery_profiler">电量分析</string>
     <string name="network_profiler">网络分析</string>
     <string name="battery_network">电量与网络</string>
+    <string name="reverse_net_title">反向供网</string>
+    <string name="reverse_net_home_description">通过 adb 将本机网络共享给已连接的 Android 设备，提供隧道级可观测性与 IPv6 防泄漏。</string>
     <string name="battery_network_description">在同一工作区分析唤醒锁、闹钟、任务、传感器、能耗证据和已脱敏的 HTTP 请求阶段。</string>
     <string name="battery_network_subtitle">电量与网络证据保持独立；仅在可证明时钟兼容时进行关联。</string>
     <string name="battery_tab">电量</string>
