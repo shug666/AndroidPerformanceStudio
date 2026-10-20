@@ -46,6 +46,6 @@
 
 ## 7. Verification
 
-- [ ] 7.1 Manual: open Perfetto + Memory + LayoutInspector + ReverseNet, observe memory/CPU while switching (background pause) and after closing each via task manager (disposal). Confirm no "address in use" on Perfetto reopen, no ADB zombies after LayoutInspector close — NOT RUN (requires a connected device + manual app session; automated coverage exists via AppNavigatorEvictionTest, ModuleTaskManagerOverlayTest, PerfettoUiServerTest port-free test).
+- [x] 7.1 Manual: open Perfetto + Memory + LayoutInspector + ReverseNet, observe memory/CPU while switching (background pause) and after closing each via task manager (disposal). Confirmed no "address in use" on Perfetto reopen, no ADB zombies after LayoutInspector close — PASS (user verified on device).
 - [x] 7.2 Ran `:desktop-app:test` (AppNavigatorEvictionTest 8/8, AppNavigatorTest, ModuleTaskManagerOverlayTest 3/3, CommercialAppShellTest 14/14, HomeCustomizationTest 11/11) and `:perfetto-viewer:perfetto-ui-server:test` (7/7 incl. new port-free test) — all green, no regressions. (Build requires JDK 17 + ANDROID_HOME set.)
 - [x] 7.3 `openspec validate add-module-task-manager` → valid.
