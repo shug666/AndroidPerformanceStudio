@@ -22,6 +22,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -200,6 +201,18 @@ class PerfettoCaptureSession(
 
     fun cancelCapture() {
         captureScope.launch { stopCapture() }
+    }
+
+    /**
+     * Releases this session's resources: cancels any in-progress capture and the session's
+     * private coroutine scope, and drops the active ADB client. Safe to call mid-capture. Called
+     * when the Perfetto page leaves composition (eviction/deactivation) so the capture scope and
+     * its subprocesses do not outlive the page.
+     */
+    fun close() {
+        captureJob?.cancel()
+        captureScope.cancel()
+        activeAdbClient = null
     }
 
     private suspend fun pushConfig(

@@ -354,6 +354,20 @@ internal class BatteryProfilerController(
         }
     }
 
+    /**
+     * Releases this controller's references when the page leaves composition (eviction/
+     * deactivation). The running experiment coroutine is cancelled by the composition scope on
+     * dispose; this drops the runner/session references so a stale controller holds no live
+     * session. The task manager disables closing while a capture is in progress (see 5.5), so
+     * [close] is not reached mid-capture.
+     */
+    fun close() {
+        runner = null
+        active = null
+        currentBatterySession = null
+        currentSessionId = null
+    }
+
     suspend fun runAutomatic() {
         val snapshot = mutableState.value
         if (snapshot.isRunning || snapshot.isLoadingSession) return

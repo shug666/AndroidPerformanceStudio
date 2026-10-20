@@ -11,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -39,8 +40,10 @@ import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.chooseOpenFile
 import com.androidperformancestudio.ui.chooseSaveFile
 import com.androidperformancestudio.ui.localizedStringResource
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
@@ -64,6 +67,19 @@ public fun FrameWindowScope.NetworkProfilerMainPage(
     var active by remember { mutableStateOf<ActiveNetworkCapture?>(null) }
     var pollJob by remember { mutableStateOf<Job?>(null) }
     var state by remember { mutableStateOf(NetworkProfilerState()) }
+    // A scope that survives composition disposal so capture.stop() can still tear down the
+    // device-side agent when the page is evicted mid-capture. The composition scope is cancelled
+    // on dispose, so the stop must run here.
+    val releaseScope = remember { CoroutineScope(SupervisorJob() + Dispatchers.IO) }
+    DisposableEffect(Unit) {
+        onDispose {
+            val session = active
+            pollJob?.cancel()
+            if (session != null) {
+                releaseScope.launch { runCatching { capture.stop(session) } }
+            }
+        }
+    }
 
     fun complete(result: com.androidperformancestudio.network.model.NetworkCaptureResult, message: String, artifact: CaptureArtifact) {
         val summary = analyzer.summarize(result.calls)

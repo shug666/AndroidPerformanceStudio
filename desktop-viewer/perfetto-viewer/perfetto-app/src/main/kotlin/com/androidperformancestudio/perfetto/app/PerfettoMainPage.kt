@@ -226,6 +226,16 @@ fun FrameWindowScope.PerfettoMainPage(
     val uiServer = remember { PerfettoUiServer() }
     val exporter = remember { TraceExporter() }
     val artifactFactory = remember { PerfettoArtifactFactory() }
+    // Release heavy resources when the page leaves composition (eviction/deactivation): stop the
+    // embedded UI HTTP server so its port frees for a clean reopen, and tear down the capture
+    // session's private coroutine scope so an in-progress capture and its ADB subprocesses do
+    // not outlive the page.
+    DisposableEffect(uiServer, captureSession) {
+        onDispose {
+            uiServer.stop()
+            captureSession.close()
+        }
+    }
     var captureState by remember { mutableStateOf<PerfettoCaptureState>(PerfettoCaptureState.Idle) }
     var sessions by remember { mutableStateOf<List<TraceSession>>(emptyList()) }
     var sessionsLoaded by remember { mutableStateOf(false) }

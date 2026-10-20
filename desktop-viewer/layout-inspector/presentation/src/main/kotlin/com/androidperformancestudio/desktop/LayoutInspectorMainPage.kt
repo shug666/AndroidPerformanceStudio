@@ -299,6 +299,13 @@ fun FrameWindowScope.LayoutInspectorMainPage(
     DisposableEffect(manualRefreshSession) {
         onDispose { manualRefreshSession.close() }
     }
+    // composeSession (a live Compose inspection session) is created on attach; close whichever
+    // session is live when it changes or when the page is disposed (eviction/deactivation) so the
+    // device-side compose agent is released. LiveDeviceClient and ComposeInjectionManager are
+    // stateless ADB command runners with no persistent resource, so they need no release hook.
+    DisposableEffect(composeSession) {
+        onDispose { composeSession?.close() }
+    }
     var availableDevices by remember { mutableStateOf<List<AndroidDeviceInfo>>(emptyList()) }
     var selectedDeviceSerial by remember(correlationHint) { mutableStateOf(correlationHint?.deviceSerial) }
     var deviceListRefreshRequest by remember { mutableStateOf(0) }

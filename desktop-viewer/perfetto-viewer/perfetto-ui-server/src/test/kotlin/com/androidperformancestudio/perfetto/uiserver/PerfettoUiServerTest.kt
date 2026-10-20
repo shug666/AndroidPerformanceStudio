@@ -94,6 +94,27 @@ class PerfettoUiServerTest {
 
         assertEquals(configured, located)
     }
+
+    @Test
+    fun `stop releases the port so the server can rebind after eviction`() {
+        val freePort = freeLoopbackPort()
+        val first = PerfettoUiServer(preferredPort = freePort)
+        try {
+            assertTrue(first.start(null, PerfettoUiServer.ServeMode.TRACE_ONLY) is StudioResult.Success)
+            first.stop()
+
+            // After stop the port must be free for a fresh server to rebind — the eviction/reopen path.
+            val second = PerfettoUiServer(preferredPort = freePort)
+            try {
+                val rebound = second.start(null, PerfettoUiServer.ServeMode.TRACE_ONLY)
+                assertTrue(rebound is StudioResult.Success, "port should be free after stop, got $rebound")
+            } finally {
+                second.stop()
+            }
+        } finally {
+            first.stop()
+        }
+    }
 }
 
 private fun PerfettoUiServer.runningServer(): Any? =
