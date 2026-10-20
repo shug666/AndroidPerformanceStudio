@@ -108,6 +108,7 @@ internal fun CommercialAppShell(
     navigator: AppNavigator,
     language: UiLanguage,
     navigationRailCollapsed: Boolean,
+    moduleOrder: List<AppDestination>,
     modifier: Modifier = Modifier,
     workspaceContext: WorkspaceContext = WorkspaceContext(),
     content: @Composable BoxScope.() -> Unit,
@@ -122,20 +123,9 @@ internal fun CommercialAppShell(
     val commandPaletteLabel = localizedStringResource(Res.string.command_palette, language)
     val settingsLabel = localizedStringResource(Res.string.settings, language)
     val navigationItems =
-        listOf(
-            AppDestination.HOME,
-            AppDestination.LAYOUT_INSPECTOR,
-            AppDestination.SIMPLEPERF,
-            AppDestination.PERFETTO,
-            AppDestination.MEMORY_PROFILER,
-            AppDestination.FRAME_PROFILER,
-            AppDestination.STARTUP_PROFILER,
-            AppDestination.BATTERY_NETWORK,
-            AppDestination.GPU_INSPECTOR,
-            AppDestination.BENCHMARK_REGRESSION,
-            AppDestination.SOURCE_WORKSPACES,
-            AppDestination.REVERSE_NET,
-        ).map {
+        // Home is pinned first; the rest follow the user-customized module order shared with the
+        // home screen, so reordering modules on the home grid reorders the rail live.
+        (listOf(AppDestination.HOME) + moduleOrder).map {
             StudioNavigationItem(
                 destination = it,
                 label = localizedStringResource(it.navigationLabelResource, language),

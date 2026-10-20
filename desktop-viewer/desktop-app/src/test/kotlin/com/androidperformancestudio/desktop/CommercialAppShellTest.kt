@@ -163,14 +163,12 @@ class CommercialAppShellTest {
             Files.readString(
                 Path.of("src/main/kotlin/com/androidperformancestudio/desktop/shell/CommercialAppShell.kt"),
             )
-        val rail =
-            shell
-                .substringAfter("val navigationItems =")
-                .substringBefore("val commandItems =")
-
-        assertTrue(rail.contains("AppDestination.SOURCE_WORKSPACES"))
-        // It must not be reachable only from the command palette.
-        assertFalse(rail.contains("AppDestination.METHOD_RECORDING"))
+        // The rail is driven by the shared, user-customizable module order (Home pinned first),
+        // not a hardcoded destination list. Source Workspaces is part of the default module order;
+        // Method Recording never is (it stays command-palette only).
+        assertTrue(shell.contains("listOf(AppDestination.HOME) + moduleOrder"))
+        assertTrue(DEFAULT_MODULE_ORDER.contains(AppDestination.SOURCE_WORKSPACES))
+        assertFalse(DEFAULT_MODULE_ORDER.contains(AppDestination.METHOD_RECORDING))
     }
 
     @Test

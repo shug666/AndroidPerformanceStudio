@@ -37,7 +37,10 @@ class AppHomePageLayoutTest {
         assertEquals(1, homeGridColumnCount(420))
         assertTrue(HOME_MODULE_CARD_HEIGHT_DP < 120)
         assertTrue(source.contains("RoundedCornerShape(StudioTokens.cardRadius)"))
-        assertTrue(source.contains("entries.chunked(columnCount)"))
+        // The module grid is a lazy, reorderable grid; non-dragged cards animate on reorder.
+        assertTrue(source.contains("LazyVerticalGrid"))
+        assertTrue(source.contains("GridCells.Fixed"))
+        assertTrue(source.contains("Modifier.animateItem()"))
         assertTrue(source.contains("height(HOME_MODULE_CARD_HEIGHT_DP.dp)"))
         assertTrue(source.contains("entry.destination.navigationIconResource"))
     }
@@ -74,15 +77,6 @@ class AppHomePageLayoutTest {
     }
 
     @Test
-    fun `quick actions stay a four up row until the column narrows`() {
-        assertEquals(4, homeQuickActionColumnCount(1020))
-        assertEquals(4, homeQuickActionColumnCount(720))
-        assertEquals(2, homeQuickActionColumnCount(680))
-        assertEquals(1, homeQuickActionColumnCount(360))
-        assertTrue(source.contains("homeQuickActionColumnCount(maxWidth.value.toInt())"))
-    }
-
-    @Test
     fun `home metrics only read the real device and recent projections`() {
         assertEquals(2, Regex("StudioMetricCard\\(").findAll(source).count())
         assertTrue(source.contains("connectedCount"))
@@ -108,28 +102,20 @@ class AppHomePageLayoutTest {
     }
 
     @Test
-    fun `quick actions reuse the shell navigation icons`() {
-        assertTrue(source.contains("HomeQuickAction("))
-        assertTrue(source.contains("HOME_QUICK_ACTION_HEIGHT_DP"))
-        assertTrue(source.contains("UiComponentsRes.drawable.ic_action_play"))
-        assertTrue(source.contains("UiComponentsRes.drawable.ic_action_import"))
-    }
-
-    @Test
-    fun `reverse net is the last home entry`() {
-        val entries = source.substringAfter("val entries =").substringBefore("val quickActions =")
-
-        val lastEntry = entries.substring(entries.lastIndexOf("HomeFeatureEntry("))
-        assertTrue(lastEntry.contains("onClick = onOpenReverseNet"))
+    fun `reverse net is the last default home entry`() {
+        // The default module order (fresh install / no customization) keeps Reverse Net last, as
+        // the hardcoded layout did before this change.
+        assertEquals(AppDestination.REVERSE_NET, DEFAULT_MODULE_ORDER.last())
     }
 
     @Test
     fun `dashboard exposes all implemented module routes`() {
-        val entries = source.substringAfter("val entries =").substringBefore("val quickActions =")
-
-        assertTrue(entries.contains("onClick = onOpenGpuInspector"))
-        assertTrue(entries.contains("onClick = onOpenBenchmarkRegression"))
-        assertFalse(entries.contains("onClick = onOpenMethodRecording"))
+        // The module grid is driven by the shared module order; the open callback covers every
+        // reorderable module. Method Recording stays out of the home grid (command-palette only).
+        assertTrue(source.contains("homeLayout.moduleOrder"))
+        assertTrue(source.contains("onOpenGpuInspector"))
+        assertTrue(source.contains("onOpenBenchmarkRegression"))
+        assertFalse(DEFAULT_MODULE_ORDER.contains(AppDestination.METHOD_RECORDING))
         val shell =
             Files.readString(
                 Path.of("src/main/kotlin/com/androidperformancestudio/desktop/shell/CommercialAppShell.kt"),

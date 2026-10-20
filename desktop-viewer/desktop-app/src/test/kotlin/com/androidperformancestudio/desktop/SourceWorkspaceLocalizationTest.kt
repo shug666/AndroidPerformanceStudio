@@ -37,8 +37,10 @@ class SourceWorkspaceLocalizationTest {
         assertTrue(codeViewer.contains("Res.string.source_search_previous"))
         assertTrue(codeViewer.contains("Res.string.source_search_next"))
         assertFalse(source.contains("fontFamily = FontFamily.Monospace"))
-        assertTrue(home.contains("localizedStringResource(Res.string.source_workspaces, language)"))
-        assertTrue(home.contains("localizedStringResource(Res.string.source_home_description, language)"))
+        // Source Workspaces is localized on the home page via the destination's title resource and
+        // the module description resolver (the grid is controller-driven, not hardcoded).
+        assertTrue(home.contains("destination.titleResource"))
+        assertTrue(home.contains("Res.string.source_home_description"))
         assertFalse(home.contains("if (language == UiLanguage.SIMPLIFIED_CHINESE) \"源码工作区\""))
         assertFalse(source.contains("private fun label("))
         assertFalse(source.contains("""Text("Sync")"""))

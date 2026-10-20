@@ -2,8 +2,8 @@ package com.androidperformancestudio.desktop
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -15,9 +15,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -30,14 +35,22 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
+import kotlin.math.roundToInt
 import com.androidperformancestudio.desktop.dashboard.DeviceOverviewSource
 import com.androidperformancestudio.desktop.dashboard.StudioDeviceOverview
 import com.androidperformancestudio.desktop.dashboard.StudioDeviceSummary
@@ -66,10 +79,6 @@ import com.androidperformancestudio.ui.studio.StudioStatusTone
 import com.androidperformancestudio.ui.studio.StudioTableColumn
 import com.androidperformancestudio.ui.studio.StudioTokens
 import com.androidperformancestudio.ui_components.generated.resources.Res as UiComponentsRes
-import com.androidperformancestudio.ui_components.generated.resources.ic_action_import
-import com.androidperformancestudio.ui_components.generated.resources.ic_action_play
-import com.androidperformancestudio.ui_components.generated.resources.ic_nav_memory_profiler
-import com.androidperformancestudio.ui_components.generated.resources.ic_nav_startup_profiler
 import com.androidperformancestudio.ui_components.generated.resources.ic_stat_device
 import com.androidperformancestudio.ui_components.generated.resources.ic_stat_history
 import java.time.Instant
@@ -78,10 +87,10 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.painterResource
 
 internal const val HOME_MODULE_CARD_HEIGHT_DP = 78
-internal const val HOME_QUICK_ACTION_HEIGHT_DP = 92
 internal const val HOME_RAIL_WIDTH_DP = 320
 internal const val HOME_TWO_COLUMN_MIN_WIDTH_DP = 900
 
@@ -89,14 +98,6 @@ internal fun homeGridColumnCount(availableWidthDp: Int): Int =
     when {
         availableWidthDp >= 820 -> 3
         availableWidthDp >= 560 -> 2
-        else -> 1
-    }
-
-/** Quick actions stay a single four-up row until the column is too narrow for the descriptions. */
-internal fun homeQuickActionColumnCount(availableWidthDp: Int): Int =
-    when {
-        availableWidthDp >= 720 -> 4
-        availableWidthDp >= 380 -> 2
         else -> 1
     }
 
@@ -111,9 +112,28 @@ private fun homeDatePattern(language: UiLanguage): String =
 private fun homeDateLocale(language: UiLanguage): Locale =
     if (language == UiLanguage.SIMPLIFIED_CHINESE) Locale.SIMPLIFIED_CHINESE else Locale.ENGLISH
 
+/** The description string shown under each module card on the home grid and in the rail tooltip. */
+private fun moduleDescriptionResource(destination: AppDestination): StringResource =
+    when (destination) {
+        AppDestination.LAYOUT_INSPECTOR -> Res.string.inspect_android_view_hierarchies_screenshots_bounds_and_properties
+        AppDestination.SIMPLEPERF -> Res.string.simpleperf_based_cpu_sampling_flame_graphs_call_tree_analysis
+        AppDestination.PERFETTO -> Res.string.perfetto_system_level_trace_capture_with_scheduling_binder_and_graphic
+        AppDestination.MEMORY_PROFILER -> Res.string.heap_dump_capture_object_statistics_and_class_histogram_analysis
+        AppDestination.FRAME_PROFILER -> Res.string.capture_online_or_import_gfxinfo_framestats_to_analyze_frame_timing
+        AppDestination.STARTUP_PROFILER -> Res.string.cold_warm_startup_breakdown_and_baseline_profile_support
+        AppDestination.BATTERY_NETWORK -> Res.string.battery_network_description
+        AppDestination.GPU_INSPECTOR -> Res.string.discover_and_launch_android_gpu_inspector_then_index_and_verify
+        AppDestination.BENCHMARK_REGRESSION -> Res.string.compare_androidx_benchmark_baselines_and_current_results_with_ci_regre
+        AppDestination.SOURCE_WORKSPACES -> Res.string.source_home_description
+        AppDestination.REVERSE_NET -> Res.string.reverse_net_home_description
+        // Non-module destinations have no home card description; fall back to the title resource.
+        else -> destination.titleResource
+    }
+
 @Composable
 internal fun AppHomePage(
     language: UiLanguage,
+    homeLayout: HomeLayoutController,
     onOpenSourceWorkspaces: () -> Unit,
     onOpenLayoutInspector: () -> Unit,
     onOpenSimpleperf: () -> Unit,
@@ -126,8 +146,6 @@ internal fun AppHomePage(
     onOpenGpuInspector: () -> Unit,
     onOpenBenchmarkRegression: () -> Unit,
     onOpenRecentArtifact: (StudioRecentItem) -> Unit,
-    onOpenTraceFile: () -> Unit,
-    onAnalyzeHprof: () -> Unit,
     androidSdkPath: String? = null,
     active: Boolean = true,
 ) {
@@ -152,146 +170,32 @@ internal fun AppHomePage(
             deviceOverview = deviceOverviewSource.load()
         }
     }
+    val openDestination: (AppDestination) -> Unit = { destination ->
+        when (destination) {
+            AppDestination.SOURCE_WORKSPACES -> onOpenSourceWorkspaces()
+            AppDestination.LAYOUT_INSPECTOR -> onOpenLayoutInspector()
+            AppDestination.SIMPLEPERF -> onOpenSimpleperf()
+            AppDestination.PERFETTO -> onOpenPerfetto()
+            AppDestination.MEMORY_PROFILER -> onOpenMemoryProfiler()
+            AppDestination.FRAME_PROFILER -> onOpenFrameProfiler()
+            AppDestination.STARTUP_PROFILER -> onOpenStartupProfiler()
+            AppDestination.BATTERY_NETWORK -> onOpenBatteryNetwork()
+            AppDestination.REVERSE_NET -> onOpenReverseNet()
+            AppDestination.GPU_INSPECTOR -> onOpenGpuInspector()
+            AppDestination.BENCHMARK_REGRESSION -> onOpenBenchmarkRegression()
+            // Home/Settings/MethodRecording are not home cards.
+            else -> {}
+        }
+    }
     val entries =
-        listOf(
+        homeLayout.moduleOrder.map { destination ->
             HomeFeatureEntry(
-                destination = AppDestination.LAYOUT_INSPECTOR,
-                title = localizedStringResource(Res.string.layout_inspector, language),
-                description =
-                    localizedStringResource(
-                        Res.string.inspect_android_view_hierarchies_screenshots_bounds_and_properties,
-                        language,
-                    ),
-                onClick = onOpenLayoutInspector,
-            ),
-            HomeFeatureEntry(
-                destination = AppDestination.SIMPLEPERF,
-                title = localizedStringResource(Res.string.cpu_profiler, language),
-                description =
-                    localizedStringResource(
-                        Res.string.simpleperf_based_cpu_sampling_flame_graphs_call_tree_analysis,
-                        language,
-                    ),
-                onClick = onOpenSimpleperf,
-            ),
-            HomeFeatureEntry(
-                destination = AppDestination.PERFETTO,
-                title = localizedStringResource(Res.string.trace_analyzer, language),
-                description =
-                    localizedStringResource(
-                        Res.string.perfetto_system_level_trace_capture_with_scheduling_binder_and_graphic,
-                        language,
-                    ),
-                onClick = onOpenPerfetto,
-            ),
-            HomeFeatureEntry(
-                destination = AppDestination.MEMORY_PROFILER,
-                title = localizedStringResource(Res.string.memory_profiler, language),
-                description =
-                    localizedStringResource(
-                        Res.string.heap_dump_capture_object_statistics_and_class_histogram_analysis,
-                        language,
-                    ),
-                onClick = onOpenMemoryProfiler,
-            ),
-            HomeFeatureEntry(
-                destination = AppDestination.FRAME_PROFILER,
-                title = localizedStringResource(Res.string.frame_profiler, language),
-                description =
-                    localizedStringResource(
-                        Res.string.capture_online_or_import_gfxinfo_framestats_to_analyze_frame_timing,
-                        language,
-                    ),
-                onClick = onOpenFrameProfiler,
-            ),
-            HomeFeatureEntry(
-                destination = AppDestination.STARTUP_PROFILER,
-                title = localizedStringResource(Res.string.startup_profiler, language),
-                description =
-                    localizedStringResource(
-                        Res.string.cold_warm_startup_breakdown_and_baseline_profile_support,
-                        language,
-                    ),
-                onClick = onOpenStartupProfiler,
-            ),
-            HomeFeatureEntry(
-                destination = AppDestination.BATTERY_NETWORK,
-                title = localizedStringResource(Res.string.battery_network, language),
-                description =
-                    localizedStringResource(
-                        Res.string.battery_network_description,
-                        language,
-                    ),
-                onClick = onOpenBatteryNetwork,
-            ),
-            HomeFeatureEntry(
-                destination = AppDestination.GPU_INSPECTOR,
-                title = localizedStringResource(Res.string.gpu_inspector, language),
-                description =
-                    localizedStringResource(
-                        Res.string.discover_and_launch_android_gpu_inspector_then_index_and_verify,
-                        language,
-                    ),
-                onClick = onOpenGpuInspector,
-            ),
-            HomeFeatureEntry(
-                destination = AppDestination.BENCHMARK_REGRESSION,
-                title = localizedStringResource(Res.string.benchmark_regression, language),
-                description =
-                    localizedStringResource(
-                        Res.string.compare_androidx_benchmark_baselines_and_current_results_with_ci_regre,
-                        language,
-                    ),
-                onClick = onOpenBenchmarkRegression,
-            ),
-            HomeFeatureEntry(
-                destination = AppDestination.SOURCE_WORKSPACES,
-                title = localizedStringResource(Res.string.source_workspaces, language),
-                description = localizedStringResource(Res.string.source_home_description, language),
-                onClick = onOpenSourceWorkspaces,
-            ),
-            HomeFeatureEntry(
-                destination = AppDestination.REVERSE_NET,
-                title = localizedStringResource(Res.string.reverse_net_title, language),
-                description =
-                    localizedStringResource(
-                        Res.string.reverse_net_home_description,
-                        language,
-                    ),
-                onClick = onOpenReverseNet,
-            ),
-        )
-    val quickActions =
-        listOf(
-            HomeQuickAction(
-                label = localizedStringResource(Res.string.quick_action_start_capture, language),
-                description =
-                    localizedStringResource(Res.string.quick_action_start_capture_description, language),
-                icon = UiComponentsRes.drawable.ic_action_play,
-                onClick = onOpenPerfetto,
-            ),
-            HomeQuickAction(
-                label = localizedStringResource(Res.string.quick_action_import_trace, language),
-                description =
-                    localizedStringResource(Res.string.quick_action_import_trace_description, language),
-                icon = UiComponentsRes.drawable.ic_action_import,
-                onClick = onOpenTraceFile,
-            ),
-            HomeQuickAction(
-                label = localizedStringResource(Res.string.quick_action_analyze_hprof, language),
-                description =
-                    localizedStringResource(Res.string.quick_action_analyze_hprof_description, language),
-                icon = UiComponentsRes.drawable.ic_nav_memory_profiler,
-                onClick = onAnalyzeHprof,
-            ),
-            HomeQuickAction(
-                label = localizedStringResource(Res.string.quick_action_run_startup_test, language),
-                description =
-                    localizedStringResource(Res.string.quick_action_run_startup_test_description, language),
-                icon = UiComponentsRes.drawable.ic_nav_startup_profiler,
-                onClick = onOpenStartupProfiler,
-            ),
-        )
+                destination = destination,
+                title = localizedStringResource(destination.titleResource, language),
+                description = localizedStringResource(moduleDescriptionResource(destination), language),
+                onClick = { openDestination(destination) },
+            )
+        }
 
     val colors = LocalViewerColors.current
     Surface(modifier = Modifier.fillMaxSize(), color = colors.workspace) {
@@ -311,8 +215,8 @@ internal fun AppHomePage(
                         verticalAlignment = Alignment.Top,
                     ) {
                         HomeMainColumn(
+                            homeLayout = homeLayout,
                             entries = entries,
-                            quickActions = quickActions,
                             deviceOverview = deviceOverview,
                             recentSnapshot = recentSnapshot,
                             loadingRecentItems = loadingRecentItems,
@@ -333,8 +237,8 @@ internal fun AppHomePage(
                         verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
                     ) {
                         HomeMainColumn(
+                            homeLayout = homeLayout,
                             entries = entries,
-                            quickActions = quickActions,
                             deviceOverview = deviceOverview,
                             recentSnapshot = recentSnapshot,
                             loadingRecentItems = loadingRecentItems,
@@ -357,8 +261,8 @@ internal fun AppHomePage(
 
 @Composable
 private fun HomeMainColumn(
+    homeLayout: HomeLayoutController,
     entries: List<HomeFeatureEntry>,
-    quickActions: List<HomeQuickAction>,
     deviceOverview: StudioDeviceOverview?,
     recentSnapshot: WorkspaceOverviewSnapshot?,
     loadingRecentItems: Boolean,
@@ -376,11 +280,12 @@ private fun HomeMainColumn(
             loadingRecentItems = loadingRecentItems,
             language = language,
         )
-        HomeSection(title = localizedStringResource(Res.string.quick_actions, language)) {
-            HomeQuickActionGrid(actions = quickActions)
-        }
         HomeSection(title = localizedStringResource(Res.string.home_analysis_modules, language)) {
-            HomeModuleGrid(entries = entries, language = language)
+            HomeModuleGrid(
+                controller = homeLayout,
+                entries = entries,
+                language = language,
+            )
         }
         HomeRecentSessions(
             recentSnapshot = recentSnapshot,
@@ -468,49 +373,162 @@ private fun HomeSection(
 }
 
 @Composable
-private fun HomeQuickActionGrid(actions: List<HomeQuickAction>) {
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        val columnCount = homeQuickActionColumnCount(maxWidth.value.toInt())
-        Column(verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding)) {
-            actions.chunked(columnCount).forEach { rowActions ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
-                ) {
-                    rowActions.forEach { action ->
-                        QuickActionCard(action = action, modifier = Modifier.weight(1f))
-                    }
-                    repeat(columnCount - rowActions.size) {
-                        Spacer(Modifier.weight(1f))
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun HomeModuleGrid(
+    controller: HomeLayoutController,
     entries: List<HomeFeatureEntry>,
     language: UiLanguage,
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val columnCount = homeGridColumnCount(maxWidth.value.toInt())
-        Column(verticalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding)) {
-            entries.chunked(columnCount).forEach { rowEntries ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(StudioTokens.compactContentPadding),
-                ) {
-                    rowEntries.forEach { entry ->
-                        FeatureEntryCard(entry = entry, modifier = Modifier.weight(1f))
+        ReorderableGrid(
+            items = controller.moduleOrder,
+            key = { destination -> destination.name },
+            columnCount = columnCount,
+            cardHeightDp = HOME_MODULE_CARD_HEIGHT_DP,
+            onMove = { from, to -> controller.moveModule(from, to) },
+            onTap = { index -> entries.getOrNull(index)?.onClick?.invoke() },
+            itemContent = { index, _ ->
+                FeatureEntryCard(
+                    entry = entries[index],
+                    modifier = Modifier.fillMaxWidth().height(HOME_MODULE_CARD_HEIGHT_DP.dp),
+                )
+            },
+        )
+    }
+}
+
+/**
+ * A responsive grid whose items the user can long-press-drag to reorder, phone-style: as the
+ * dragged card moves, the others shuffle aside in real time via [Modifier.animateItem].
+ *
+ * Pointer handling lives on a transparent overlay (a stable coordinate space), so the dragged
+ * card follows the pointer across reorders without node-local-coordinate drift. Taps route to
+ * [onTap]. The column count is frozen for the duration of a drag so the grid does not reflow
+ * mid-gesture.
+ */
+@Composable
+private fun <T> ReorderableGrid(
+    items: SnapshotStateList<T>,
+    key: (T) -> Any,
+    columnCount: Int,
+    cardHeightDp: Int,
+    onMove: (from: Int, to: Int) -> Unit,
+    onTap: (index: Int) -> Unit,
+    itemContent: @Composable (index: Int, item: T) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (columnCount <= 0) return
+    val gridState = rememberLazyGridState()
+    var draggedIndex by remember { mutableStateOf<Int?>(null) }
+    var dragPosition by remember { mutableStateOf(Offset.Zero) }
+    var grabLocal by remember { mutableStateOf(Offset.Zero) }
+    var frozenColumns by remember { mutableStateOf<Int?>(null) }
+    // The pointerInput blocks below are keyed on stable values (the items list instance and the
+    // column count), so their coroutines launch once and would otherwise capture the first
+    // onTap/onMove closures. After a drag mutates `items`, the cards re-render with the new order
+    // but the tap handler would still call the stale closure — opening the module that *used to*
+    // be at the tapped slot. rememberUpdatedState keeps the handlers live across recompositions.
+    val currentOnTap by rememberUpdatedState(onTap)
+    val currentOnMove by rememberUpdatedState(onMove)
+    val cols = frozenColumns ?: columnCount
+    val gapDp = StudioTokens.compactContentPadding
+    val totalSlots = items.size
+    val rows = if (cols <= 0) 0 else (totalSlots + cols - 1) / cols
+    val gridHeightDp: Dp = (cardHeightDp * rows).dp + gapDp * (rows - 1)
+
+    fun slotAt(position: Offset) =
+        gridState.layoutInfo.visibleItemsInfo.firstOrNull { slot ->
+            position.x >= slot.offset.x &&
+                position.x <= slot.offset.x + slot.size.width &&
+                position.y >= slot.offset.y &&
+                position.y <= slot.offset.y + slot.size.height
+        }
+
+    fun reorderableRects() =
+        gridState.layoutInfo.visibleItemsInfo
+            .map { IntRect(it.offset.x, it.offset.y, it.offset.x + it.size.width, it.offset.y + it.size.height) }
+
+    Box(modifier = modifier.fillMaxWidth().height(gridHeightDp)) {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(cols),
+            state = gridState,
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(gapDp),
+            verticalArrangement = Arrangement.spacedBy(gapDp),
+            userScrollEnabled = false,
+        ) {
+            itemsIndexed(items, key = { _, item -> key(item) }) { index, item ->
+                val dragged = draggedIndex == index
+                val cellModifier =
+                    if (dragged) {
+                        Modifier
+                            .offset {
+                                val slot = gridState.layoutInfo.visibleItemsInfo
+                                    .firstOrNull { it.index == index }
+                                if (slot != null) {
+                                    IntOffset(
+                                        (dragPosition.x - grabLocal.x - slot.offset.x).roundToInt(),
+                                        (dragPosition.y - grabLocal.y - slot.offset.y).roundToInt(),
+                                    )
+                                } else {
+                                    IntOffset.Zero
+                                }
+                            }
+                            .zIndex(1f)
+                    } else {
+                        Modifier.animateItem()
                     }
-                    repeat(columnCount - rowEntries.size) {
-                        Spacer(Modifier.weight(1f))
-                    }
-                }
+                Box(modifier = cellModifier) { itemContent(index, item) }
             }
         }
+
+        // Transparent overlay: single pointer authority over the grid. Taps open the item under the
+        // pointer; a long-press starts a drag. Cards themselves carry no click handler, so the
+        // overlay never has to compete with them for pointer events.
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(items, columnCount) {
+                        detectTapGestures { offset -> slotAt(offset)?.let { currentOnTap(it.index) } }
+                    }
+                    .pointerInput(items, columnCount) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = { offset ->
+                                val slot = slotAt(offset)
+                                if (slot != null) {
+                                    draggedIndex = slot.index
+                                    frozenColumns = columnCount
+                                    grabLocal = Offset(
+                                        offset.x - slot.offset.x,
+                                        offset.y - slot.offset.y,
+                                    )
+                                    dragPosition = offset
+                                }
+                            },
+                            onDrag = { change, _ ->
+                                change.consume()
+                                dragPosition = change.position
+                                val di = draggedIndex
+                                if (di != null) {
+                                    val target =
+                                        dropIndexForGrid(
+                                            reorderableRects(),
+                                            change.position.x.toInt(),
+                                            change.position.y.toInt(),
+                                            cols,
+                                        )
+                                    if (target != di && target in items.indices) {
+                                        currentOnMove(di, target)
+                                        draggedIndex = target
+                                    }
+                                }
+                            },
+                            onDragEnd = { draggedIndex = null; frozenColumns = null },
+                            onDragCancel = { draggedIndex = null; frozenColumns = null },
+                        )
+                    },
+        )
     }
 }
 
@@ -763,78 +781,6 @@ private data class HomeFeatureEntry(
     val onClick: () -> Unit,
 )
 
-private data class HomeQuickAction(
-    val label: String,
-    val description: String,
-    val icon: DrawableResource,
-    val onClick: () -> Unit,
-)
-
-@Composable
-private fun QuickActionCard(
-    action: HomeQuickAction,
-    modifier: Modifier = Modifier,
-) {
-    val colors = LocalViewerColors.current
-    val shape = RoundedCornerShape(StudioTokens.cardRadius)
-    val interactionSource = remember { MutableInteractionSource() }
-    val hovered by interactionSource.collectIsHoveredAsState()
-    StudioCard(
-        modifier =
-            modifier
-                .height(HOME_QUICK_ACTION_HEIGHT_DP.dp)
-                .shadow(elevation = if (hovered) 6.dp else 1.dp, shape = shape, clip = false)
-                .clickable(interactionSource = interactionSource, indication = null, onClick = action.onClick),
-        containerColor = if (hovered) colors.selectedRow else colors.panel,
-        borderColor = if (hovered) colors.accent.copy(alpha = 0.42f) else colors.border.copy(alpha = 0.72f),
-        contentPadding = 0.dp,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(StudioTokens.sectionGap),
-        ) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(colors.accent.copy(alpha = if (colors.isDark) 0.24f else 0.12f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    painter = painterResource(action.icon),
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = colors.accent,
-                )
-            }
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
-            ) {
-                Text(
-                    text = action.label,
-                    color = colors.primaryText,
-                    fontSize = ViewerTypography.cardTitle.fontSize,
-                    lineHeight = ViewerTypography.cardTitle.lineHeight,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = action.description,
-                    color = colors.secondaryText,
-                    fontSize = ViewerTypography.secondary.fontSize,
-                    lineHeight = ViewerTypography.secondary.lineHeight,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
 @Composable
 private fun FeatureEntryCard(
     entry: HomeFeatureEntry,
@@ -842,16 +788,10 @@ private fun FeatureEntryCard(
 ) {
     val colors = LocalViewerColors.current
     val shape = RoundedCornerShape(StudioTokens.cardRadius)
-    val interactionSource = remember { MutableInteractionSource() }
-    val hovered by interactionSource.collectIsHoveredAsState()
     StudioCard(
-        modifier =
-            modifier
-                .height(HOME_MODULE_CARD_HEIGHT_DP.dp)
-                .shadow(elevation = if (hovered) 6.dp else 1.dp, shape = shape, clip = false)
-                .clickable(interactionSource = interactionSource, indication = null, onClick = entry.onClick),
-        containerColor = if (hovered) colors.selectedRow else colors.panel,
-        borderColor = if (hovered) colors.accent.copy(alpha = 0.42f) else colors.border.copy(alpha = 0.72f),
+        modifier = modifier.shadow(elevation = 1.dp, shape = shape, clip = false),
+        containerColor = colors.panel,
+        borderColor = colors.border.copy(alpha = 0.72f),
         contentPadding = 0.dp,
     ) {
         Row(

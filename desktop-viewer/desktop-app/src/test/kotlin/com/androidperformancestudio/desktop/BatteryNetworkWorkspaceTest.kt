@@ -18,8 +18,11 @@ class BatteryNetworkWorkspaceTest {
         assertTrue(destinations.contains("BATTERY_NETWORK"))
         assertFalse(destinations.contains("BATTERY_PROFILER"))
         assertFalse(destinations.contains("NETWORK_PROFILER"))
-        assertTrue(shell.contains("AppDestination.BATTERY_NETWORK"))
-        assertTrue(home.contains("Res.string.battery_network"))
+        assertTrue(shell.contains("moduleOrder"))
+        // Battery Network is a home module; its title resolves through the shared destination
+        // title resource (the home grid is controller-driven), and it ships in the default order.
+        assertTrue(DEFAULT_MODULE_ORDER.contains(AppDestination.BATTERY_NETWORK))
+        assertTrue(home.contains("destination.titleResource"))
     }
 
     @Test

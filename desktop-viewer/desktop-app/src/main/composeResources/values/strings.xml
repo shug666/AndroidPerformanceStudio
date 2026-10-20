@@ -208,7 +208,6 @@
     <string name="loading_recent_artifacts">Reading local recent indexes…</string>
     <string name="no_recent_artifacts">No recent CPU, Layout, Trace or Memory artifacts</string>
     <string name="recent_artifacts_hint">Capture or open an artifact in a profiler to see it here.</string>
-    <string name="quick_actions">Quick Actions</string>
     <string name="open_trace_file">Open Trace File</string>
     <string name="analyze_hprof">Analyze HPROF</string>
     <string name="recent_indexes_unavailable">Recent indexes unavailable</string>
@@ -229,13 +228,6 @@
     <string name="recent_column_package">Package</string>
     <string name="recent_column_type">Type</string>
     <string name="recent_column_started">Started</string>
-    <string name="quick_action_start_capture">Start Capture</string>
-    <string name="quick_action_start_capture_description">Capture a system trace from a connected device.</string>
-    <string name="quick_action_import_trace">Import Trace</string>
-    <string name="quick_action_import_trace_description">Supports Perfetto and Systrace files.</string>
-    <string name="quick_action_analyze_hprof">Analyze HPROF</string>
-    <string name="quick_action_analyze_hprof_description">Detect memory leaks and allocation hotspots.</string>
-    <string name="quick_action_run_startup_test">Run Startup Test</string>
-    <string name="quick_action_run_startup_test_description">Measure application launch performance.</string>
     <string name="home_focus_on_performance">Focus on Performance</string>
+    <string name="home_module_drag_hint">Long-press a module card to drag and reorder.</string>
 </resources>

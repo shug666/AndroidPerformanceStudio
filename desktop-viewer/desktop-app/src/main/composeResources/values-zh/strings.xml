@@ -208,7 +208,6 @@
     <string name="loading_recent_artifacts">正在读取本地最近记录…</string>
     <string name="no_recent_artifacts">暂无 CPU、布局、Trace 或内存产物</string>
     <string name="recent_artifacts_hint">在分析工具中采集或打开产物后，将在此显示。</string>
-    <string name="quick_actions">快捷操作</string>
     <string name="open_trace_file">打开 Trace 文件</string>
     <string name="analyze_hprof">分析 HPROF</string>
     <string name="recent_indexes_unavailable">近期记录不可用</string>
@@ -229,13 +228,6 @@
     <string name="recent_column_package">应用包名</string>
     <string name="recent_column_type">类型</string>
     <string name="recent_column_started">开始时间</string>
-    <string name="quick_action_start_capture">开始采集</string>
-    <string name="quick_action_start_capture_description">从已连接设备采集系统跟踪与性能数据</string>
-    <string name="quick_action_import_trace">导入 Trace</string>
-    <string name="quick_action_import_trace_description">支持 Perfetto / Systrace 格式</string>
-    <string name="quick_action_analyze_hprof">分析 HPROF</string>
-    <string name="quick_action_analyze_hprof_description">内存泄漏与分配热点分析</string>
-    <string name="quick_action_run_startup_test">运行启动测试</string>
-    <string name="quick_action_run_startup_test_description">测量应用启动性能</string>
     <string name="home_focus_on_performance">专注性能 · 创造更好的应用</string>
+    <string name="home_module_drag_hint">长按模块卡片可拖拽排序。</string>
 </resources>

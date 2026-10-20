@@ -70,17 +70,23 @@ class UnifiedDesktopShellTest {
         assertTrue(shell.contains("navigator.openPerfettoTrace"))
 
         assertFalse(home.contains("AppSettingsControls"))
+        // The home grid is controller-driven: module titles resolve via the shared
+        // destination title resource, and descriptions via the module description resolver.
+        assertTrue(home.contains("homeLayout.moduleOrder"))
+        assertTrue(home.contains("destination.titleResource"))
+        assertTrue(home.contains("moduleDescriptionResource"))
         listOf(
-            "Res.string.layout_inspector",
-            "Res.string.cpu_profiler",
-            "Res.string.trace_analyzer",
-            "Res.string.memory_profiler",
+            "Res.string.inspect_android_view_hierarchies_screenshots_bounds_and_properties",
+            "Res.string.simpleperf_based_cpu_sampling_flame_graphs_call_tree_analysis",
+            "Res.string.perfetto_system_level_trace_capture_with_scheduling_binder_and_graphic",
             "Res.string.heap_dump_capture_object_statistics_and_class_histogram_analysis",
-            "Res.string.frame_profiler",
-            "Res.string.startup_profiler",
-            "Res.string.battery_network",
-            "Res.string.gpu_inspector",
-            "Res.string.benchmark_regression",
+            "Res.string.capture_online_or_import_gfxinfo_framestats_to_analyze_frame_timing",
+            "Res.string.cold_warm_startup_breakdown_and_baseline_profile_support",
+            "Res.string.battery_network_description",
+            "Res.string.discover_and_launch_android_gpu_inspector_then_index_and_verify",
+            "Res.string.compare_androidx_benchmark_baselines_and_current_results_with_ci_regre",
+            "Res.string.source_home_description",
+            "Res.string.reverse_net_home_description",
         ).forEach { resource -> assertTrue(home.contains(resource), "Missing home resource reference: $resource") }
         listOf(
             "Res.string.view_live_telemetry",

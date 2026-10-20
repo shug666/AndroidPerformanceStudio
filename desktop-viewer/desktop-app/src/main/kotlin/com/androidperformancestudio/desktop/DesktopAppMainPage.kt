@@ -85,6 +85,7 @@ fun FrameWindowScope.DesktopAppMainPage(
     var menuReadyDestination by remember { mutableStateOf<AppDestination?>(null) }
     val applicationSettingsStore = remember { ApplicationUiSettingsStore.desktop() }
     val simpleperfPreferencesStore = remember { SimpleperfPreferencesStore.desktop() }
+    val homeLayout = remember { HomeLayoutController.desktop() }
     val externalAnalysisLauncher = remember { ExternalAnalysisLauncher() }
     val userDocumentationLauncher = remember { UserDocumentationLauncher() }
     val sourceWorkspaceRuntime = remember { SourceWorkspaceRuntime.desktop() }
@@ -200,6 +201,7 @@ fun FrameWindowScope.DesktopAppMainPage(
                         navigator = navigator,
                         language = language,
                         navigationRailCollapsed = applicationSettings.navigationRailCollapsed,
+                        moduleOrder = homeLayout.moduleOrder,
                     ) {
                         navigator.retainedDestinations.forEach { destination ->
                             key(destination) {
@@ -219,6 +221,7 @@ fun FrameWindowScope.DesktopAppMainPage(
                             AppDestination.HOME ->
                                 AppHomePage(
                                     language = language,
+                                    homeLayout = homeLayout,
                                     onOpenSourceWorkspaces = { navigator.open(AppDestination.SOURCE_WORKSPACES) },
                                     onOpenLayoutInspector = { navigator.open(AppDestination.LAYOUT_INSPECTOR) },
                                     onOpenSimpleperf = { navigator.open(AppDestination.SIMPLEPERF) },
@@ -242,8 +245,6 @@ fun FrameWindowScope.DesktopAppMainPage(
                                                 navigator.openMemoryProfiler(item.artifactPath)
                                         }
                                     },
-                                    onOpenTraceFile = openTraceFile,
-                                    onAnalyzeHprof = analyzeHprof,
                                     androidSdkPath = applicationSettings.androidSdkPath,
                                     active = active,
                                 )
