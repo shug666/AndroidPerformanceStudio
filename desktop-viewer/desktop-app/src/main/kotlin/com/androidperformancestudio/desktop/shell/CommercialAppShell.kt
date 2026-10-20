@@ -70,6 +70,7 @@ import com.androidperformancestudio.desktop_app.generated.resources.no_active_ar
 import com.androidperformancestudio.desktop_app.generated.resources.no_matching_commands
 import com.androidperformancestudio.desktop_app.generated.resources.search_commands
 import com.androidperformancestudio.desktop_app.generated.resources.settings
+import com.androidperformancestudio.desktop_app.generated.resources.task_manager
 import com.androidperformancestudio.ui.LocalViewerColors
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTypography
@@ -83,6 +84,7 @@ import org.jetbrains.compose.resources.painterResource
 import com.androidperformancestudio.ui_components.generated.resources.Res as UiComponentsRes
 import com.androidperformancestudio.ui_components.generated.resources.ic_nav_rail_collapse
 import com.androidperformancestudio.ui_components.generated.resources.ic_nav_rail_expand
+import com.androidperformancestudio.ui_components.generated.resources.ic_task_manager
 
 internal data class WorkspaceContext(
     val deviceLabel: String? = null,
@@ -113,6 +115,7 @@ internal fun CommercialAppShell(
     content: @Composable BoxScope.() -> Unit,
 ) {
     var showCommandPalette by remember { mutableStateOf(false) }
+    var showTaskManager by remember { mutableStateOf(false) }
     val shellFocusRequester = remember { FocusRequester() }
     LaunchedEffect(navigator.destination) {
         shellFocusRequester.requestFocus()
@@ -171,6 +174,12 @@ internal fun CommercialAppShell(
                             navigator.open(AppDestination.SETTINGS)
                             true
                         }
+                        event.type == KeyEventType.KeyDown &&
+                            event.key == Key.M &&
+                            (event.isCtrlPressed || event.isMetaPressed) -> {
+                            showTaskManager = true
+                            true
+                        }
                         else -> false
                     }
                 }
@@ -189,6 +198,8 @@ internal fun CommercialAppShell(
                     settingsSelected = navigator.destination == AppDestination.SETTINGS,
                     onDestinationSelected = navigator::open,
                     onOpenSettings = { navigator.open(AppDestination.SETTINGS) },
+                    taskManagerLabel = localizedStringResource(Res.string.task_manager, language),
+                    onOpenTaskManager = { showTaskManager = true },
                 )
                 Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                     content()
@@ -213,6 +224,19 @@ internal fun CommercialAppShell(
                 navigator.open(destination)
                 showCommandPalette = false
             },
+            taskManagerLabel = localizedStringResource(Res.string.task_manager, language),
+            onOpenTaskManager = {
+                showCommandPalette = false
+                showTaskManager = true
+            },
+        )
+    }
+
+    if (showTaskManager) {
+        ModuleTaskManagerOverlay(
+            navigator = navigator,
+            language = language,
+            onDismiss = { showTaskManager = false },
         )
     }
 }
@@ -229,6 +253,8 @@ private fun StudioNavigationRail(
     settingsSelected: Boolean,
     onDestinationSelected: (AppDestination) -> Unit,
     onOpenSettings: () -> Unit,
+    taskManagerLabel: String,
+    onOpenTaskManager: () -> Unit,
 ) {
     val colors = LocalViewerColors.current
     val width by animateDpAsState(
@@ -280,6 +306,15 @@ private fun StudioNavigationRail(
             selected = settingsSelected,
             collapsed = collapsed,
             onClick = onOpenSettings,
+        )
+        // The task manager sits at the very bottom of the rail: an "open modules" switcher that
+        // lists retained modules and lets the user close (evict) them to free their resources.
+        NavigationRailEntry(
+            icon = UiComponentsRes.drawable.ic_task_manager,
+            label = taskManagerLabel,
+            selected = false,
+            collapsed = collapsed,
+            onClick = onOpenTaskManager,
         )
     }
 }
@@ -430,6 +465,8 @@ private fun StudioCommandPalette(
     items: List<StudioNavigationItem>,
     onDismiss: () -> Unit,
     onDestinationSelected: (AppDestination) -> Unit,
+    taskManagerLabel: String,
+    onOpenTaskManager: () -> Unit,
 ) {
     val colors = LocalViewerColors.current
     var query by remember { mutableStateOf("") }
@@ -468,6 +505,19 @@ private fun StudioCommandPalette(
                             )
                         }
                     }
+                }
+                // Footer action: open the task manager (open-modules switcher) from the palette.
+                TextButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onOpenTaskManager,
+                ) {
+                    Text(
+                        text = taskManagerLabel,
+                        modifier = Modifier.fillMaxWidth(),
+                        color = colors.accent,
+                        fontSize = ViewerTypography.body.fontSize,
+                        lineHeight = ViewerTypography.body.lineHeight,
+                    )
                 }
             }
         },

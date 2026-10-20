@@ -21,6 +21,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -71,6 +72,7 @@ import java.awt.datatransfer.StringSelection
 @Composable
 public fun FrameWindowScope.ReverseNetMainPage(
     language: UiLanguage = UiLanguage.ENGLISH,
+    active: Boolean = true,
     onBack: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
@@ -81,6 +83,12 @@ public fun FrameWindowScope.ReverseNetMainPage(
     val controller = remember { buildController(eventBus) { initError = it } }
     val sessionState by controller?.state?.collectAsState()
         ?: remember { mutableStateOf<ReverseNetSessionState>(ReverseNetSessionState.Error("init")) }
+    // Release the reverse-tethering session when the page leaves composition (eviction/
+    // deactivation): stops the relay, removes the adb reverse tunnel, and stops the device
+    // client so the tunnel does not outlive the page.
+    DisposableEffect(controller) {
+        onDispose { controller?.close() }
+    }
 
     val devices = remember { mutableStateListOf<String>() }
     var selectedSerial by remember { mutableStateOf<String?>(null) }
@@ -108,8 +116,12 @@ public fun FrameWindowScope.ReverseNetMainPage(
         }
     }
 
-    // Auto-detect devices on entry and poll while the page is active.
-    LaunchedEffect(controller) {
+    // Auto-detect devices on entry and poll only while the page is active. Keying on [active]
+    // cancels the loop when the module becomes inactive (retained but switched away) so it stops
+    // polling adb; the loop resumes if the module becomes active again. An active relay session
+    // runs in the SessionController's own scope and is unaffected by pausing this polling loop.
+    LaunchedEffect(controller, active) {
+        if (!active) return@LaunchedEffect
         while (isActive) {
             val ctl = controller ?: break
             try {

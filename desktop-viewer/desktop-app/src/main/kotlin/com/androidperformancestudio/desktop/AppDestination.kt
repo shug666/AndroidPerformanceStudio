@@ -105,6 +105,54 @@ class AppNavigator(
         activate(destination)
     }
 
+    /**
+     * Closes [destination]: removes it from [retainedDestinations] so its composed subtree is
+     * disposed and its resources released. HOME is never evictable. If [destination] is the
+     * currently active destination, the shell first returns to HOME. Any pending navigator
+     * request routed to [destination] is cleared so reopening does not re-trigger a stale
+     * intent; requests targeting other modules are left untouched.
+     */
+    fun evict(destination: com.androidperformancestudio.desktop.AppDestination) {
+        if (destination == AppDestination.HOME) return
+        if (destination == this.destination) {
+            this.destination = AppDestination.HOME
+        }
+        retainedDestinations.remove(destination)
+        clearRequestsFor(destination)
+    }
+
+    /**
+     * Closes every open module except HOME and the currently active destination. The active
+     * module and HOME remain composed; everything else is disposed.
+     */
+    fun evictAll() {
+        val active = this.destination
+        retainedDestinations.toList().forEach { destination ->
+            if (destination != AppDestination.HOME && destination != active) {
+                evict(destination)
+            }
+        }
+    }
+
+    private fun clearRequestsFor(destination: com.androidperformancestudio.desktop.AppDestination) {
+        when (destination) {
+            AppDestination.PERFETTO -> clearPerfettoTrace()
+            AppDestination.MEMORY_PROFILER -> {
+                memoryImportFile = null
+                memoryImportRequestId = 0L
+                memoryImportIsJavaHeap = false
+            }
+            AppDestination.LAYOUT_INSPECTOR -> {
+                layoutArchiveRequest = null
+                inspectorCorrelationHint = null
+            }
+            AppDestination.SIMPLEPERF -> simpleperfSessionRequest = null
+            AppDestination.METHOD_RECORDING -> methodRecordingTraceFile = null
+            AppDestination.SOURCE_WORKSPACES -> sourceLocation = null
+            else -> {}
+        }
+    }
+
     fun openSource(location: SourceLocation) {
         sourceLocation = location
         activate(AppDestination.SOURCE_WORKSPACES)

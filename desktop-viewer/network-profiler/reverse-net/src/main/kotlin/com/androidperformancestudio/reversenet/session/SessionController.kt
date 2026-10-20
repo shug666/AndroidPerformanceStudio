@@ -95,6 +95,23 @@ public class SessionController(
         stopInternal(reportError = false)
     }
 
+    /**
+     * Non-suspend release for page disposal (eviction/deactivation): best-effort runs the full
+     * [stop] sequence on the session scope so the relay thread stops, the adb reverse tunnel is
+     * removed, and the device client is stopped — without blocking the composition thread. Safe
+     * to call with no active session (no-op).
+     */
+    public fun close() {
+        if (activeSerial == null && relayEngine == null) return
+        scope.launch {
+            try {
+                stop()
+            } catch (_: Throwable) {
+                // best-effort cleanup during dispose
+            }
+        }
+    }
+
     /** Called by the tap listener when the device tunnel connects (client id handshake done). */
     public fun onTunnelConnected() {
         if (stateFlow.value is ReverseNetSessionState.Starting ||

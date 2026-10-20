@@ -422,6 +422,7 @@ fun FrameWindowScope.DesktopAppMainPage(
             AppDestination.REVERSE_NET ->
                 ReverseNetMainPage(
                     language = language,
+                    active = active,
                     onBack = { navigator.open(AppDestination.HOME) },
                 )
             AppDestination.GPU_INSPECTOR ->
