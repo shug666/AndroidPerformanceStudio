@@ -1,10 +1,7 @@
 package com.androidperformancestudio.desktop
 
-import com.androidperformancestudio.desktop.shell.NAVIGATION_COLLAPSE_BREAKPOINT_DP
 import com.androidperformancestudio.desktop.shell.WorkspaceContext
 import com.androidperformancestudio.desktop.shell.navigationIconResource
-import com.androidperformancestudio.desktop.shell.navigationRailCollapsedFor
-import com.androidperformancestudio.desktop.shell.resolvedNavigationRailCollapsed
 import java.nio.file.Files
 import java.nio.file.Path
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -54,13 +51,16 @@ class CommercialAppShellTest {
     }
 
     @Test
-    fun `navigation rail collapses below the documented minimum width`() {
-        assertTrue(navigationRailCollapsedFor(NAVIGATION_COLLAPSE_BREAKPOINT_DP - 1))
-        assertFalse(navigationRailCollapsedFor(NAVIGATION_COLLAPSE_BREAKPOINT_DP))
-        assertFalse(navigationRailCollapsedFor(NAVIGATION_COLLAPSE_BREAKPOINT_DP + 160))
-        assertTrue(resolvedNavigationRailCollapsed(1100, null))
-        assertFalse(resolvedNavigationRailCollapsed(1100, false))
-        assertTrue(resolvedNavigationRailCollapsed(1440, true))
+    fun `navigation rail collapse is purely user-controlled with no width fallback`() {
+        val shell =
+            Files.readString(
+                Path.of("src/main/kotlin/com/androidperformancestudio/desktop/shell/CommercialAppShell.kt"),
+            )
+        // The auto-collapse helpers and breakpoint are gone; the rail reads the persisted state directly.
+        assertFalse(shell.contains("NAVIGATION_COLLAPSE_BREAKPOINT_DP"))
+        assertFalse(shell.contains("navigationRailCollapsedFor"))
+        assertFalse(shell.contains("resolvedNavigationRailCollapsed"))
+        assertTrue(shell.contains("val collapsed = navigationRailCollapsed"))
     }
 
     @Test
@@ -129,7 +129,7 @@ class CommercialAppShellTest {
     }
 
     @Test
-    fun `navigation rail expansion is a persisted preference controlled from general settings`() {
+    fun `navigation rail collapse is a persisted preference with an in-rail toggle and a settings switch`() {
         val shell =
             Files.readString(
                 Path.of("src/main/kotlin/com/androidperformancestudio/desktop/shell/CommercialAppShell.kt"),
@@ -143,15 +143,22 @@ class CommercialAppShellTest {
                 Path.of("src/main/kotlin/com/androidperformancestudio/desktop/DesktopAppSettingsPage.kt"),
             )
 
-        // The rail only renders the persisted state; the expand/collapse button is gone.
+        // The shell exposes a toggle callback and renders the toggle with the rail icons.
         assertTrue(shell.contains("navigationRailCollapsed: Boolean"))
-        assertTrue(shell.contains("resolvedNavigationRailCollapsed(maxWidth.value.toInt(), navigationRailCollapsed)"))
-        assertFalse(shell.contains("onNavigationRailCollapsedChange"))
-        assertFalse(shell.contains("RailCollapseToggle"))
-        assertFalse(shell.contains("var userCollapsed"))
+        assertTrue(shell.contains("onToggleNavigationRailCollapsed: () -> Unit"))
+        assertTrue(shell.contains("onToggleCollapsed = onToggleNavigationRailCollapsed"))
+        assertTrue(shell.contains("ic_nav_rail_collapse"))
+        assertTrue(shell.contains("ic_nav_rail_expand"))
+        // The rail width animates between collapsed and expanded.
+        assertTrue(shell.contains("animateDpAsState"))
+        // The labels reuse the existing collapse/expand strings.
+        assertTrue(shell.contains("Res.string.expand_navigation"))
+        assertTrue(shell.contains("Res.string.collapse_navigation"))
+        // DesktopAppMainPage wires the toggle to flip the persisted setting.
         assertTrue(main.contains("navigationRailCollapsed = applicationSettings.navigationRailCollapsed"))
-        assertFalse(main.contains("onNavigationRailCollapsedChange"))
-        // Settings -> General owns the switch: checked means "show sidebar titles" (expanded).
+        assertTrue(main.contains("onToggleNavigationRailCollapsed"))
+        assertTrue(main.contains("navigationRailCollapsed = !applicationSettings.navigationRailCollapsed"))
+        // Settings -> General keeps its switch as the second entry point (same field).
         assertTrue(settings.contains("Res.string.show_sidebar_titles"))
         assertTrue(settings.contains("checked = !settings.navigationRailCollapsed"))
         assertTrue(settings.contains("navigationRailCollapsed = !showSidebarTitles"))
