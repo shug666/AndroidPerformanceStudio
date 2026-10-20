@@ -23,9 +23,12 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,9 +44,15 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -86,6 +95,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.painterResource
@@ -103,6 +113,40 @@ internal fun homeGridColumnCount(availableWidthDp: Int): Int =
 
 private val sessionTimestampFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault())
+
+/** Phases of a card drag, used to select the lift/settle scale mapping. */
+private enum class DragPhase { Idle, Lifting, Dragging, Dropping }
+
+/** Scale the floating card shrinks to at the start of the lift (anticipation). */
+private const val LIFT_DIP_SCALE = 0.92f
+
+/** Scale the floating card grows to once lifted (raised above the grid). */
+private const val LIFT_RAISED_SCALE = 1.05f
+
+/** Resting shadow elevation (dp) of a card sitting in the grid. */
+private const val CARD_REST_SHADOW_DP = 1f
+
+/** Lifted shadow elevation (dp) of the floating card. */
+private const val CARD_LIFTED_SHADOW_DP = 12f
+
+private val LiftSpring = spring<Float>(dampingRatio = 0.6f, stiffness = 400f)
+private val DropSpring = spring<Float>(dampingRatio = 0.8f, stiffness = 350f)
+
+/**
+ * Maps the drag's lift progress (0..1) to the floating card's scale. While lifting/dragging the
+ * card grows from [LIFT_DIP_SCALE] to [LIFT_RAISED_SCALE]; while dropping it settles from
+ * [LIFT_RAISED_SCALE] back to the resting 1.0 (without re-dipping through the anticipation scale).
+ */
+private fun liftScaleFor(progress: Float, dropping: Boolean): Float =
+    if (dropping) {
+        LIFT_RAISED_SCALE + (1f - progress) * (1f - LIFT_RAISED_SCALE)
+    } else {
+        LIFT_DIP_SCALE + progress * (LIFT_RAISED_SCALE - LIFT_DIP_SCALE)
+    }
+
+/** Maps the drag's lift progress (0..1) to the floating card's shadow elevation in dp. */
+private fun liftShadowDp(progress: Float): Float =
+    CARD_REST_SHADOW_DP + progress * (CARD_LIFTED_SHADOW_DP - CARD_REST_SHADOW_DP)
 
 private fun Instant.sessionLabel(): String = sessionTimestampFormatter.format(this)
 
@@ -405,6 +449,12 @@ private fun HomeModuleGrid(
  * card follows the pointer across reorders without node-local-coordinate drift. Taps route to
  * [onTap]. The column count is frozen for the duration of a drag so the grid does not reflow
  * mid-gesture.
+ *
+ * While a drag is in progress the lifted card is rendered as a floating overlay above the grid
+ * (raised scale + elevated shadow, tracking the pointer), and its original grid slot shows a
+ * dashed [DraggedSlotPlaceholder] that rides [Modifier.animateItem] as the grid shuffles. A lift
+ * animation plays on long-press (anticipation shrink then grow, in parallel with pointer-follow)
+ * and a settle animation plays on drop.
  */
 @Composable
 private fun <T> ReorderableGrid(
@@ -419,10 +469,14 @@ private fun <T> ReorderableGrid(
 ) {
     if (columnCount <= 0) return
     val gridState = rememberLazyGridState()
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
     var draggedIndex by remember { mutableStateOf<Int?>(null) }
     var dragPosition by remember { mutableStateOf(Offset.Zero) }
     var grabLocal by remember { mutableStateOf(Offset.Zero) }
     var frozenColumns by remember { mutableStateOf<Int?>(null) }
+    var phase by remember { mutableStateOf(DragPhase.Idle) }
+    val liftProgress = remember { Animatable(0f) }
     // The pointerInput blocks below are keyed on stable values (the items list instance and the
     // column count), so their coroutines launch once and would otherwise capture the first
     // onTap/onMove closures. After a drag mutates `items`, the cards re-render with the new order
@@ -458,27 +512,54 @@ private fun <T> ReorderableGrid(
             userScrollEnabled = false,
         ) {
             itemsIndexed(items, key = { _, item -> key(item) }) { index, item ->
+                // The dragged slot keeps its place in the grid (so drop-index math over
+                // visibleItemsInfo stays valid) but renders a dashed placeholder instead of the
+                // card; the lifted card is drawn as an overlay above. Both the placeholder and the
+                // non-dragged cards use animateItem() so the placeholder shuffles along with the rest.
                 val dragged = draggedIndex == index
-                val cellModifier =
+                Box(modifier = Modifier.animateItem()) {
                     if (dragged) {
-                        Modifier
-                            .offset {
-                                val slot = gridState.layoutInfo.visibleItemsInfo
-                                    .firstOrNull { it.index == index }
-                                if (slot != null) {
-                                    IntOffset(
-                                        (dragPosition.x - grabLocal.x - slot.offset.x).roundToInt(),
-                                        (dragPosition.y - grabLocal.y - slot.offset.y).roundToInt(),
-                                    )
-                                } else {
-                                    IntOffset.Zero
-                                }
-                            }
-                            .zIndex(1f)
+                        DraggedSlotPlaceholder(
+                            modifier = Modifier.fillMaxWidth().height(cardHeightDp.dp),
+                        )
                     } else {
-                        Modifier.animateItem()
+                        itemContent(index, item)
                     }
-                Box(modifier = cellModifier) { itemContent(index, item) }
+                }
+            }
+        }
+
+        // Floating lifted card: rendered above the grid only while a drag is in progress. It is
+        // sized to the dragged slot's width and positioned at dragPosition - grabLocal (the outer
+        // Box, the grid, and the pointer overlay share one coordinate origin since the grid is not
+        // scrolled and exactly fills the Box). graphicsLayer drives the lift/settle scale + shadow.
+        val liftedIndex = draggedIndex
+        if (liftedIndex != null) {
+            val slot =
+                gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == liftedIndex }
+            if (slot != null) {
+                val slotWidthDp = with(density) { slot.size.width.toDp() }
+                val dropping = phase == DragPhase.Dropping
+                Box(
+                    modifier = Modifier
+                        .offset {
+                            IntOffset(
+                                (dragPosition.x - grabLocal.x).roundToInt(),
+                                (dragPosition.y - grabLocal.y).roundToInt(),
+                            )
+                        }
+                        .width(slotWidthDp)
+                        .height(cardHeightDp.dp)
+                        .graphicsLayer {
+                            val scale = liftScaleFor(liftProgress.value, dropping)
+                            scaleX = scale
+                            scaleY = scale
+                            shadowElevation = with(density) { liftShadowDp(liftProgress.value).dp.toPx() }
+                        }
+                        .zIndex(1f),
+                ) {
+                    itemContent(liftedIndex, items[liftedIndex])
+                }
             }
         }
 
@@ -504,11 +585,20 @@ private fun <T> ReorderableGrid(
                                         offset.y - slot.offset.y,
                                     )
                                     dragPosition = offset
+                                    // Lift runs in parallel with pointer-follow: the card begins
+                                    // tracking immediately while the shrink-then-grow plays over
+                                    // the first ~200ms, so there is no dead-time after the press.
+                                    phase = DragPhase.Lifting
+                                    scope.launch {
+                                        liftProgress.animateTo(1f, LiftSpring)
+                                        if (phase == DragPhase.Lifting) phase = DragPhase.Dragging
+                                    }
                                 }
                             },
                             onDrag = { change, _ ->
                                 change.consume()
                                 dragPosition = change.position
+                                if (phase == DragPhase.Lifting) phase = DragPhase.Dragging
                                 val di = draggedIndex
                                 if (di != null) {
                                     val target =
@@ -524,12 +614,53 @@ private fun <T> ReorderableGrid(
                                     }
                                 }
                             },
-                            onDragEnd = { draggedIndex = null; frozenColumns = null },
-                            onDragCancel = { draggedIndex = null; frozenColumns = null },
+                            onDragEnd = {
+                                phase = DragPhase.Dropping
+                                scope.launch {
+                                    liftProgress.animateTo(0f, DropSpring)
+                                    draggedIndex = null
+                                    frozenColumns = null
+                                    phase = DragPhase.Idle
+                                }
+                            },
+                            onDragCancel = {
+                                phase = DragPhase.Dropping
+                                scope.launch {
+                                    liftProgress.animateTo(0f, DropSpring)
+                                    draggedIndex = null
+                                    frozenColumns = null
+                                    phase = DragPhase.Idle
+                                }
+                            },
                         )
                     },
         )
     }
+}
+
+/**
+ * The dashed, faintly-filled placeholder shown in a card's grid slot while that card is being
+ * dragged. Same size as the card; rides [Modifier.animateItem] so it shuffles with the grid.
+ */
+@Composable
+private fun DraggedSlotPlaceholder(modifier: Modifier = Modifier) {
+    val colors = LocalViewerColors.current
+    val accent = colors.accent
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(StudioTokens.cardRadius))
+            .background(accent.copy(alpha = 0.06f))
+            .drawBehind {
+                drawRoundRect(
+                    color = accent.copy(alpha = 0.5f),
+                    cornerRadius = CornerRadius(StudioTokens.cardRadius.toPx(), StudioTokens.cardRadius.toPx()),
+                    style = Stroke(
+                        width = 1.dp.toPx(),
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()), 0f),
+                    ),
+                )
+            },
+    )
 }
 
 @Composable
