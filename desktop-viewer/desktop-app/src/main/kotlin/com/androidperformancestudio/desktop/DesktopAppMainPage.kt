@@ -201,6 +201,11 @@ fun FrameWindowScope.DesktopAppMainPage(
                         navigator = navigator,
                         language = language,
                         navigationRailCollapsed = applicationSettings.navigationRailCollapsed,
+                        onToggleNavigationRailCollapsed = {
+                            updateApplicationSettings(
+                                applicationSettings.copy(navigationRailCollapsed = !applicationSettings.navigationRailCollapsed),
+                            )
+                        },
                         moduleOrder = homeLayout.moduleOrder,
                     ) {
                         navigator.retainedDestinations.forEach { destination ->

@@ -2,6 +2,7 @@
 
 package com.androidperformancestudio.desktop.shell
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.TooltipArea
@@ -63,6 +64,8 @@ import com.androidperformancestudio.desktop.navigationLabelResource
 import com.androidperformancestudio.desktop.titleResource
 import com.androidperformancestudio.desktop_app.generated.resources.Res
 import com.androidperformancestudio.desktop_app.generated.resources.command_palette
+import com.androidperformancestudio.desktop_app.generated.resources.collapse_navigation
+import com.androidperformancestudio.desktop_app.generated.resources.expand_navigation
 import com.androidperformancestudio.desktop_app.generated.resources.no_active_artifact
 import com.androidperformancestudio.desktop_app.generated.resources.no_matching_commands
 import com.androidperformancestudio.desktop_app.generated.resources.search_commands
@@ -77,14 +80,9 @@ import com.androidperformancestudio.ui.studio.StudioSearchField
 import com.androidperformancestudio.ui.studio.StudioTokens
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
-
-internal const val NAVIGATION_COLLAPSE_BREAKPOINT_DP: Int = 1280
-
-internal fun navigationRailCollapsedFor(availableWidthDp: Int): Boolean =
-    availableWidthDp < NAVIGATION_COLLAPSE_BREAKPOINT_DP
-
-internal fun resolvedNavigationRailCollapsed(availableWidthDp: Int, userCollapsed: Boolean?): Boolean =
-    userCollapsed ?: navigationRailCollapsedFor(availableWidthDp)
+import com.androidperformancestudio.ui_components.generated.resources.Res as UiComponentsRes
+import com.androidperformancestudio.ui_components.generated.resources.ic_nav_rail_collapse
+import com.androidperformancestudio.ui_components.generated.resources.ic_nav_rail_expand
 
 internal data class WorkspaceContext(
     val deviceLabel: String? = null,
@@ -108,6 +106,7 @@ internal fun CommercialAppShell(
     navigator: AppNavigator,
     language: UiLanguage,
     navigationRailCollapsed: Boolean,
+    onToggleNavigationRailCollapsed: () -> Unit,
     moduleOrder: List<AppDestination>,
     modifier: Modifier = Modifier,
     workspaceContext: WorkspaceContext = WorkspaceContext(),
@@ -122,6 +121,11 @@ internal fun CommercialAppShell(
     val destinationTitle = localizedStringResource(navigator.destination.titleResource, language)
     val commandPaletteLabel = localizedStringResource(Res.string.command_palette, language)
     val settingsLabel = localizedStringResource(Res.string.settings, language)
+    // The collapse/expand toggle's label resolves against the current state; re-resolved on toggle.
+    val collapseToggleLabel = localizedStringResource(
+        if (navigationRailCollapsed) Res.string.expand_navigation else Res.string.collapse_navigation,
+        language,
+    )
     val navigationItems =
         // Home is pinned first; the rest follow the user-customized module order shared with the
         // home screen, so reordering modules on the home grid reorders the rail live.
@@ -172,13 +176,15 @@ internal fun CommercialAppShell(
                 }
                 .focusable(),
     ) {
-        val collapsed = resolvedNavigationRailCollapsed(maxWidth.value.toInt(), navigationRailCollapsed)
+        val collapsed = navigationRailCollapsed
         Column(modifier = Modifier.fillMaxSize().background(colors.toolbar)) {
             Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 StudioNavigationRail(
                     items = navigationItems,
                     selectedDestination = navigator.destination,
                     collapsed = collapsed,
+                    onToggleCollapsed = onToggleNavigationRailCollapsed,
+                    collapseToggleLabel = collapseToggleLabel,
                     settingsLabel = settingsLabel,
                     settingsSelected = navigator.destination == AppDestination.SETTINGS,
                     onDestinationSelected = navigator::open,
@@ -217,13 +223,20 @@ private fun StudioNavigationRail(
     items: List<StudioNavigationItem>,
     selectedDestination: AppDestination,
     collapsed: Boolean,
+    onToggleCollapsed: () -> Unit,
+    collapseToggleLabel: String,
     settingsLabel: String,
     settingsSelected: Boolean,
     onDestinationSelected: (AppDestination) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val colors = LocalViewerColors.current
-    val width = if (collapsed) StudioTokens.navigationCollapsedWidth else StudioTokens.navigationExpandedWidth
+    val width by animateDpAsState(
+        if (collapsed) StudioTokens.navigationCollapsedWidth else StudioTokens.navigationExpandedWidth,
+        label = "navigationRailWidth",
+    )
+    val toggleIcon =
+        if (collapsed) UiComponentsRes.drawable.ic_nav_rail_expand else UiComponentsRes.drawable.ic_nav_rail_collapse
     Column(
         modifier =
             Modifier
@@ -244,6 +257,15 @@ private fun StudioNavigationRail(
             )
         }
         Spacer(Modifier.weight(1f))
+        // The collapse/expand toggle sits between the destinations and the divider + Settings
+        // entry, matching the layout the icon-centering comment anticipated.
+        NavigationRailEntry(
+            icon = toggleIcon,
+            label = collapseToggleLabel,
+            selected = false,
+            collapsed = collapsed,
+            onClick = onToggleCollapsed,
+        )
         Box(
             modifier =
                 Modifier
