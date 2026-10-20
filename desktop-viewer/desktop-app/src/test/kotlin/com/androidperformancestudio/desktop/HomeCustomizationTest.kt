@@ -69,4 +69,18 @@ class HomeCustomizationTest {
         assertFalse(home.contains("QuickActionsManageDialog"))
         assertFalse(home.contains("homeQuickActionColumnCount"))
     }
+
+    @Test
+    fun `tap and drag handlers stay live after a reorder`() {
+        // The pointerInput overlay is keyed on stable values, so its coroutine launches once.
+        // The tap/drag callbacks must be kept live via rememberUpdatedState, otherwise a tap after
+        // a drag would open the module that *used to* be at the tapped slot.
+        assertTrue(home.contains("rememberUpdatedState(onTap)"), "onTap must be rememberUpdatedState")
+        assertTrue(home.contains("rememberUpdatedState(onMove)"), "onMove must be rememberUpdatedState")
+        assertTrue(home.contains("currentOnTap(it.index)"))
+        assertTrue(home.contains("currentOnMove(di, target)"))
+        // The stale-closure anti-pattern: the overlay must NOT call onTap/onMove directly.
+        assertFalse(home.contains("onTap(it.index)"))
+        assertFalse(Regex("onMove\\(di, target\\)").containsMatchIn(home))
+    }
 }

@@ -35,6 +35,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
@@ -422,6 +423,13 @@ private fun <T> ReorderableGrid(
     var dragPosition by remember { mutableStateOf(Offset.Zero) }
     var grabLocal by remember { mutableStateOf(Offset.Zero) }
     var frozenColumns by remember { mutableStateOf<Int?>(null) }
+    // The pointerInput blocks below are keyed on stable values (the items list instance and the
+    // column count), so their coroutines launch once and would otherwise capture the first
+    // onTap/onMove closures. After a drag mutates `items`, the cards re-render with the new order
+    // but the tap handler would still call the stale closure — opening the module that *used to*
+    // be at the tapped slot. rememberUpdatedState keeps the handlers live across recompositions.
+    val currentOnTap by rememberUpdatedState(onTap)
+    val currentOnMove by rememberUpdatedState(onMove)
     val cols = frozenColumns ?: columnCount
     val gapDp = StudioTokens.compactContentPadding
     val totalSlots = items.size
@@ -482,7 +490,7 @@ private fun <T> ReorderableGrid(
                 Modifier
                     .fillMaxSize()
                     .pointerInput(items, columnCount) {
-                        detectTapGestures { offset -> slotAt(offset)?.let { onTap(it.index) } }
+                        detectTapGestures { offset -> slotAt(offset)?.let { currentOnTap(it.index) } }
                     }
                     .pointerInput(items, columnCount) {
                         detectDragGesturesAfterLongPress(
@@ -511,7 +519,7 @@ private fun <T> ReorderableGrid(
                                             cols,
                                         )
                                     if (target != di && target in items.indices) {
-                                        onMove(di, target)
+                                        currentOnMove(di, target)
                                         draggedIndex = target
                                     }
                                 }
