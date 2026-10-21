@@ -265,6 +265,11 @@ fun FrameWindowScope.PerfettoMainPage(
     var fileDialogOpen by remember { mutableStateOf(false) }
     var traceOpenJob by remember { mutableStateOf<Job?>(null) }
     val traceOpenMutex = remember { Mutex() }
+    // Serializes the "Open in Perfetto UI" and "Open with native engine" actions so rapid
+    // back-and-forth clicks cannot interleave stop/start/browse on port 9001. Each action fully
+    // completes (stops the other server, starts its own, opens the browser) before the next
+    // begins; the last click wins and the running service always matches the last browser tab.
+    val openUiMutex = remember { Mutex() }
     val openTrace: (Path, com.androidperformancestudio.contracts.CaptureArtifact?) -> Unit = { traceFile, artifact ->
         traceOpenJob?.cancel()
         traceOpenJob =
@@ -285,20 +290,22 @@ fun FrameWindowScope.PerfettoMainPage(
     // deactivates so the browser can refresh or switch between the official and local UI.
     val launchInUi: (Path?, PerfettoUiServer.ServeMode, Long?) -> Unit = { requestedTraceFile, mode, timestamp ->
         coroutineScope.launch(Dispatchers.IO) {
-            val traceFile = requestedTraceFile ?: activeTraceFile ?: run {
-                diagnosticError = localizedStringResource(Res.string.no_active_trace, language)
-                return@launch
-            }
-            // The byte-serving endpoint and the native engine are mutually exclusive on port
-            // 9001: take the port over from a running native process so this mode can bind.
-            nativeServer.stop()
-            when (val started = uiServer.start(PerfettoUiServer.tryFindUiAssetsDir(), mode)) {
-                is StudioResult.Failure -> diagnosticError = started.error.message
-                is StudioResult.Success ->
-                    when (val opened = uiServer.openTrace(traceFile, timestamp)) {
-                        is StudioResult.Failure -> diagnosticError = opened.error.message
-                        is StudioResult.Success -> diagnosticError = null
-                    }
+            openUiMutex.withLock {
+                val traceFile = requestedTraceFile ?: activeTraceFile ?: run {
+                    diagnosticError = localizedStringResource(Res.string.no_active_trace, language)
+                    return@withLock
+                }
+                // The byte-serving endpoint and the native engine are mutually exclusive on port
+                // 9001: take the port over from a running native process so this mode can bind.
+                nativeServer.stop()
+                when (val started = uiServer.start(PerfettoUiServer.tryFindUiAssetsDir(), mode)) {
+                    is StudioResult.Failure -> diagnosticError = started.error.message
+                    is StudioResult.Success ->
+                        when (val opened = uiServer.openTrace(traceFile, timestamp)) {
+                            is StudioResult.Failure -> diagnosticError = opened.error.message
+                            is StudioResult.Success -> diagnosticError = null
+                        }
+                }
             }
         }
     }
@@ -313,19 +320,21 @@ fun FrameWindowScope.PerfettoMainPage(
     // the native process holds it (SERVER_START_FAILED).
     val openInNativeEngine: () -> Unit = {
         coroutineScope.launch(Dispatchers.IO) {
-            val traceFile =
-                activeTraceFile ?: run {
-                    diagnosticError = localizedStringResource(Res.string.no_active_trace, language)
-                    return@launch
-                }
-            uiServer.stop()
-            when (val resolved = TraceProcessorToolResolver().resolve()) {
-                is StudioResult.Failure -> diagnosticError = resolved.error.message
-                is StudioResult.Success ->
-                    when (val started = nativeServer.start(resolved.value, traceFile)) {
-                        is StudioResult.Failure -> diagnosticError = started.error.message
-                        is StudioResult.Success -> diagnosticError = null
+            openUiMutex.withLock {
+                val traceFile =
+                    activeTraceFile ?: run {
+                        diagnosticError = localizedStringResource(Res.string.no_active_trace, language)
+                        return@withLock
                     }
+                uiServer.stop()
+                when (val resolved = TraceProcessorToolResolver().resolve()) {
+                    is StudioResult.Failure -> diagnosticError = resolved.error.message
+                    is StudioResult.Success ->
+                        when (val started = nativeServer.start(resolved.value, traceFile)) {
+                            is StudioResult.Failure -> diagnosticError = started.error.message
+                            is StudioResult.Success -> diagnosticError = null
+                        }
+                }
             }
         }
     }
