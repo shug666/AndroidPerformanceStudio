@@ -289,6 +289,9 @@ fun FrameWindowScope.PerfettoMainPage(
                 diagnosticError = localizedStringResource(Res.string.no_active_trace, language)
                 return@launch
             }
+            // The byte-serving endpoint and the native engine are mutually exclusive on port
+            // 9001: take the port over from a running native process so this mode can bind.
+            nativeServer.stop()
             when (val started = uiServer.start(PerfettoUiServer.tryFindUiAssetsDir(), mode)) {
                 is StudioResult.Failure -> diagnosticError = started.error.message
                 is StudioResult.Success ->

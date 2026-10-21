@@ -39,14 +39,14 @@ class NativeTraceProcessorServer(
 
     /**
      * Starts the native RPC server for [traceFile] and opens the official UI. A running server is
-     * reused (a second open re-points nothing — the process already holds the trace); start
-     * failures stop the process before returning the error.
+     * reused for the trace (the process already holds it), but the browser is re-opened on every
+     * call so repeated clicks keep surfacing the UI; start failures stop the process first.
      */
     suspend fun start(
         tool: TraceProcessorTool,
         traceFile: Path,
     ): StudioResult<Unit> {
-        if (process != null) return StudioResult.Success(Unit)
+        if (process != null) return openOfficialUi()
         if (!Files.isRegularFile(traceFile)) {
             return StudioResult.Failure(
                 StudioError(
