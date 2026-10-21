@@ -55,6 +55,7 @@ import com.androidperformancestudio.perfetto_presentation.generated.resources.tr
 import com.androidperformancestudio.perfetto_presentation.generated.resources.trace_workspace_no_trace_description
 import com.androidperformancestudio.perfetto_presentation.generated.resources.trace_workspace_open
 import com.androidperformancestudio.perfetto_presentation.generated.resources.trace_workspace_open_in_timeline
+import com.androidperformancestudio.perfetto_presentation.generated.resources.trace_workspace_open_native_engine
 import com.androidperformancestudio.perfetto_presentation.generated.resources.trace_workspace_open_viewer
 import com.androidperformancestudio.perfetto_presentation.generated.resources.trace_workspace_query_id
 import com.androidperformancestudio.perfetto_presentation.generated.resources.trace_workspace_result
@@ -149,6 +150,7 @@ data class TraceAnalyzerWorkspaceActions(
     val onRunDiagnostic: (String) -> Unit = {},
     val onOpenInTimeline: (TraceInsightEvidence) -> Unit = {},
     val onOpenViewer: (TraceWorkspaceArtifact) -> Unit = {},
+    val onOpenNativeEngine: (TraceWorkspaceArtifact) -> Unit = {},
     val onExport: (TraceWorkspaceArtifact) -> Unit = {},
 )
 
@@ -654,6 +656,13 @@ private fun TraceViewerPanel(
                         enabled = artifact.viewerAvailable,
                         selected = artifact.viewerAvailable,
                         modifier = Modifier.testTag("open-perfetto-viewer"),
+                    )
+                    PerfettoCompactButton(
+                        text = localizedStringResource(Res.string.trace_workspace_open_native_engine, language),
+                        onClick = { actions.onOpenNativeEngine(artifact) },
+                        enabled = artifact.viewerAvailable,
+                        selected = artifact.viewerAvailable,
+                        modifier = Modifier.testTag("open-native-engine"),
                     )
                     PerfettoCompactButton(
                         text = localizedStringResource(Res.string.trace_workspace_export, language),
