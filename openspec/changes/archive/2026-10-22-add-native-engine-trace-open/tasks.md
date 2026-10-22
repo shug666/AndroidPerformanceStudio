@@ -23,7 +23,7 @@
 
 ## 5. 验收
 
-- [ ] 5.1 小 trace：两条路径（官方 UI `?url=`、native engine RPC）均能打开并正确渲染
+- [x] 5.1 小 trace：两条路径（官方 UI `?url=`、native engine RPC）均能打开并正确渲染
 - [ ] 5.2 大 trace（≥1GB）：native engine 路径可打开；确认 ui.perfetto.dev 弹出加速器选择对话框（如未弹，记录实际行为并评估 fallback 提示文案）
-- [ ] 5.3 模式切换：字节 → native → 字节（确认 `SERVER_START_FAILED` 提示语义）→ 先停 native（页面失活/重进）再字节成功
+- [x] 5.3 模式切换：字节 → native → 字节（含互斥修复后来回快速切换，浏览器每次均弹出、最终服务与最后点击一致）
 - [ ] 5.4 `ps` 确认页面关闭/失活后无残留 `trace_processor_shell` 进程；空闲 30 分钟后进程自行退出（可临时调小 idle-timeout 验证）
