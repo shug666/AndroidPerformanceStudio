@@ -1,0 +1,174 @@
+name: Package Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "App version for the packages, for example 0.1.1 (defaults to a git-derived dev version)"
+        required: false
+        type: string
+        default: ""
+  push:
+    branches:
+      - "pkg-windows/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Package Windows x64 MSI and EXE
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Resolve package version
+        id: ver
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${INPUT_VERSION}" ]]; then
+            version="${INPUT_VERSION#v}"
+          else
+            # jpackage/Compose nativeDistributions require MAJOR.MINOR.BUILD (numeric,
+            # MAJOR/MINOR <= 255, BUILD <= 65535). With no explicit version, derive a
+            # legal dev version: use the numeric prefix of the latest tag, else 0.0.1,
+            # and fold a monotonic counter into the BUILD component for uniqueness.
+            describe="$(git describe --tags --always 2>/dev/null || true)"
+            tag="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+            base="0.0.1"
+            if [[ -n "${tag}" ]] && [[ "${tag#v}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              base="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+            fi
+            # commits-since-tag (or total commits if no tag) -> BUILD bump keeps it unique & legal.
+            since="$(git rev-list --count HEAD 2>/dev/null || echo 0)"
+            build=$(( ${base##*.} + since % 60000 ))
+            major="${base%%.*}"; rest="${base#*.}"; minor="${rest%%.*}"
+            version="${major}.${minor}.${build}"
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "Resolved package version: ${version}"
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24.19.0"
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Set up pinned npm
+        run: npm install --global npm@11.17.0
+
+      - name: Build profiler assets
+        shell: bash
+        run: |
+          npm install --global yarn@1
+          ./scripts/firefox-profiler.sh all
+          ./scripts/build-perfetto-ui.sh download
+          PERFETTO_TOOLS_DIR="$PWD/build/perfetto-tools" ./scripts/install-trace-processor.sh
+          python3 ./scripts/install-adb-tools.py --host windows-x64
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+          cache-dependency-path: |
+            desktop-viewer/*.gradle.kts
+            desktop-viewer/gradle/libs.versions.toml
+            desktop-viewer/gradle/wrapper/gradle-wrapper.properties
+            desktop-viewer/**/build.gradle.kts
+
+      - name: Install pinned Windows JBRSDK
+        shell: pwsh
+        run: ./scripts/install-jbr.ps1
+
+      - name: Set up pinned Rust 1.85.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.85.1 --profile minimal
+          rustup run 1.85.1 rustc --version
+          echo "RUSTUP_TOOLCHAIN=1.85.1" >> "$GITHUB_ENV"
+
+      - name: Build and verify Compose agent bundle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sdkmanager = Join-Path $env:ANDROID_HOME 'cmdline-tools/latest/bin/sdkmanager.bat'
+          if (-not (Test-Path -LiteralPath $sdkmanager)) {
+            $found = Get-Command sdkmanager.bat -ErrorAction SilentlyContinue
+            if (-not $found) { throw 'sdkmanager.bat not found on the Windows runner.' }
+            $sdkmanager = $found.Source
+          }
+          $sdkRoot = Join-Path $env:RUNNER_TEMP 'compose-agent-sdk'
+          # Reuse the licenses already accepted by the hosted runner. An isolated SDK prevents
+          # preinstalled platform, NDK or CMake versions from changing the selected toolchain.
+          New-Item -ItemType Directory -Force -Path (Join-Path $sdkRoot 'licenses') | Out-Null
+          Copy-Item -Path (Join-Path $env:ANDROID_HOME 'licenses/*') -Destination (Join-Path $sdkRoot 'licenses') -Recurse -Force
+          & $sdkmanager --sdk_root="$sdkRoot" --install `
+            'platforms;android-35' `
+            'build-tools;35.0.0' `
+            'ndk;27.1.12297006' `
+            'cmake;3.22.1'
+          if ($LASTEXITCODE -ne 0) { throw 'Android SDK component installation failed.' }
+          $env:ANDROID_HOME = $sdkRoot
+          $env:ANDROID_SDK_ROOT = $sdkRoot
+          & .\desktop-viewer\gradlew.bat -p desktop-viewer :layout-inspector:compose-agent-build:verifyComposeAgentBundle --no-configuration-cache --no-daemon
+          if ($LASTEXITCODE -ne 0) { throw 'Compose agent bundle verification failed.' }
+
+      - name: Verify bundled ADB without SDK or PATH
+        shell: pwsh
+        run: |
+          & .\desktop-viewer\gradlew.bat -p desktop-viewer :platform-core:adb-core:smokeBundledAdb --no-daemon
+          if ($LASTEXITCODE -ne 0) { throw 'Bundled ADB smoke check failed.' }
+
+      - name: Build MSI and EXE
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          $version = $env:VERSION
+          & .\desktop-viewer\gradlew.bat -p desktop-viewer :desktop-app:packageMsi "-PappVersion=$version" "-Ptarget.arch=x64" "-Ptarget.javaHome=$env:APS_JBR_HOME" --no-daemon
+          if ($LASTEXITCODE -ne 0) { throw 'Windows MSI packaging failed.' }
+          & .\desktop-viewer\gradlew.bat -p desktop-viewer :desktop-app:packageExe "-PappVersion=$version" "-Ptarget.arch=x64" "-Ptarget.javaHome=$env:APS_JBR_HOME" --no-daemon
+          if ($LASTEXITCODE -ne 0) { throw 'Windows EXE packaging failed.' }
+
+      - name: Prepare Windows assets
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          $msiPackages = @(Get-ChildItem "desktop-viewer\desktop-app\build\compose\binaries\main\msi\*.msi")
+          if ($msiPackages.Count -ne 1) {
+            throw "Expected exactly one MSI package, found $($msiPackages.Count)."
+          }
+          $exePackages = @(Get-ChildItem "desktop-viewer\desktop-app\build\compose\binaries\main\exe\*.exe")
+          if ($exePackages.Count -ne 1) {
+            throw "Expected exactly one EXE package, found $($exePackages.Count)."
+          }
+          $VERSION = $env:VERSION
+          New-Item -ItemType Directory -Force "release-assets" | Out-Null
+          Copy-Item $msiPackages[0].FullName "release-assets\AndroidPerformanceStudio-$VERSION-windows-x64.msi"
+          Copy-Item $exePackages[0].FullName "release-assets\AndroidPerformanceStudio-$VERSION-windows-x64.exe"
+
+      - name: Upload Windows installers as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installers-x64
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
