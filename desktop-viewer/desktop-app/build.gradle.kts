@@ -227,6 +227,27 @@ if (!System.getProperty("os.name").lowercase().contains("win")) {
                             check(runCmd("dpkg-deb", "-x", archive.absolutePath, root.toString()) == 0) { "dpkg-deb -x failed for $archive" }
                             check(runCmd("dpkg-deb", "-e", archive.absolutePath, root.resolve("DEBIAN").toString()) == 0) { "dpkg-deb -e failed for $archive" }
 
+                            // The package was renamed early on (androidperfermancestudio →
+                            // androidperformancestudio); dpkg treats the renamed package as brand-new,
+                            // so the misspelled predecessor must be declared as Conflicts/Replaces or
+                            // both end up installed side by side after an upgrade.
+                            val stalePackageName = "androidperfermancestudio"
+                            val controlFile = root.resolve("DEBIAN/control").toFile()
+                            check(controlFile.isFile) { "No DEBIAN/control in $archive" }
+                            val controlLines = controlFile.readLines().toMutableList()
+                            // jpackage's control ends with a blank stanza separator; appending after
+                            // it would start a second (invalid) package stanza, so trim it first.
+                            while (controlLines.isNotEmpty() && controlLines.last().isBlank()) {
+                                controlLines.removeAt(controlLines.lastIndex)
+                            }
+                            if (controlLines.none { it.startsWith("Conflicts:") && stalePackageName in it }) {
+                                controlLines += "Conflicts: $stalePackageName"
+                            }
+                            if (controlLines.none { it.startsWith("Replaces:") && stalePackageName in it }) {
+                                controlLines += "Replaces: $stalePackageName"
+                            }
+                            controlFile.writeText(controlLines.joinToString("\n") + "\n")
+
                             verifyPayload(root.toFile(), archive.name)
 
                             val repacked = workdir.resolve("repacked.deb")
