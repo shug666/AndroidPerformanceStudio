@@ -122,7 +122,7 @@ Artifact indexing, integrity verification, and external-tool capability checks.
 - Android SDK command-line tools, SDK Platform Tools, NDK/CMake, and `patch` on the inspection-runtime build host.
 - A Bash-compatible shell for the scripts below. Windows uses `gradlew.bat` for Gradle tasks.
 
-Pinned tool versions are declared in the [Gradle wrapper](desktop-viewer/gradle/wrapper/gradle-wrapper.properties), [version catalog](desktop-viewer/gradle/libs.versions.toml), and [release workflow](.github/workflows/release.yml).
+Pinned tool versions are declared in the [Gradle wrapper](desktop-viewer/gradle/wrapper/gradle-wrapper.properties), [version catalog](desktop-viewer/gradle/libs.versions.toml), and [packaging workflow](.github/workflows/package.yml).
 
 ### 1. Clone and prepare profiler assets
 

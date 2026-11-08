@@ -121,7 +121,7 @@ View 层级、边界叠加、节点属性、时间线差异与问题提示。
 - 检查运行时的构建主机需要 Android SDK 命令行工具、SDK Platform Tools、NDK/CMake 和 `patch`。
 - 以下脚本示例使用兼容 Bash 的 Shell；Windows 的 Gradle 任务使用 `gradlew.bat`。
 
-构建工具版本以 [Gradle Wrapper](desktop-viewer/gradle/wrapper/gradle-wrapper.properties)、[版本目录](desktop-viewer/gradle/libs.versions.toml)和[发布工作流](.github/workflows/release.yml)为准。
+构建工具版本以 [Gradle Wrapper](desktop-viewer/gradle/wrapper/gradle-wrapper.properties)、[版本目录](desktop-viewer/gradle/libs.versions.toml)和[打包工作流](.github/workflows/package.yml)为准。
 
 ### 1. 克隆并准备分析器资源
 
