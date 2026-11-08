@@ -489,6 +489,9 @@ val buildAgentNative =
             outputDir.deleteRecursively()
             val cmake = executableIn(cmakeBinDir.get(), "cmake")!!.absolutePath
             val ninja = executableIn(cmakeBinDir.get(), "ninja")!!.absolutePath
+            // CMake escape-parses -D argument values, so Windows backslash paths would fail with
+            // "Invalid character escape '\a'". CMake/Ninja/Clang all accept forward slashes.
+            fun cmakePath(path: String) = path.replace('\\', '/')
             for (abi in supportedAbis) {
                 val buildDir = File(outputDir, "build-" + abi)
                 val abiDir = File(outputDir, abi)
@@ -510,9 +513,12 @@ val buildAgentNative =
                         "-DTRANSPORT_ROOT=" + transportRoot.absolutePath,
                         "-DSLICER_ROOT=" + slicerRoot.absolutePath,
                         "-DJVMTI_INCLUDE_DIR=" + File(stagedDir, "jvmti").absolutePath,
-                    ),
+                    ).map(::cmakePath),
                 )
-                runTool(listOf(cmake, "--build", buildDir.absolutePath, "--target", "ui_inspector_agent", "-j", "8"))
+                runTool(
+                    listOf(cmake, "--build", buildDir.absolutePath, "--target", "ui_inspector_agent", "-j", "8")
+                        .map(::cmakePath),
+                )
                 val produced = File(buildDir, "libui_inspector_agent.so")
                 check(produced.isFile && produced.length() > 0) { "CMake did not produce " + produced }
                 val target = File(abiDir, "lib_ui_inspector_agent.so")
