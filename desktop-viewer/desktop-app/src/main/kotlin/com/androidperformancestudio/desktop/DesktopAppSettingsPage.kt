@@ -1,6 +1,5 @@
 package com.androidperformancestudio.desktop
 
-import com.androidperformancestudio.memory.model.HprofEngine
 import com.androidperformancestudio.ui.UiLanguage
 import com.androidperformancestudio.ui.ViewerTextField
 import com.androidperformancestudio.ui.ViewerTypography
@@ -961,19 +960,35 @@ private fun ConfigurationSettingsContent(
         )
         SettingsChoice(
             language = language,
-            label = localizedStringResource(Res.string.hprof_analysis_engine, language),
-            current = settings.hprofEngine,
-            options = HprofEngine.entries,
+            label = localizedStringResource(Res.string.cpu_analysis_engine, language),
+            current = settings.cpuAnalysisEngine,
+            options = CpuAnalysisEngine.entries,
             optionLabel = { engine ->
                 localizedStringResource(
                     when (engine) {
-                        HprofEngine.LEGACY -> Res.string.hprof_engine_legacy
-                        HprofEngine.RUST -> Res.string.hprof_engine_rust
+                        CpuAnalysisEngine.LEGACY -> Res.string.cpu_engine_legacy
+                        CpuAnalysisEngine.RUST -> Res.string.cpu_engine_rust_projection
                     },
                     language,
                 )
             },
-            onSelected = { onSettingsChanged(settings.copy(hprofEngine = it)) },
+            onSelected = { onSettingsChanged(settings.copy(cpuAnalysisEngine = it)) },
+        )
+        SettingsChoice(
+            language = language,
+            label = localizedStringResource(Res.string.har_import_engine, language),
+            current = settings.harImportEngine,
+            options = HarImportEngine.entries,
+            optionLabel = { engine ->
+                localizedStringResource(
+                    when (engine) {
+                        HarImportEngine.LEGACY -> Res.string.har_engine_legacy
+                        HarImportEngine.RUST -> Res.string.har_engine_rust
+                    },
+                    language,
+                )
+            },
+            onSelected = { onSettingsChanged(settings.copy(harImportEngine = it)) },
         )
     }
 }

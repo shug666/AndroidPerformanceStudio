@@ -32,6 +32,7 @@ import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -42,6 +43,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -128,6 +130,11 @@ fun FrameWindowScope.DesktopAppMainPage(
     var showAiWindow by remember { mutableStateOf(false) }
     var aiWindowOpenRequestId by remember { mutableStateOf(0L) }
     var aiWindowContext by remember { mutableStateOf<com.androidperformancestudio.aiplatform.app.BusinessContext?>(null) }
+    var aiEntryError by remember { mutableStateOf<String?>(null) }
+    var aiEntryPreparing by remember { mutableStateOf(false) }
+    val aiExecutionState = aiPlatform?.service?.state?.collectAsState()?.value
+    val currentAiBusy by rememberUpdatedState(aiExecutionState?.status?.terminal == false)
+    val coroutineScope = rememberCoroutineScope()
     aiCoordinator.sourceModel = sourceWorkspaceRuntime::aiModel
     aiCoordinator.onOpen = { context ->
         aiWindowContext = context
@@ -136,11 +143,29 @@ fun FrameWindowScope.DesktopAppMainPage(
     }
     val aiContextHost = remember {
         object : com.androidperformancestudio.ui.AiContextHost {
+            override val analysisBusy: Boolean
+                get() = aiEntryPreparing || currentAiBusy
             override fun publish(context: com.androidperformancestudio.ui.UiAiContext) {
                 val evidence = context.evidence.map { item -> com.androidperformancestudio.ai.PerformanceEvidence(item.id, item.kind, item.summary, item.payloadJson) }
                 aiCoordinator.contexts.publish(com.androidperformancestudio.aiplatform.app.createBusinessContext(context.key, context.title, evidence, context.currentSelection))
             }
             override fun remove(key: String) { aiCoordinator.contexts.remove(key) }
+            override fun analyze(context: com.androidperformancestudio.ui.UiAiContext) {
+                if (analysisBusy || context.key != navigator.destination.aiContextKey()) return
+                aiEntryPreparing = true
+                aiEntryError = null
+                coroutineScope.launch {
+                    try {
+                        aiCoordinator.analyze(profilerAnalysisRequest(context))
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                        throw cancelled
+                    } catch (failure: Exception) {
+                        aiEntryError = failure.message?.takeIf { it.matches(Regex("E_[A-Z0-9_]{1,80}")) } ?: "E_AI_ANALYSIS_FAILED"
+                    } finally {
+                        aiEntryPreparing = false
+                    }
+                }
+            }
         }
     }
     val openGlobalAi: () -> Unit = {
@@ -177,7 +202,6 @@ fun FrameWindowScope.DesktopAppMainPage(
             throw failure
         } catch (_: Exception) { aiStartupError = "E_AI_STARTUP" }
     }
-    val coroutineScope = rememberCoroutineScope()
     var applicationSettings by remember { mutableStateOf(applicationSettingsStore.load()) }
     var simpleperfPreferences by remember { mutableStateOf(simpleperfPreferencesStore.load()) }
     var settingsPersistenceErrorPage by remember { mutableStateOf<SettingsPage?>(null) }
@@ -323,6 +347,18 @@ fun FrameWindowScope.DesktopAppMainPage(
     )
 
     WindowSurfaceEffect(windowColors.workspace)
+    aiEntryError?.let { error ->
+        AlertDialog(
+            onDismissRequest = { aiEntryError = null },
+            title = { androidx.compose.material3.Text(if (language == UiLanguage.SIMPLIFIED_CHINESE) "AI 分析失败" else "AI Analysis Failed") },
+            text = { CopyableText(error, language = language) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { aiEntryError = null }) {
+                    androidx.compose.material3.Text(if (language == UiLanguage.SIMPLIFIED_CHINESE) "关闭" else "Close")
+                }
+            },
+        )
+    }
     WindowsWindowChromeEffect(windowColors, darkTheme)
     Column(modifier = Modifier.fillMaxSize().background(windowColors.workspace)) {
         MacOsTitleBar(
@@ -477,6 +513,7 @@ fun FrameWindowScope.DesktopAppMainPage(
                                     window = window,
                                     settings = simpleperfSettings,
                                     androidSdkPath = applicationSettings.androidSdkPath?.let { path -> runCatching { java.nio.file.Path.of(path) }.getOrNull() },
+                                    nativeCpuEngineEnabled = applicationSettings.cpuAnalysisEngine == CpuAnalysisEngine.RUST,
                                     initialSessionFile = navigator.simpleperfSessionRequest?.path,
                                     initialSessionRequestId = navigator.simpleperfSessionRequest?.requestId ?: 0L,
                                     onSettingsChanged = updateSimpleperfPreferences,
@@ -513,7 +550,6 @@ fun FrameWindowScope.DesktopAppMainPage(
                             AppDestination.MEMORY_PROFILER ->
                                 MemoryProfilerMainPage(
                                     language = language,
-                                    hprofEngine = applicationSettings.hprofEngine,
                                     highlightClassName = memoryHighlightClassName,
                                     initialImportFile = navigator.memoryImportFile,
                                     initialImportRequestId = navigator.memoryImportRequestId,
@@ -578,13 +614,13 @@ fun FrameWindowScope.DesktopAppMainPage(
                                     onBack = { navigator.open(AppDestination.HOME) },
                                     isActive = active,
                                 )
-            AppDestination.REVERSE_NET ->
-                ReverseNetMainPage(
-                    language = language,
-                    active = active,
-                    onBack = { navigator.open(AppDestination.HOME) },
-                )
-            AppDestination.GPU_INSPECTOR ->
+                            AppDestination.REVERSE_NET ->
+                                ReverseNetMainPage(
+                                    language = language,
+                                    active = active,
+                                    onBack = { navigator.open(AppDestination.HOME) },
+                                )
+                            AppDestination.GPU_INSPECTOR ->
                                 GpuIntegrationMainPage(
                                     language = language,
                                     onBack = { navigator.open(AppDestination.HOME) },

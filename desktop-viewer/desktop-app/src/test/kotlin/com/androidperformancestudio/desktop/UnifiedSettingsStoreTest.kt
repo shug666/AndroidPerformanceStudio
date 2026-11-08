@@ -2,7 +2,6 @@ package com.androidperformancestudio.desktop
 
 import androidx.compose.ui.graphics.Color
 import com.androidperformancestudio.desktop.SimpleperfUiSettings
-import com.androidperformancestudio.memory.model.HprofEngine
 import com.androidperformancestudio.presentation.FlameTooltipMode
 import com.androidperformancestudio.presentation.SimpleperfEngine
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -99,7 +98,6 @@ class UnifiedSettingsStoreTest {
                 language = ApplicationLanguagePreference.SIMPLIFIED_CHINESE,
                 androidSdkPath = "D:/Android/Sdk",
                 navigationRailCollapsed = false,
-                hprofEngine = HprofEngine.LEGACY,
             )
         assertTrue(reloaded.save(changed))
 
@@ -119,7 +117,6 @@ class UnifiedSettingsStoreTest {
                 themeColor = ApplicationThemeColor.ROYAL_PURPLE.color,
                 language = ApplicationLanguagePreference.SIMPLIFIED_CHINESE,
                 androidSdkPath = "D:/Android/Sdk",
-                hprofEngine = HprofEngine.RUST,
             )
 
         assertTrue(store.save(settings))
@@ -130,76 +127,71 @@ class UnifiedSettingsStoreTest {
         assertEquals("simplified_chinese", values["application.language"])
         assertEquals("D:/Android/Sdk", values["application.androidSdkPath"])
         assertEquals("true", values["application.navigationRailCollapsed"])
-        assertEquals("rust", values["application.hprofEngine"])
         assertEquals(settings, store.load())
     }
 
     @Test
-    fun `hprof analysis defaults to Rust for fresh and existing profiles without a selection`() {
-        assertEquals(HprofEngine.RUST, HprofEngine.DEFAULT)
-        assertEquals(HprofEngine.RUST, HprofEngine.parse(null))
-        assertEquals(HprofEngine.RUST, ApplicationUiSettings().hprofEngine)
-        assertEquals(HprofEngine.RUST, ApplicationUiSettingsStore({ null }, { _, _ -> }).load().hprofEngine)
+    fun `new analysis engines default to Rust implementations for fresh profiles`() {
+        assertEquals(CpuAnalysisEngine.RUST, CpuAnalysisEngine.DEFAULT)
+        assertEquals(HarImportEngine.RUST, HarImportEngine.DEFAULT)
+        assertEquals(CpuAnalysisEngine.RUST, ApplicationUiSettings().cpuAnalysisEngine)
+        assertEquals(HarImportEngine.RUST, ApplicationUiSettings().harImportEngine)
 
-        val values = mutableMapOf("application.theme" to "dark", "application.language" to "english")
-        val settings = ApplicationUiSettingsStore(values::get, values::set).load()
+        val values = mutableMapOf<String, String>()
+        val loaded = ApplicationUiSettingsStore(values::get, values::set).load()
 
-        assertEquals(HprofEngine.RUST, settings.hprofEngine)
-        assertEquals(ApplicationThemePreference.DARK, settings.theme)
-        assertEquals(ApplicationLanguagePreference.ENGLISH, settings.language)
-        assertFalse(values.containsKey("application.hprofEngine"))
+        assertEquals(CpuAnalysisEngine.RUST, loaded.cpuAnalysisEngine)
+        assertEquals(HarImportEngine.RUST, loaded.harImportEngine)
+        assertFalse(values.containsKey("application.cpuAnalysisEngine"))
+        assertFalse(values.containsKey("application.harImportEngine"))
     }
 
     @Test
-    fun `both hprof engines round trip under the stable key without changing other preferences`() {
+    fun `new analysis engine preferences parse supported values and reject invalid values without rewriting`() {
+        listOf("RUST", "Rust", " rust ").forEach { storedValue ->
+            val values = mutableMapOf("application.cpuAnalysisEngine" to storedValue)
+            assertEquals(
+                CpuAnalysisEngine.RUST,
+                ApplicationUiSettingsStore(values::get, values::set).load().cpuAnalysisEngine,
+            )
+        }
+        listOf("RUST", "Rust", " rust ").forEach { storedValue ->
+            val values = mutableMapOf("application.harImportEngine" to storedValue)
+            assertEquals(
+                HarImportEngine.RUST,
+                ApplicationUiSettingsStore(values::get, values::set).load().harImportEngine,
+            )
+        }
+
+        listOf("", "unknown", "future-engine").forEach { storedValue ->
+            val values = mutableMapOf(
+                "application.cpuAnalysisEngine" to storedValue,
+                "application.harImportEngine" to storedValue,
+            )
+            val original = values.toMap()
+            val loaded = ApplicationUiSettingsStore(values::get, values::set).load()
+
+            assertEquals(CpuAnalysisEngine.RUST, loaded.cpuAnalysisEngine)
+            assertEquals(HarImportEngine.RUST, loaded.harImportEngine)
+            assertEquals(original, values)
+        }
+    }
+
+    @Test
+    fun `new analysis engine preferences round trip under independent application keys`() {
         val values = mutableMapOf<String, String>()
-        var flushCount = 0
-        val store = ApplicationUiSettingsStore(values::get, values::set, flush = { flushCount += 1 })
-        val original =
+        val store = ApplicationUiSettingsStore(values::get, values::set)
+        val settings =
             ApplicationUiSettings(
-                theme = ApplicationThemePreference.DARK,
-                displayScale = ApplicationDisplayScale.PERCENT_125,
-                androidSdkPath = "D:/Android/Sdk",
-                navigationRailCollapsed = false,
+                cpuAnalysisEngine = CpuAnalysisEngine.LEGACY,
+                harImportEngine = HarImportEngine.LEGACY,
             )
 
-        listOf(HprofEngine.RUST to "rust", HprofEngine.LEGACY to "legacy").forEach { (engine, storedValue) ->
-            val settings = original.copy(hprofEngine = engine)
+        assertTrue(store.save(settings))
 
-            assertTrue(store.save(settings))
-            assertEquals(storedValue, values["application.hprofEngine"])
-            assertEquals(settings, ApplicationUiSettingsStore(values::get, values::set).load())
-        }
-        assertEquals(2, flushCount)
-    }
-
-    @Test
-    fun `unrecognized hprof engine preferences default to Rust without overwriting storage`() {
-        listOf("", "unknown", "future-engine").forEach { storedValue ->
-            val values = mutableMapOf("application.hprofEngine" to storedValue)
-            val store = ApplicationUiSettingsStore(values::get, values::set)
-
-            assertEquals(HprofEngine.RUST, store.load().hprofEngine)
-            assertEquals(storedValue, values["application.hprofEngine"])
-        }
-    }
-
-    @Test
-    fun `saved Legacy preference remains explicit after the default changes to Rust`() {
-        val values = mutableMapOf("application.hprofEngine" to "legacy")
-        val store = ApplicationUiSettingsStore(values::get, values::set)
-
-        assertEquals(HprofEngine.LEGACY, store.load().hprofEngine)
-        assertEquals("legacy", values["application.hprofEngine"])
-    }
-
-    @Test
-    fun `hprof engine storage parsing tolerates capitalization and surrounding whitespace`() {
-        listOf("RUST", "Rust", " rust ").forEach { storedValue ->
-            val values = mutableMapOf("application.hprofEngine" to storedValue)
-            assertEquals(HprofEngine.RUST, ApplicationUiSettingsStore(values::get, values::set).load().hprofEngine)
-        }
-        assertEquals(HprofEngine.LEGACY, HprofEngine.parse("LEGACY"))
+        assertEquals("legacy", values["application.cpuAnalysisEngine"])
+        assertEquals("legacy", values["application.harImportEngine"])
+        assertEquals(settings, ApplicationUiSettingsStore(values::get, values::set).load())
     }
 
     @Test

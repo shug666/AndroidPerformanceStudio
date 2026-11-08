@@ -25,12 +25,25 @@ class NetworkProfilerWorkspaceSourceTest {
     }
 
     @Test
+    fun `AI button and published context share one bounded instance`() {
+        assertTrue(source.contains("val aiContext = remember(state) { runCatching { boundedAiContext(networkAiContext(state)) }.getOrNull() }"))
+        assertTrue(source.contains("PublishAiContext(\"network\", aiContext)"))
+        assertTrue(source.contains("ProfilerAiAnalysisButton(aiContext, language)"))
+        assertTrue(source.contains("horizontalScroll(rememberScrollState())"))
+        val toolbar = source.substringAfter("HeaderToolbar(").substringBefore("HorizontalDivider(")
+        assertTrue(toolbar.contains("ProfilerAiAnalysisButton(aiContext, language)"))
+        assertTrue(toolbar.contains("Modifier.weight(1f).horizontalScroll(rememberScrollState())"))
+        assertTrue(toolbar.contains("ProfilerToolbarStatus(state.message, state.error, Modifier.widthIn(max = 240.dp))"))
+    }
+
+    @Test
     fun `toolbar preserves capture import and export wiring with enabled predicates`() {
         assertButtonContains(
             "text = localizedStringResource(Res.string.import_har, language)",
             "enabled = !state.capturing",
             "chooseOpenFile(",
-            "HarParser().parse(file.toPath())",
+            "val mode = if (nativeHarEngineEnabled) HarImportMode.NATIVE_WITH_LEGACY_FALLBACK else HarImportMode.SHADOW",
+            "HarImportParser(mode, executable).parse(file.toPath()) { context.ensureActive() }",
             "complete(",
         )
         assertButtonContains(

@@ -37,7 +37,6 @@ import com.androidperformancestudio.memory.memory_app.generated.resources.native
 import com.androidperformancestudio.memory.memory_app.generated.resources.record_sampled_art
 import com.androidperformancestudio.memory.memory_app.generated.resources.refresh_devices
 import com.androidperformancestudio.memory.memory_app.generated.resources.sampled_art_view
-import com.androidperformancestudio.memory.model.HprofEngine
 import com.androidperformancestudio.memory.presentation.MemoryProfilerActions
 import com.androidperformancestudio.memory.presentation.MemoryProfilerCaptureNativeHeapButton
 import com.androidperformancestudio.memory.presentation.MemoryProfilerDumpBitmapsButton
@@ -49,6 +48,8 @@ import com.androidperformancestudio.memory.presentation.MemoryProfilerToolbarSel
 import com.androidperformancestudio.memory.presentation.MemoryProfilerViewMode
 import com.androidperformancestudio.memory.presentation.MemoryWorkspaceActions
 import com.androidperformancestudio.ui.PublishAiContext
+import com.androidperformancestudio.ui.ProfilerAiAnalysisButton
+import com.androidperformancestudio.ui.boundedAiContext
 import com.androidperformancestudio.ui.DesktopOpenFileDialog
 import com.androidperformancestudio.ui.HeaderDivider
 import com.androidperformancestudio.ui.HeaderSpacer
@@ -95,20 +96,20 @@ fun FrameWindowScope.MemoryProfilerMainPage(
     initialImportFile: Path? = null,
     initialImportRequestId: Long = 0L,
     initialImportIsJavaHeap: Boolean = false,
-    hprofEngine: HprofEngine = HprofEngine.DEFAULT,
+    graphStorage: String = "memory",
 ) {
     val controller =
         remember {
             MemoryProfilerController(
-                DesktopMemoryProfilerBackend(language = language, hprofEngine = hprofEngine),
+                DesktopMemoryProfilerBackend(language = language),
                 language = language,
             )
         }
     DisposableEffect(controller) { onDispose(controller::close) }
     SideEffect { controller.changeLanguage(language) }
-    LaunchedEffect(controller, hprofEngine) { controller.changeHprofEngine(hprofEngine) }
     val state by controller.state.collectAsState()
-    PublishAiContext("memory", remember(state) { runCatching { memoryAiContext(state) }.getOrNull() })
+    val aiContext = remember(state) { boundedAiContext(runCatching { memoryAiContext(state) }.getOrNull()) }
+    PublishAiContext("memory", aiContext)
     val recentSessions by controller.recentSessions.collectAsState()
     val titleBarHost = LocalTitleBarTargetHost.current
     val selectedPackageName = state.processes.firstOrNull { it.pid == state.selectedProcessId }?.packageName
@@ -399,6 +400,7 @@ fun FrameWindowScope.MemoryProfilerMainPage(
                     language = language,
                     onMapping = { showMappingFileDialog = true },
                 )
+                ProfilerAiAnalysisButton(aiContext, language)
             },
         )
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)

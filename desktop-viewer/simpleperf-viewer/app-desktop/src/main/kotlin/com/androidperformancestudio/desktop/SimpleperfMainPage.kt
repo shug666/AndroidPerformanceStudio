@@ -45,6 +45,8 @@ import com.androidperformancestudio.application.DeviceSelection
 import com.androidperformancestudio.application.DeviceTargetController
 import com.androidperformancestudio.application.DeviceTargetGateway
 import com.androidperformancestudio.application.OfflineProfileImporter
+import com.androidperformancestudio.application.HostSimpleperfResolver
+import com.androidperformancestudio.application.PerfDataConverter
 import com.androidperformancestudio.application.ReportController
 import com.androidperformancestudio.application.ReportLoadState
 import com.androidperformancestudio.application.ReportState
@@ -61,6 +63,7 @@ import com.androidperformancestudio.model.StudioError
 import com.androidperformancestudio.model.StudioResult
 import com.androidperformancestudio.parser.HostSimpleperfLocator
 import com.androidperformancestudio.parser.SimpleperfReportConverter
+import com.androidperformancestudio.platform.toolchain.NativeSummaryShadow
 import com.androidperformancestudio.platform.toolchain.RecentPathStore
 import com.androidperformancestudio.presentation.CaptureSettingsSection
 import com.androidperformancestudio.presentation.DeviceTargetActions
@@ -94,6 +97,7 @@ fun FrameWindowScope.SimpleperfMainPage(
     onOpenSourceCandidate: ((String) -> Unit)? = null,
     initialSessionFile: Path? = null,
     initialSessionRequestId: Long = 0L,
+    nativeCpuEngineEnabled: Boolean = true,
 ) {
     var currentSettings by remember(settings) { mutableStateOf(settings) }
     val dependencies = remember(androidSdkPath) { createWorkspaceDependencies(androidSdkPath) }
@@ -112,7 +116,7 @@ fun FrameWindowScope.SimpleperfMainPage(
     DisposableEffect(webBridgeHost) { onDispose(webBridgeHost::close) }
     val sessionPackages = remember { SessionPackageService() }
     val reportExports = remember { ReportExportService() }
-    val offlineImporter = remember { createOfflineImporter() }
+    val offlineImporter = remember(nativeCpuEngineEnabled) { createOfflineImporter(nativeCpuEngineEnabled) }
     val firefoxProfilerLaunchers = remember { applicationFirefoxProfilerLaunchers }
     val selectedEngine by rememberUpdatedState(currentSettings.simpleperfEngine)
     val sessionOpener =
@@ -182,7 +186,7 @@ fun FrameWindowScope.SimpleperfMainPage(
                 reportController,
                 sessionPackages,
                 reportExports,
-                ::createOfflineImporter,
+                { createOfflineImporter(nativeCpuEngineEnabled) },
                 sessionOpener::open,
                 scope,
                 window,
@@ -288,7 +292,7 @@ fun FrameWindowScope.SimpleperfMainPage(
     }
 
     pendingAiAnalysis?.let { pending ->
-        var performanceOnly by remember(pending) { mutableStateOf(false) }
+        var performanceOnly by remember(pending) { mutableStateOf(true) }
         AlertDialog(
             onDismissRequest = {
                 pending.webCommand?.let { it.session.update(it.event, SimpleperfWebStatus.CANCELLED, "E_CANCELLED") }
@@ -302,7 +306,7 @@ fun FrameWindowScope.SimpleperfMainPage(
                             Res.string.sp_ai_run_details,
                             resolvedLanguage,
                             selectedSimpleperfScope(pending.state, pending.report, resolvedLanguage),
-                            extractSimpleperfEvidence(pending.report, pending.state).size,
+                            if (extractSimpleperfEvidence(pending.report, pending.state).isEmpty()) 0 else 1,
                             pending.report.overview.sampleCount,
                         ),
                         language = resolvedLanguage,
@@ -322,7 +326,7 @@ fun FrameWindowScope.SimpleperfMainPage(
                         aiAnalysisError = null
                         aiAnalysisResult = null
                         val evidenceScope = selectedSimpleperfScope(pending.state, pending.report, resolvedLanguage)
-                        val evidenceCount = extractSimpleperfEvidence(pending.report, pending.state).size
+                        val evidenceCount = 1
                         val sampleCount = pending.report.overview.sampleCount
                         pending.webCommand?.let { it.session.update(it.event, SimpleperfWebStatus.RUNNING) }
                         val analysisJob = scope.launch {
@@ -586,7 +590,7 @@ private fun createWorkspaceDependencies(androidSdkPath: Path? = null): Workspace
     }
 }
 
-private fun createOfflineImporter(configuredSimpleperf: Path? = null): OfflineProfileImporter {
+private fun createOfflineImporter(nativeCpuEngineEnabled: Boolean, configuredSimpleperf: Path? = null): OfflineProfileImporter {
     val pathDirectories =
         System
             .getenv("PATH")
@@ -595,12 +599,19 @@ private fun createOfflineImporter(configuredSimpleperf: Path? = null): OfflinePr
             .filter(String::isNotBlank)
             .map(Path::of)
     return OfflineProfileImporter(
-        HostSimpleperfLocator(
-            configuredExecutable = configuredSimpleperf ?: findAndroidNdkSimpleperf(),
-            bundledExecutable = null,
-            pathDirectories = pathDirectories,
-        ),
-        SimpleperfReportConverter(),
+        hostSimpleperfResolver = HostSimpleperfResolver { signal ->
+            HostSimpleperfLocator(
+                configuredExecutable = configuredSimpleperf ?: findAndroidNdkSimpleperf(),
+                bundledExecutable = null,
+                pathDirectories = pathDirectories,
+            ).locate(signal)
+        },
+        perfDataConverter = PerfDataConverter { host, request, signal ->
+            SimpleperfReportConverter().convert(host, request, signal)
+        },
+        nativeEngineExecutable = {
+            if (!nativeCpuEngineEnabled) null else NativeSummaryShadow.configured("aps.simpleperfEngine.path", "APS_SIMPLEPERF_ENGINE")
+        },
     )
 }
 

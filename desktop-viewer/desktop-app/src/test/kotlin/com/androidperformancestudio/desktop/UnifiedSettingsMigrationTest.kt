@@ -84,57 +84,32 @@ class UnifiedSettingsMigrationTest {
     }
 
     @Test
-    fun `hprof engine configuration reuses the shared choice control and localized options`() {
+    fun `analysis engine configuration reuses the shared choice control and localized options`() {
         val configuration =
             desktopSource("DesktopAppSettingsPage.kt")
                 .substringAfter("private fun ConfigurationSettingsContent(")
                 .substringBefore("private fun ThemeColorSettingsContent(")
 
         assertTrue(configuration.contains("SettingsChoice("))
-        assertTrue(configuration.contains("Res.string.hprof_analysis_engine"))
-        assertTrue(configuration.contains("current = settings.hprofEngine"))
-        assertTrue(configuration.contains("options = HprofEngine.entries"))
-        assertTrue(configuration.contains("HprofEngine.LEGACY -> Res.string.hprof_engine_legacy"))
-        assertTrue(configuration.contains("HprofEngine.RUST -> Res.string.hprof_engine_rust"))
-        assertTrue(configuration.contains("onSettingsChanged(settings.copy(hprofEngine = it))"))
+        assertTrue(configuration.contains("current = settings.cpuAnalysisEngine"))
+        assertTrue(configuration.contains("options = CpuAnalysisEngine.entries"))
+        assertTrue(configuration.contains("CpuAnalysisEngine.RUST -> Res.string.cpu_engine_rust_projection"))
+        assertTrue(configuration.contains("onSettingsChanged(settings.copy(cpuAnalysisEngine = it))"))
+        assertTrue(configuration.contains("current = settings.harImportEngine"))
+        assertTrue(configuration.contains("options = HarImportEngine.entries"))
+        assertTrue(configuration.contains("HarImportEngine.RUST -> Res.string.har_engine_rust"))
+        assertTrue(configuration.contains("onSettingsChanged(settings.copy(harImportEngine = it))"))
 
         val english = desktopStrings("values")
         val chinese = desktopStrings("values-zh")
-        assertEquals("HPROF analysis engine", english["hprof_analysis_engine"])
-        assertEquals("HPROF \u5206\u6790\u5f15\u64ce", chinese["hprof_analysis_engine"])
-        assertEquals("Legacy", english["hprof_engine_legacy"])
-        assertEquals("Legacy\uFF08\u65E7\u7248\uFF09", chinese["hprof_engine_legacy"])
-        assertEquals("Rust", english["hprof_engine_rust"])
-        assertEquals("Rust", chinese["hprof_engine_rust"])
-    }
-
-    @Test
-    fun `hprof engine changes reach the remembered controller without restarting initial imports`() {
-        val shell = desktopSource("DesktopAppMainPage.kt")
-        val memoryPage =
-            Files.readString(
-                Path.of(
-                    "../memory-profiler/memory-app/src/main/kotlin/" +
-                        "com/androidperformancestudio/memory/app/MemoryProfilerMainPage.kt",
-                ),
-            )
-        val controllerCreation = memoryPage.substringAfter("val controller =").substringBefore("DisposableEffect")
-
-        assertTrue(shell.contains("hprofEngine = applicationSettings.hprofEngine"))
-        assertTrue(memoryPage.contains("hprofEngine: HprofEngine = HprofEngine.DEFAULT"))
-        assertTrue(Regex("remember\\s*\\{").containsMatchIn(controllerCreation))
-        assertFalse(Regex("remember\\s*\\([^)]*hprofEngine").containsMatchIn(controllerCreation))
-        assertTrue(
-            controllerCreation.contains("DesktopMemoryProfilerBackend(language = language, hprofEngine = hprofEngine)"),
-        )
-        assertTrue(
-            memoryPage.contains(
-                "LaunchedEffect(controller, hprofEngine) { controller.changeHprofEngine(hprofEngine) }",
-            ),
-        )
-        val initialImportEffect = "LaunchedEffect(initialImportFile, initialImportIsJavaHeap, initialImportRequestId)"
-        assertTrue(memoryPage.contains(initialImportEffect))
-        assertTrue(memoryPage.indexOf("controller.changeHprofEngine(hprofEngine)") < memoryPage.indexOf(initialImportEffect))
+        assertEquals("CPU analysis engine", english["cpu_analysis_engine"])
+        assertEquals("CPU 分析引擎", chinese["cpu_analysis_engine"])
+        assertEquals("Rust projection", english["cpu_engine_rust_projection"])
+        assertEquals("Rust 投影", chinese["cpu_engine_rust_projection"])
+        assertEquals("HAR import engine", english["har_import_engine"])
+        assertEquals("HAR 导入引擎", chinese["har_import_engine"])
+        assertEquals("Rust", english["har_engine_rust"])
+        assertEquals("Rust", chinese["har_engine_rust"])
     }
 
     private fun desktopStrings(localeDirectory: String): Map<String, String> {
