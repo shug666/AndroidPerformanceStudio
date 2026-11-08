@@ -64,6 +64,13 @@ fun androidSdkDir(): File =
 
 fun numericVersion(name: String): Double = name.substringAfterLast('-').toDoubleOrNull() ?: 0.0
 
+// SDK/NDK tools ship without a suffix on Unix hosts and with .exe/.bat on Windows hosts, so tool
+// lookups must accept every spelling instead of hardcoding the Unix name.
+fun executableIn(dir: File, name: String): File? =
+    listOf(name, "$name.exe", "$name.bat")
+        .map { File(dir, it) }
+        .firstOrNull { it.isFile }
+
 // Desktop packaging configures this module but does not build the Android agents. Resolve SDK
 // inputs only when an agent task actually consumes them, not while configuring unrelated builds.
 val androidJar = providers.provider {
@@ -76,14 +83,16 @@ val androidJar = providers.provider {
 
 val d8Tool = providers.provider {
     File(androidSdkDir(), "build-tools").listFiles().orEmpty()
-        .filter { it.isDirectory && File(it, "d8").isFile }
+        .filter { it.isDirectory && executableIn(it, "d8") != null }
         .maxByOrNull { numericVersion(it.name) }
-        ?.let { File(it, "d8") }
+        ?.let { executableIn(it, "d8")!! }
         ?: error("No d8 under " + androidSdkDir() + "/build-tools")
 }
 
 fun runTool(command: List<String>, directory: File? = null) {
-    val builder = ProcessBuilder(command).redirectErrorStream(true)
+    // Windows cannot CreateProcess a .bat directly; the interpreter must launch it.
+    val argv = if (command.first().endsWith(".bat")) listOf("cmd", "/c") + command else command
+    val builder = ProcessBuilder(argv).redirectErrorStream(true)
     if (directory != null) builder.directory(directory)
     val process = builder.start()
     val output = process.inputStream.bufferedReader().readText()
@@ -418,7 +427,8 @@ val ndkDir = providers.provider {
 
 val cmakeBinDir = providers.provider {
     File(androidSdkDir(), "cmake").listFiles().orEmpty()
-        .filter { it.isDirectory && File(it, "bin/cmake").isFile && File(it, "bin/ninja").isFile }
+        .filter { it.isDirectory && executableIn(File(it, "bin"), "cmake") != null &&
+            executableIn(File(it, "bin"), "ninja") != null }
         .maxByOrNull { numericVersion(it.name) }
         ?.let { File(it, "bin") }
         ?: error("No SDK CMake with ninja under " + androidSdkDir() + "/cmake")
@@ -426,8 +436,8 @@ val cmakeBinDir = providers.provider {
 
 val llvmStrip = providers.provider {
     File(ndkDir.get(), "toolchains/llvm/prebuilt").listFiles().orEmpty()
-        .map { File(it, "bin/llvm-strip") }
-        .firstOrNull { it.isFile }
+        .map { executableIn(File(it, "bin"), "llvm-strip") }
+        .firstOrNull { it != null }
         ?: error("No llvm-strip under " + ndkDir.get() + "/toolchains/llvm/prebuilt")
 }
 
@@ -477,8 +487,8 @@ val buildAgentNative =
             val stagedDir = staged.get().asFile
             val outputDir = output.get().asFile
             outputDir.deleteRecursively()
-            val cmake = File(cmakeBinDir.get(), "cmake").absolutePath
-            val ninja = File(cmakeBinDir.get(), "ninja").absolutePath
+            val cmake = executableIn(cmakeBinDir.get(), "cmake")!!.absolutePath
+            val ninja = executableIn(cmakeBinDir.get(), "ninja")!!.absolutePath
             for (abi in supportedAbis) {
                 val buildDir = File(outputDir, "build-" + abi)
                 val abiDir = File(outputDir, abi)
