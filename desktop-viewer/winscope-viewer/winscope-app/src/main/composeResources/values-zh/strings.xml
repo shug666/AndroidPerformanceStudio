@@ -5,7 +5,7 @@
     <string name="winscope_open_viewer">打开查看器</string>
     <string name="winscope_service_stopped">服务未启动</string>
     <string name="winscope_service_starting">启动中…</string>
-    <string name="winscope_service_running">服务运行中（代理 :5544，查看器 :%1$d）</string>
+    <string name="winscope_service_running">服务运行中（代理 :5544，查看器 :%1$s）</string>
     <string name="winscope_capture_idle">没有进行中的抓取</string>
     <string name="winscope_capture_recording">正在录制（%1$s）</string>
     <string name="winscope_capture_collecting">正在收集 trace（%1$s）</string>
