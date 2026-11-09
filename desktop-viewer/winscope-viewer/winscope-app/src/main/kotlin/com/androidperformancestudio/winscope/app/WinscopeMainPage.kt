@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +42,8 @@ import com.androidperformancestudio.winscope.winscope_app.generated.resources.wi
 import com.androidperformancestudio.winscope.winscope_app.generated.resources.winscope_start_service
 import com.androidperformancestudio.winscope.winscope_app.generated.resources.winscope_stop_browser_drives_capture
 import com.androidperformancestudio.winscope.winscope_app.generated.resources.winscope_stop_service
+import com.androidperformancestudio.winscope.winscope_app.generated.resources.winscope_token_label
+import com.androidperformancestudio.winscope.winscope_app.generated.resources.winscope_viewer_url_label
 
 /**
  * Winscope capture page: start/stop the bundled proxy + viewer service, mirror
@@ -99,8 +102,45 @@ public fun WinscopeMainPage(
             )
             Spacer(Modifier.height(12.dp))
 
+            ManualHandoffSection(state, language)
             CaptureStatusSection(state, language)
         }
+    }
+}
+
+@Composable
+private fun ManualHandoffSection(
+    state: WinscopePageState,
+    language: UiLanguage,
+) {
+    // Manual-handoff path: when the browser's automatic token handshake fails
+    // (stale cached tab, blocked request), the URL and token are shown here so
+    // the viewer's paste-token retry dialog can be served by hand.
+    state.viewerUrl?.let { url ->
+        SelectionContainer {
+            Column {
+                Text(
+                    text = localizedStringResource(Res.string.winscope_viewer_url_label, language),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Text(
+                    text = url,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = localizedStringResource(Res.string.winscope_token_label, language),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Text(
+                    text = state.sessionToken ?: "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
     }
 }
 

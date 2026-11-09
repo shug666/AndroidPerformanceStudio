@@ -13,5 +13,7 @@
     <string name="winscope_capture_legacy_path">Legacy path (non-Perfetto)</string>
     <string name="winscope_capture_perfetto_path">Perfetto path</string>
     <string name="winscope_stop_browser_drives_capture">Capture is driven from the Winscope viewer opened in your browser; this page mirrors its state.</string>
+    <string name="winscope_viewer_url_label">Viewer URL (copy into the browser if it did not open)</string>
+    <string name="winscope_token_label">Session token (paste into the viewer retry dialog if prompted)</string>
     <string name="winscope_error_prefix">Error: %1$s</string>
 </resources>

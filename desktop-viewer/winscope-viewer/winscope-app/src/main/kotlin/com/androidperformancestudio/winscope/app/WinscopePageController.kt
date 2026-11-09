@@ -146,5 +146,7 @@ private fun toPageState(
         captureLegacyPath = targets.isNotEmpty() && !targets.contains("perfetto_trace"),
         errorMessage = snapshot.errorMessage ?: if (viewerMissing) "viewer resource closure not packaged" else null,
         viewerPort = snapshot.viewerPort,
+        viewerUrl = snapshot.viewerUrl,
+        sessionToken = snapshot.sessionToken,
     )
 }

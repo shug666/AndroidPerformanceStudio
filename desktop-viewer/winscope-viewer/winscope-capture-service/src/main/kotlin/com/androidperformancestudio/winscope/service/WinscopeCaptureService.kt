@@ -31,6 +31,10 @@ public data class WinscopeServiceSnapshot(
     val captureSerial: String? = null,
     val captureTargetNames: List<String> = emptyList(),
     val errorMessage: String? = null,
+    /** Full viewer entry URL with the token injected; null while stopped. */
+    val viewerUrl: String? = null,
+    /** Session token shown for the viewer's paste-token retry dialog. */
+    val sessionToken: String? = null,
 )
 
 /**
@@ -124,6 +128,8 @@ public class WinscopeCaptureService(
                     running = true,
                     proxyPort = proxyPort,
                     viewerPort = viewerHost.port,
+                    viewerUrl = "http://127.0.0.1:${viewerHost.port}/index.html?token=$newToken",
+                    sessionToken = newToken,
                 )
             startWatchdog()
         } catch (startError: Exception) {

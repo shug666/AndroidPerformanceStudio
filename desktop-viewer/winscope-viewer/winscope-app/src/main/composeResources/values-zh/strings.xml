@@ -13,5 +13,7 @@
     <string name="winscope_capture_legacy_path">传统路径（非 Perfetto）</string>
     <string name="winscope_capture_perfetto_path">Perfetto 路径</string>
     <string name="winscope_stop_browser_drives_capture">抓取由浏览器中打开的 Winscope 查看器驱动；本页面同步显示其状态。</string>
+    <string name="winscope_viewer_url_label">查看器地址（若浏览器未自动打开，请复制到浏览器）</string>
+    <string name="winscope_token_label">会话 token（若查看器提示连接失败，可粘贴到重试对话框）</string>
     <string name="winscope_error_prefix">错误：%1$s</string>
 </resources>

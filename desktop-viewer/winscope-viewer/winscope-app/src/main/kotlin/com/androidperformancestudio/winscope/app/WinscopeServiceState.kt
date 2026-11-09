@@ -36,4 +36,8 @@ public data class WinscopePageState(
     val errorMessage: String? = null,
     /** Port the static viewer host is serving on when [serviceState] is RUNNING. */
     val viewerPort: Int? = null,
+    /** Full viewer entry URL with token; shown so the handshake can be retried manually. */
+    val viewerUrl: String? = null,
+    /** Session token for the viewer's paste-token retry dialog. */
+    val sessionToken: String? = null,
 )
