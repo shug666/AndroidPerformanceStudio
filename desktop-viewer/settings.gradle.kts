@@ -142,3 +142,9 @@ includeBuild("benchmark-regression") {
 includeBuild("device-screencast") {
     name = "device-screencast"
 }
+
+// Winscope capture service, device capture execution, and the packaged viewer closure
+// are kept isolated as a composite build.
+includeBuild("winscope-viewer") {
+    name = "winscope-viewer"
+}

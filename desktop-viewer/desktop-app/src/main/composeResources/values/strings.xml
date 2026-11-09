@@ -104,6 +104,8 @@
     <string name="benchmark_regression">Benchmark Regression</string>
     <string name="device_screencast">Device Screencast</string>
     <string name="device_screencast_description">Mirror and control a connected Android device in-app via an embedded scrcpy protocol client.</string>
+    <string name="winscope">Winscope</string>
+    <string name="winscope_description">Capture WindowManager and SurfaceFlinger system traces and inspect them in the bundled Winscope viewer.</string>
     <string name="view_live_telemetry">View Live Telemetry</string>
     <string name="cpu_method_recording">CPU Method Recording</string>
     <string name="java_kotlin_allocations">Java/Kotlin Allocations</string>

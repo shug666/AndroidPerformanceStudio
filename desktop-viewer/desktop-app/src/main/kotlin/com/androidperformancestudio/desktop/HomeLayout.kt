@@ -22,6 +22,7 @@ internal val DEFAULT_MODULE_ORDER: List<AppDestination> =
         AppDestination.GPU_INSPECTOR,
         AppDestination.BENCHMARK_REGRESSION,
         AppDestination.SOURCE_WORKSPACES,
+        AppDestination.WINSCOPE,
         AppDestination.REVERSE_NET,
         AppDestination.SCREENCAST,
     )

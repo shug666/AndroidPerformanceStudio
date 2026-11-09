@@ -1,0 +1,17 @@
+<resources>
+    <string name="winscope">Winscope</string>
+    <string name="winscope_start_service">启动服务</string>
+    <string name="winscope_stop_service">停止服务</string>
+    <string name="winscope_open_viewer">打开查看器</string>
+    <string name="winscope_service_stopped">服务未启动</string>
+    <string name="winscope_service_starting">启动中…</string>
+    <string name="winscope_service_running">服务运行中（代理 :5544，查看器 :%1$d）</string>
+    <string name="winscope_capture_idle">没有进行中的抓取</string>
+    <string name="winscope_capture_recording">正在录制（%1$s）</string>
+    <string name="winscope_capture_collecting">正在收集 trace（%1$s）</string>
+    <string name="winscope_capture_targets">数据源：%1$s</string>
+    <string name="winscope_capture_legacy_path">传统路径（非 Perfetto）</string>
+    <string name="winscope_capture_perfetto_path">Perfetto 路径</string>
+    <string name="winscope_stop_browser_drives_capture">抓取由浏览器中打开的 Winscope 查看器驱动；本页面同步显示其状态。</string>
+    <string name="winscope_error_prefix">错误：%1$s</string>
+</resources>

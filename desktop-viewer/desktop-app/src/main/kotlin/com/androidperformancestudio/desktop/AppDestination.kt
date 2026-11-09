@@ -24,6 +24,7 @@ enum class AppDestination {
     GPU_INSPECTOR,
     BENCHMARK_REGRESSION,
     METHOD_RECORDING,
+    WINSCOPE,
     // SCREENCAST is kept as a navigation-entry identity (icon/label/home-card source) but is no
     // longer an in-window destination: opening it spawns a separate OS window instead of switching
     // the navigator. See DesktopAppMainPage's screencast Window and CommercialAppShell's dispatch.
@@ -73,6 +74,7 @@ internal val com.androidperformancestudio.desktop.AppDestination.titleResource: 
             AppDestination.GPU_INSPECTOR -> Res.string.gpu_inspector
             AppDestination.BENCHMARK_REGRESSION -> Res.string.benchmark_regression
             AppDestination.METHOD_RECORDING -> Res.string.method_recording
+            AppDestination.WINSCOPE -> Res.string.winscope
             AppDestination.SCREENCAST -> Res.string.device_screencast
             AppDestination.SETTINGS -> Res.string.settings
         }

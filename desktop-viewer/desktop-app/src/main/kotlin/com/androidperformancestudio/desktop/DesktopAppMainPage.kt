@@ -72,6 +72,8 @@ import com.androidperformancestudio.memory.app.MemoryProfilerMainPage
 import com.androidperformancestudio.methodrecording.app.MethodRecordingMainPage
 import com.androidperformancestudio.screencast.app.ScreencastMainPage
 import com.androidperformancestudio.perfetto.app.PerfettoMainPage
+import com.androidperformancestudio.winscope.app.WinscopeDependencies
+import com.androidperformancestudio.winscope.app.WinscopeMainPage
 import com.androidperformancestudio.presentation.CaptureSettingsSection
 import com.androidperformancestudio.network.app.ReverseNetMainPage
 import com.androidperformancestudio.startup.app.StartupProfilerMainPage
@@ -435,6 +437,7 @@ fun FrameWindowScope.DesktopAppMainPage(
                                     onOpenReverseNet = { navigator.open(AppDestination.REVERSE_NET) },
                                     onOpenGpuInspector = { navigator.open(AppDestination.GPU_INSPECTOR) },
                                     onOpenBenchmarkRegression = { navigator.open(AppDestination.BENCHMARK_REGRESSION) },
+                                    onOpenWinscope = { navigator.open(AppDestination.WINSCOPE) },
                                     onOpenScreencast = openScreencastWindow,
                                     onOpenRecentArtifact = { item ->
                                         when (item.feature) {
@@ -662,6 +665,32 @@ fun FrameWindowScope.DesktopAppMainPage(
                             // window (see the screencast Window rendered below). The enum is retained only
                             // as the identity/icon source for the navigation entry and home card.
                             AppDestination.SCREENCAST -> Unit
+                            AppDestination.WINSCOPE ->
+                                WinscopeMainPage(
+                                    language = language,
+                                    isActive = active,
+                                    onBack = { navigator.open(AppDestination.HOME) },
+                                    controller =
+                                        remember(applicationSettings.androidSdkPath) {
+                                            val sdkPath =
+                                                applicationSettings.androidSdkPath
+                                                    ?.takeIf(String::isNotBlank)
+                                                    ?.let { path -> runCatching { java.nio.file.Path.of(path) }.getOrNull() }
+                                            val resourcesDir =
+                                                System.getProperty("compose.application.resources.dir")
+                                                    ?.takeIf(String::isNotBlank)
+                                                    ?.let { path -> runCatching { java.nio.file.Path.of(path) }.getOrNull() }
+                                            val workingDir = java.nio.file.Path.of(System.getProperty("user.dir"))
+                                            WinscopeDependencies(
+                                                androidSdkPath = sdkPath,
+                                                viewerResourceRootCandidates =
+                                                    listOfNotNull(
+                                                        resourcesDir?.resolve("winscope-viewer"),
+                                                        workingDir.resolve("winscope-viewer/winscope-resources/winscope-viewer"),
+                                                    ),
+                                            ).createController()
+                                        },
+                                )
                             AppDestination.SETTINGS ->
                                 DesktopAppSettingsPage(
                                     selectedPage = settingsPage,

@@ -1,0 +1,44 @@
+{
+  "provenance": {
+    "source": "AOSP Winscope production bundle (user-provided dist/prod closure)",
+    "aospCommit": "unknown (not embedded in the bundle; confirm on manual upgrade)",
+    "buildDateHint": "2026-04-05 (bundle file timestamps)",
+    "clientProtocolVersion": "4.0.8",
+    "packagingStripped": [
+      "winscope_proxy.py (capture owned by APS, not the viewer)",
+      "*.bat launch scripts",
+      "js/*.LICENSE.txt (collected into THIRD-PARTY-LICENSES.txt instead)",
+      "index.html Google Analytics external script tag",
+      "index.html remote font @imports (fonts.googleapis.com)"
+    ]
+  },
+  "files": {
+    "c44ce671975a9930ecda.svg": "3666f56d21f75e204a89e4c27faa893f127771cdc469e1bc599ed2dc3266d0fc",
+    "cube_full_shade.svg": "96b1f81c774564f45e1e879e4643bca04c7cf6dc25dc0fbe8b40e573e7cedbe4",
+    "cube_partial_shade.svg": "be29f74175864dab8546e462c4be0e5b19fd98c8a3fe76ecd88c0490a0a2d61b",
+    "engine_bundle.js": "f517ea6b118d15de3b37b76f0564a8b02f2f6f1682f46edd53300a261f38b16f",
+    "index.html": "dc5c71856be099abd12aacfab92fcea19d199fac2e052236558b287d218a9c04",
+    "js/app.5c2e23a719a1dbe2e441.js": "d6f62166f22044dd449cdfa04d61ffe42d5fb884d43856702f1e631b16468b94",
+    "js/npm..pnpm.5c2e23a719a1dbe2e441.js": "e3e54b070181b86af92fec67ee524bab40649160affff3ff192891e757849c73",
+    "js/npm.angular.5c2e23a719a1dbe2e441.js": "dfed198ed2edbefce70853a04fa3c543a762c0aa77504c0ea5c7ddc169e5c522",
+    "js/npm.css-loader.5c2e23a719a1dbe2e441.js": "1d4db4dbb2355df142f4239b7af312f552f2f63f351dc5fdebe9691152d18a9e",
+    "js/npm.jszip.5c2e23a719a1dbe2e441.js": "fc759ada2b29fd007ba138e4aa8517bad29247b6bbf2049c7f529129c95428d7",
+    "js/npm.long.5c2e23a719a1dbe2e441.js": "1a243129950513099608d6aaf90dec5ffa567e881c5bc369f6839a7a7c74ccfb",
+    "js/npm.mp4box.5c2e23a719a1dbe2e441.js": "b90704c5bc33af3c6e0c0467da2b5d8be1c0adeb40cb9d2c0cd8736176182910",
+    "js/npm.protobufjs.5c2e23a719a1dbe2e441.js": "595e6d00e5763d18b9dbfd05736ec551436867e44a710e0007e3768078a4e7e3",
+    "js/npm.rxjs.5c2e23a719a1dbe2e441.js": "f5df10c4213a4d8156bef14c04234f40de24e082ef917c567cc110204d138e43",
+    "js/npm.style-loader.5c2e23a719a1dbe2e441.js": "0d91c76bd1f36a54cdc5e2d84a685d0a422d4861ae56d9763e8630f0f38ec112",
+    "js/npm.three.5c2e23a719a1dbe2e441.js": "f4abb51bc7aa843c28c4725ad2bf368f8c1948f71ec286d0312456dc757ce613",
+    "js/npm.tslib.5c2e23a719a1dbe2e441.js": "f32454860ff4e2b397874de15582657b395ab2aa376f5ca15142120fb04a1448",
+    "js/npm.zone.js.5c2e23a719a1dbe2e441.js": "f539bccde342823acb484094d5e52d39286f8dc5f5b4c5241eeaa0cc624cf2ad",
+    "js/polyfills.5c2e23a719a1dbe2e441.js": "5053f24df63e0692c90d54ff55e940b0d7247b46ef59e892b6eee877fa62e356",
+    "js/runtime.5c2e23a719a1dbe2e441.js": "40aa7f725be352bc32ddabf6288b5a4703df88a38689dfd4f85c57bc654bf2ff",
+    "js/styles.5c2e23a719a1dbe2e441.js": "77fca54a552609e9d718cd546e370d8c222815775203f7cde430e23faa2b5cbd",
+    "logo_dark_mode.svg": "4ccc559b177343a876e1b086818b33aa2e34651a1441aa15eb32b419c14fbd56",
+    "logo_light_mode.svg": "7036c7c9a8fe3de00cde42574586fc9c207f4467f879eb3b82ce24a26447bb46",
+    "trace_processor.wasm": "e9c9ff93fd051692c431cb919d4bb0df98a27db9b8f99320db6f5e7bb351b0f6",
+    "trackpad_horizontal_scroll.svg": "2990919af633e0eaf07c0aa40c3f873b4e135925d640f01dd157bf12066f2946",
+    "trackpad_right_click.svg": "b5de9322b64ce1f41a1c4476046601cee0ee64c5d5b9266c650615f55c75dd63",
+    "trackpad_vertical_scroll.svg": "8ac1592c89e27cd070158a9180acec34ad0b5587a31c6d5c09cc0ad164901dc4"
+  }
+}

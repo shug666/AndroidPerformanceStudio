@@ -28,6 +28,8 @@ val desktopAppClassName = "AndroidPerformanceStudio"
 val adbToolsPreparationScript = rootProject.layout.projectDirectory.file("../scripts/prepare-adb-tools.py")
 val userDocumentationEnglish = rootProject.layout.projectDirectory.dir("../docs-user")
 val userDocumentationChinese = rootProject.layout.projectDirectory.dir("../docs-user-zh")
+val winscopeViewerDist = rootProject.layout.projectDirectory.dir("winscope-viewer/winscope-resources/winscope-viewer")
+val winscopeViewerManifest = rootProject.layout.projectDirectory.file("winscope-viewer/winscope-resources/winscope-viewer-manifest.json")
 val composeAgentBundle =
     rootProject.layout.projectDirectory.dir("layout-inspector/compose-agent-build/build/compose-agent-bundle")
 val profilerAppResources = layout.buildDirectory.dir("generated/profiler-app-resources")
@@ -41,6 +43,8 @@ val prepareProfilerAppResources =
         inputs.dir(adbTools)
         inputs.dir(userDocumentationEnglish)
         inputs.dir(userDocumentationChinese)
+        inputs.dir(winscopeViewerDist)
+        inputs.file(winscopeViewerManifest)
         from(firefoxProfilerDist)
         from(perfettoUiDist) {
             into("perfetto-ui")
@@ -56,6 +60,12 @@ val prepareProfilerAppResources =
         }
         from(userDocumentationChinese) {
             into("docs-user-zh")
+        }
+        from(winscopeViewerDist) {
+            into("winscope-viewer")
+        }
+        from(winscopeViewerManifest) {
+            into("winscope-viewer")
         }
         from(composeAgentBundle) {
             into("compose-agent-bundle")
@@ -693,6 +703,7 @@ dependencies {
     implementation(libs.aps.gpu.integration.app)
     implementation(libs.aps.benchmark.app)
     implementation(libs.aps.screencast.app)
+    implementation(libs.aps.winscope.app)
     when {
         hostOs.contains("mac") && targetArch == "x64" -> implementation(compose.desktop.macos_x64)
         hostOs.contains("mac") && targetArch == "arm64" -> implementation(compose.desktop.macos_arm64)
