@@ -176,6 +176,30 @@ class WinscopeProxyServerTest {
     }
 
     @Test
+    fun `cors preflight without token returns ok with cors headers`() {
+        // Browsers never attach custom headers (Winscope-Token) to the OPTIONS
+        // preflight; the reference implementation answers it without token checks.
+        // A 403 here blocks every cross-origin viewer request (regression guard).
+        val (server, port, _) = startServer(FakeAdbClient())
+        try {
+            val connection =
+                URI
+                    .create("http://127.0.0.1:$port/devices/")
+                    .toURL()
+                    .openConnection() as HttpURLConnection
+            connection.requestMethod = "OPTIONS"
+            assertEquals(200, connection.responseCode)
+            assertEquals(
+                WinscopeProxyServer.TOKEN_HEADER + ", Content-Type, Content-Length",
+                connection.getHeaderField("Access-Control-Allow-Headers"),
+            )
+            assertEquals("*", connection.getHeaderField("Access-Control-Allow-Origin"))
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
     fun `wrong token is rejected with 403`() {
         val (server, port, _) = startServer(FakeAdbClient())
         try {

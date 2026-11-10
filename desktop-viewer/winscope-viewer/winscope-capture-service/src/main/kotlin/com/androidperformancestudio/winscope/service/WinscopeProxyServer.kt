@@ -101,6 +101,13 @@ public class WinscopeProxyServer(
 
     private fun route(exchange: HttpExchange) {
         try {
+            // CORS preflight must pass WITHOUT a token: browsers never attach custom
+            // headers to the OPTIONS preflight, and the reference implementation's
+            // do_OPTIONS bypasses token validation for exactly this reason.
+            if (exchange.requestMethod == "OPTIONS") {
+                respond(exchange, 200, "GET,POST".toByteArray(), "text/txt")
+                return
+            }
             val requestToken = exchange.requestHeaders.getFirst(TOKEN_HEADER)
             if (requestToken == null || requestToken != token) {
                 respond(exchange, 403, BAD_TOKEN_BODY.toByteArray(), "text/txt")
@@ -116,7 +123,6 @@ public class WinscopeProxyServer(
                 return
             }
             when (exchange.requestMethod) {
-                "OPTIONS" -> respond(exchange, 200, "GET,POST".toByteArray(), "text/txt")
                 "GET" -> routeGet(exchange, segments)
                 "POST" -> routePost(exchange, segments)
                 else -> respondBadRequest(exchange, "Unsupported method ${exchange.requestMethod}")

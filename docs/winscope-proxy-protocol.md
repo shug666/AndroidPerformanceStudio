@@ -22,6 +22,7 @@
 - curl 带 token 请求 `/devices/` → 200 `{}`；无 token → 403（正文与参考实现一致）。
 - headless Chrome 加载 `http://127.0.0.1:8100/index.html?token=<session>` → DOM 34,280,039 字节（与 stub spike 的 34,275,484 同量级，Angular 完整 bootstrap），浏览器接受 Kotlin 实现的版本头并用 URL token 完成握手。
 - 结论：方案 2 的服务端实现与打包闭包在浏览器级联调通过；剩余真机项为 root 设备抓取链路。
+- **更正（2026-11-10）**：本节的"浏览器握手通过"结论当时是误判——DOM bootstrap 成功不等于 proxy 连接成功；CORS 预检 403 导致查看器始终显示 python 提示。修复 OPTIONS 免鉴权后，渲染 UI 中断连面板（Retry 按钮）消失，连接状态确认。教训：浏览器级 E2E 必须断言连接状态（如断连面板不渲染），并抓取 console 错误（`--enable-logging=stderr`）。
 
 ## 0.07 真机联调偏差修正记录（2026-11-11，TB710FU userdebug）
 
@@ -47,6 +48,7 @@
 | 项 | 值 |
 |---|---|
 | 监听地址 | `localhost:5544`（客户端 `WINSCOPE_PROXY_URL` 写死） |
+| **OPTIONS 预检免鉴权** | **CORS 预检（OPTIONS）绝不携带 `Winscope-Token` 头；参考实现 `do_OPTIONS` 不经过 token 校验直接回 200+标准头。token 校验放在 OPTIONS 分支之后——顺序错误会让预检 403，浏览器阻止全部跨端口请求，查看器永远显示"运行 python proxy"（2026-11-10 真机排障确认的根因）** |
 | 版本头 | 每个响应带 `Winscope-Proxy-Version: 4.0.8`；客户端校验 major 相等且 (minor 更大 或 minor 相等且 patch ≥ 客户端) |
 | 鉴权 | 所有端点要求 `Winscope-Token` 请求头，与 secret 不符 → `403`，正文 `b"Bad Winscope authorization token!\nThis is Winscope ADB proxy.\n"` |
 | token 来源（客户端） | URL `?token=` 参数 > localStorage（key `adb.proxyKey`）> 空（403 后 UI 提供粘贴 token 重试 `onRetryConnection`） |
