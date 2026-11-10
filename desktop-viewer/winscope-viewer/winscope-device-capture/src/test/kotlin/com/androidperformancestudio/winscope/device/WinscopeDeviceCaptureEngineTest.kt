@@ -32,6 +32,7 @@ class WinscopeDeviceCaptureEngineTest {
         var backupListing: String = ""
         var deviceFiles: String = ""
         var traceStatus: String = "TRACE_OK"
+
         /** When set, every shell call blocks until released — simulates a running trace. */
         var shellGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
 

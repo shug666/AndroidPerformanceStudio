@@ -108,8 +108,7 @@ public class WinscopeDeviceCaptureEngine(
      * polls `/status` every second and string-compares against Python-style "True":
      * anything else is treated as a dead trace and triggers an automatic stop.
      */
-    public fun isCaptureAlive(serial: String): Boolean =
-        activeCaptures[serial]?.firstOrNull()?.let { !it.job.isCompleted } ?: false
+    public fun isCaptureAlive(serial: String): Boolean = activeCaptures[serial]?.firstOrNull()?.let { !it.job.isCompleted } ?: false
 
     // ------------------------------------------------------------------ start
 
