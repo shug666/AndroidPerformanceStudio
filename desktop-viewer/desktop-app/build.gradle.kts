@@ -124,6 +124,9 @@ if (!System.getProperty("os.name").lowercase().contains("win")) {
         .matching { task -> task.name in packageTasks }
         .configureEach {
             val taskOutputs = outputs.files
+            // resolved at configuration time; a String capture is configuration-cache safe
+            val launcherPatchScript =
+                rootProject.layout.projectDirectory.file("../scripts/patch-jpackage-launcher.py").asFile
             val executableNames = packagedExecutableResources.map { it.substringAfterLast('/') }
             doLast {
                 val task = this
@@ -237,6 +240,20 @@ if (!System.getProperty("os.name").lowercase().contains("win")) {
                             check(runCmd("dpkg-deb", "-x", archive.absolutePath, root.toString()) == 0) { "dpkg-deb -x failed for $archive" }
                             check(runCmd("dpkg-deb", "-e", archive.absolutePath, root.resolve("DEBIAN").toString()) == 0) { "dpkg-deb -e failed for $archive" }
 
+                            // JDK-8380085: replace the jpackage ELF launcher (segfaults with our
+                            // classpath size) with a shell wrapper and restore runtime/bin/java.
+                            val jdkJavaLauncher = File(System.getenv("JAVA_HOME") ?: error("JAVA_HOME must be set for the Linux launcher patch"), "bin/java")
+                            val patchResult = ProcessBuilder(
+                                "python3",
+                                launcherPatchScript.absolutePath,
+                                "patch_payload",
+                                root.toFile().absolutePath,
+                                jdkJavaLauncher.absolutePath,
+                            ).redirectErrorStream(true).start()
+                            val patchOutput = patchResult.inputStream.bufferedReader().readText()
+                            check(patchResult.waitFor() == 0) { "Linux launcher patch failed:\n$patchOutput" }
+                            patchOutput.lines().filter { it.isNotBlank() }.forEach { task.logger.lifecycle(it) }
+
                             // The package was renamed early on (androidperfermancestudio →
                             // androidperformancestudio); dpkg treats the renamed package as brand-new,
                             // so the misspelled predecessor must be declared as Conflicts/Replaces or
@@ -273,9 +290,28 @@ if (!System.getProperty("os.name").lowercase().contains("win")) {
                             workdir.toFile().deleteRecursively()
                         }
                     } else if (archive.extension == "rpm") {
-                        // No robust in-place rpm mode fix without rpmrebuild; rpm installs rely on the
-                        // resolver's runtime self-heal.
-                        task.logger.warn("RPM exec-bit repack not implemented for $archive; rpm installs rely on runtime self-heal. (.deb is repacked.)")
+                        // Same JDK-8380085 launcher fix as the deb: extract, patch, rebuild
+                        // with rpmbuild (scriptlets preserved), and verify the result.
+                        if (runCmd("rpm2cpio", "--help") != 0) {
+                            task.logger.warn("rpm tooling not found; skipping launcher rebuild of $archive.")
+                            return@forEach
+                        }
+                        val jdkJavaLauncher = File(System.getenv("JAVA_HOME") ?: error("JAVA_HOME must be set for the Linux launcher patch"), "bin/java")
+                        val rebuilt = Files.createTempFile("launcher-fix", ".rpm")
+                        val patchResult = ProcessBuilder(
+                            "python3",
+                            launcherPatchScript.absolutePath,
+                            "rebuild_rpm",
+                            archive.absolutePath,
+                            jdkJavaLauncher.absolutePath,
+                            rebuilt.toString(),
+                        ).redirectErrorStream(true).start()
+                        val patchOutput = patchResult.inputStream.bufferedReader().readText()
+                        check(patchResult.waitFor() == 0) { "RPM launcher patch failed:\n$patchOutput" }
+                        patchOutput.lines().filter { it.isNotBlank() }.forEach { task.logger.lifecycle(it) }
+                        check(archive.delete()) { "Unable to replace original .rpm: $archive" }
+                        check(rebuilt.toFile().copyTo(archive, overwrite = true) == archive) { "Unable to write rebuilt .rpm: $archive" }
+                        task.logger.lifecycle("Rebuilt $archive with the JDK-8380085 launcher workaround.")
                     }
                 }
 
