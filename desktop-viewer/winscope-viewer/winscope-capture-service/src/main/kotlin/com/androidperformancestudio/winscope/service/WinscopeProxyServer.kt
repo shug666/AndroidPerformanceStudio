@@ -1,4 +1,4 @@
-@file:Suppress("TooManyFunctions", "MagicNumber", "MaxLineLength")
+@file:Suppress("TooManyFunctions", "MagicNumber", "MaxLineLength", "ReturnCount")
 
 package com.androidperformancestudio.winscope.service
 
