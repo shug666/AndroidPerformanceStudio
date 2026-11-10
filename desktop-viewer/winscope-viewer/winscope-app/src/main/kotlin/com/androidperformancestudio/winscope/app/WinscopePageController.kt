@@ -29,8 +29,31 @@ public class WinscopeDependencies(
     viewerResourceRootCandidates: List<Path>,
 ) {
     /** First candidate directory that actually contains an index.html; null when unpackaged. */
-    public val viewerResourceRoot: Path? =
-        viewerResourceRootCandidates.firstOrNull { Files.isRegularFile(it.resolve("index.html")) }
+    public val viewerResourceRoot: Path? = resolveViewerRoot(viewerResourceRootCandidates)
+
+    /**
+     * Resolves the packaged viewer closure. [resolveViewerRoot] also derives a
+     * candidate from this class's own install location, so the closure is found even
+     * when the resources-dir system property is absent or points elsewhere.
+     */
+    private fun resolveViewerRoot(candidates: List<Path>): Path? {
+        val effective =
+            buildList {
+                addAll(candidates)
+                runCatching {
+                    WinscopeDependencies::class.java.protectionDomain.codeSource.location
+                        ?.let { location -> Path.of(location.toURI()) }
+                        ?.parent // lib/app
+                        ?.parent // lib
+                        ?.resolve("resources/winscope-viewer")
+                        ?.let { add(it) }
+                }
+            }
+        val resolved = effective.firstOrNull { Files.isRegularFile(it.resolve("index.html")) }
+        println("[winscope] viewer root candidates: ${'$'}effective")
+        println("[winscope] viewer root resolved: ${'$'}resolved")
+        return resolved
+    }
 
     private val adb: AdbClient by lazy {
         val configuration = AdbConfiguration(androidSdkPath = androidSdkPath)

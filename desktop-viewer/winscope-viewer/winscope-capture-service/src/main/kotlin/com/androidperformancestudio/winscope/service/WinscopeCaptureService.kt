@@ -121,6 +121,10 @@ public class WinscopeCaptureService(
         try {
             val newToken = newToken()
             sessionToken = newToken
+            println(
+                "[winscope] starting service: root=" + viewerResourceRoot +
+                    " manifest=" + closureManifest.size + " entries",
+            )
             viewerHost.start(viewerResourceRoot, closureManifest)
             proxyServer.start(newToken)
             _state.value =

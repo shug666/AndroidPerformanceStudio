@@ -92,6 +92,13 @@ public class WinscopeViewerHost(
                 if (requested.isBlank()) viewerRoot.resolve("index.html") else viewerRoot.resolve(requested).normalize()
             // Directory listing is never produced; only real files inside the closure resolve.
             if (!target.startsWith(viewerRoot) || !Files.isRegularFile(target)) {
+                // One log line per missing request so an unexpected empty/short root
+                // is diagnosable from journald.
+                println(
+                    "[winscope] viewer host 404: root=" + viewerRoot +
+                        " requested=" + requested +
+                        " exists=" + Files.exists(target),
+                )
                 exchange.sendResponseHeaders(404, -1)
                 return
             }
