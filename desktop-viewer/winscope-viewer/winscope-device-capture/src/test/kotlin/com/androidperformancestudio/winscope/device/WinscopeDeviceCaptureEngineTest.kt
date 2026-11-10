@@ -32,6 +32,8 @@ class WinscopeDeviceCaptureEngineTest {
         var backupListing: String = ""
         var deviceFiles: String = ""
         var traceStatus: String = "TRACE_OK"
+        /** When set, every shell call blocks until released — simulates a running trace. */
+        var shellGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
 
         private fun respond(arguments: List<String>): String {
             val joined = arguments.joinToString(" ")
@@ -56,6 +58,10 @@ class WinscopeDeviceCaptureEngineTest {
             isCancellationRequested: () -> Boolean,
         ): AdbTextResult {
             calls.add(arguments)
+            // Only the spawned trace script blocks; preparation calls must return.
+            if (shellGate != null && arguments.joinToString(" ").contains("TRACE_START")) {
+                runBlocking { shellGate!!.await() }
+            }
             return AdbTextResult(0, respond(arguments), "", Duration.ZERO)
         }
 
@@ -264,6 +270,27 @@ class WinscopeDeviceCaptureEngineTest {
             val joined = adb.calls.joinToString("\n") { it.joinToString(" ") }
             assertTrue("mv /data/misc/wmtrace/wm_trace.winscope ${WinscopeTraceTargets.WINSCOPE_BACKUP_DIR}window_trace" in joined, joined)
             assertFalse(engine.hasActiveCapture("SER1"))
+        }
+    }
+
+    @Test
+    fun `status aliveness follows the running shell with python bool semantics`() {
+        val adb = ScriptedAdbClient()
+        adb.perfettoQueryResult = ""
+        adb.shellGate = kotlinx.coroutines.CompletableDeferred()
+        val engine = newEngine(adb)
+        runBlocking {
+            engine.startCapture("SER1", listOf(WinscopeTraceRequest("window_trace", emptyList())))
+            // The trace shell is blocked mid-run: the viewer must see exactly "True"
+            // (Python str(bool)); any other body — including lowercase "true" — makes
+            // the viewer auto-stop the capture every keep-alive tick.
+            assertEquals("True", if (engine.isCaptureAlive("SER1")) "True" else "False")
+            adb.shellGate?.complete(Unit)
+            adb.deviceFiles = ""
+            adb.traceStatus = "TRACE_OK"
+            adb.backupListing = ""
+            engine.endCapture("SER1")
+            assertFalse(engine.isCaptureAlive("SER1"))
         }
     }
 

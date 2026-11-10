@@ -103,6 +103,14 @@ public class WinscopeDeviceCaptureEngine(
 
     public fun activeTargetNames(serial: String): List<String> = activeCaptures[serial]?.map(ActiveTrace::targetName) ?: emptyList()
 
+    /**
+     * Whether the first active trace shell for [serial] is still running. The viewer
+     * polls `/status` every second and string-compares against Python-style "True":
+     * anything else is treated as a dead trace and triggers an automatic stop.
+     */
+    public fun isCaptureAlive(serial: String): Boolean =
+        activeCaptures[serial]?.firstOrNull()?.let { !it.job.isCompleted } ?: false
+
     // ------------------------------------------------------------------ start
 
     /**

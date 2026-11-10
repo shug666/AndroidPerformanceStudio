@@ -214,7 +214,10 @@ public class WinscopeProxyServer(
             return
         }
         engine.resetKeepAlive(serial)
-        respond(exchange, 200, "true".toByteArray(), "text/plain")
+        // Python str(bool) semantics: the viewer string-compares "True" exactly and
+        // treats any other body as a dead trace, auto-stopping the capture.
+        val alive = if (engine.isCaptureAlive(serial)) "True" else "False"
+        respond(exchange, 200, alive.toByteArray(), "text/plain")
     }
 
     private fun handleFetch(
