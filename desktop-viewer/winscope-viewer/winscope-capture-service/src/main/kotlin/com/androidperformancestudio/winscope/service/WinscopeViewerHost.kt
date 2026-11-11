@@ -50,9 +50,14 @@ public class WinscopeViewerHost(
      * expected SHA-256; a mismatch or missing tracked file rejects startup.
      */
     public fun start(
-        viewerRoot: Path,
+        rawViewerRoot: Path,
         manifest: Map<String, String>,
     ) {
+        // Normalize once: the installed app's resources dir carries a `..` component
+        // (from the cfg's $APPDIR expansion), and Path.startsWith compares components —
+        // an unnormalized root never matches its own normalized targets, 404ing
+        // every request (2026-11-11 journald diagnosis).
+        val viewerRoot = rawViewerRoot.normalize()
         check(server == null) { "Winscope viewer host is already running" }
         verifyClosure(viewerRoot, manifest)
         var lastError: IOException? = null

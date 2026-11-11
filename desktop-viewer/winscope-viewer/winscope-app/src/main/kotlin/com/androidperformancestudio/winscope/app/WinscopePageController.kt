@@ -50,8 +50,8 @@ public class WinscopeDependencies(
                 }
             }
         val resolved = effective.firstOrNull { Files.isRegularFile(it.resolve("index.html")) }
-        println("[winscope] viewer root candidates: ${'$'}effective")
-        println("[winscope] viewer root resolved: ${'$'}resolved")
+        println("[winscope] viewer root candidates: " + effective)
+        println("[winscope] viewer root resolved: " + resolved)
         return resolved
     }
 
