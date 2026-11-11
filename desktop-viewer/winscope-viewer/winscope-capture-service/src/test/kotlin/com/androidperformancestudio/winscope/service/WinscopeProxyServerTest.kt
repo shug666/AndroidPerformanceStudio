@@ -185,7 +185,8 @@ class WinscopeProxyServerTest {
             WinscopeCaptureService(
                 adb,
                 java.nio.file.Files.createTempDirectory("viewer").also {
-                    java.nio.file.Files.writeString(it.resolve("index.html"), "<html></html>")
+                    java.nio.file.Files
+                        .writeString(it.resolve("index.html"), "<html></html>")
                 },
                 emptyMap(),
                 proxyPort = 5555,
