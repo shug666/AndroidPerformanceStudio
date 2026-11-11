@@ -101,6 +101,7 @@ public class WinscopeCaptureService(
 
     private var watchdog: Job? = null
     private var sessionToken: String? = null
+    private var shutdownHook: Thread? = null
 
     public val isRunning: Boolean
         get() = proxyServer.isRunning
@@ -136,6 +137,7 @@ public class WinscopeCaptureService(
                     sessionToken = newToken,
                 )
             startWatchdog()
+            registerShutdownHook()
         } catch (startError: Exception) {
             proxyServer.stop()
             viewerHost.stop()
@@ -153,6 +155,37 @@ public class WinscopeCaptureService(
         watchdog = null
         sessionToken = null
         _state.value = WinscopeServiceSnapshot(running = false)
+        shutdownHook?.let { hook -> Runtime.getRuntime().removeShutdownHook(hook) }
+        shutdownHook = null
+    }
+
+    /**
+     * App-exit safety net: when the application closes without an explicit stop, end
+     * any in-progress device capture (otherwise the device-side trace shells and the
+     * detached perfetto session orphan) and release both ports.
+     */
+    private fun registerShutdownHook() {
+        if (shutdownHook != null) return
+        val hook =
+            Thread {
+                try {
+                    val serials = engine.activeCaptureSerials()
+                    if (serials.isNotEmpty()) {
+                        println("[winscope] app exiting: ending active captures on " + serials)
+                        kotlinx.coroutines.runBlocking {
+                            serials.forEach { serial -> runCatching { engine.endCapture(serial) } }
+                        }
+                    }
+                } catch (cleanupError: Throwable) {
+                    println("[winscope] shutdown cleanup error: " + cleanupError)
+                } finally {
+                    runCatching { proxyServer.stop() }
+                    runCatching { viewerHost.stop() }
+                    println("[winscope] shutdown cleanup done")
+                }
+            }
+        shutdownHook = hook
+        Runtime.getRuntime().addShutdownHook(hook)
     }
 
     /** Opens the system browser at the viewer entry page with the session token injected. */

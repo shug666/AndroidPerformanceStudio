@@ -8,10 +8,12 @@ import com.androidperformancestudio.platform.adb.AdbTextResult
 import com.androidperformancestudio.winscope.device.WinscopeDeviceCaptureEngine
 import com.androidperformancestudio.winscope.device.WinscopeDeviceCatalog
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -173,6 +175,48 @@ class WinscopeProxyServerTest {
         } finally {
             server.stop()
         }
+    }
+
+    @Test
+    fun `app exit hook ends active captures and stops the service`() {
+        val adb = FakeAdbClient()
+        adb.shellResponses.addAll(listOf("", "", "", "", "", "0", "", "", "TRACE_OK", ""))
+        val service =
+            WinscopeCaptureService(
+                adb,
+                java.nio.file.Files.createTempDirectory("viewer").also {
+                    java.nio.file.Files.writeString(it.resolve("index.html"), "<html></html>")
+                },
+                emptyMap(),
+                proxyPort = 5555,
+                preferredViewerPort = 8021,
+            )
+        service.start()
+        val engineField = WinscopeCaptureService::class.java.getDeclaredField("engine")
+        engineField.isAccessible = true
+        val engine = engineField.get(service) as WinscopeDeviceCaptureEngine
+        runBlocking {
+            engine.startCapture(
+                "FAKE001",
+                listOf(
+                    com.androidperformancestudio.winscope.device.WinscopeTraceRequest(
+                        "window_trace",
+                        emptyList(),
+                    ),
+                ),
+            )
+        }
+        assertTrue(engine.hasActiveCapture("FAKE001"))
+
+        // Simulate JVM shutdown: the registered hook must end captures and free ports.
+        val hookField = WinscopeCaptureService::class.java.getDeclaredField("shutdownHook")
+        hookField.isAccessible = true
+        val hook = hookField.get(service) as Thread
+        hook.start()
+        hook.join(10_000)
+
+        assertFalse(engine.hasActiveCapture("FAKE001"), "shutdown hook must end active captures")
+        assertFalse(service.isRunning, "shutdown hook must release the ports")
     }
 
     @Test

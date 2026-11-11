@@ -101,6 +101,9 @@ public class WinscopeDeviceCaptureEngine(
 
     public fun hasActiveCapture(serial: String): Boolean = activeCaptures.containsKey(serial)
 
+    /** Serials that currently have a capture in progress (for app-exit cleanup). */
+    public fun activeCaptureSerials(): List<String> = activeCaptures.keys().toList()
+
     public fun activeTargetNames(serial: String): List<String> = activeCaptures[serial]?.map(ActiveTrace::targetName) ?: emptyList()
 
     /**
