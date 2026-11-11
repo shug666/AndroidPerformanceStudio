@@ -31,6 +31,8 @@ public class WinscopeViewerHost(
                 "svg" to "image/svg+xml",
                 "json" to "application/json",
                 "wasm" to "application/wasm",
+            "woff" to "font/woff",
+            "woff2" to "font/woff2",
                 "png" to "image/png",
                 "map" to "application/json",
                 "txt" to "text/plain",

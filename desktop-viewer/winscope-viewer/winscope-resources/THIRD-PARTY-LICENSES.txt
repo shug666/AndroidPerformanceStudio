@@ -59,3 +59,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
  * (c) 2010-2022 Google LLC. https://angular.io/
  * License: MIT
  */
+
+---------------------------------------------------------------------------
+Material Icons / Material Symbols fonts (fonts/*.woff2)
+Copyright Google LLC — Apache License, Version 2.0
+https://fonts.google.com/icons (Apache 2.0)
