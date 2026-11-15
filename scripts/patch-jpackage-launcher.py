@@ -171,6 +171,9 @@ def rebuild_rpm(rpm_in: str, jdk_java: str, rpm_out: str) -> None:
             "BuildArch: %s" % arch,
             "AutoReqProv: no",
             "",
+            "%description",
+            "%s" % summary,
+            "",
         ]
         for directive, body in scriptlets.items():
             if body.strip():
