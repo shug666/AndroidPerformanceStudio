@@ -162,6 +162,11 @@ def rebuild_rpm(rpm_in: str, jdk_java: str, rpm_out: str) -> None:
 
         buildroot = os.path.join(workdir, "buildroot")
         os.makedirs(buildroot)
+        # rpmbuild packages files from the BuildRoot, which must mirror the payload
+        # tree. Without copying, the BuildRoot is empty and rpmbuild produces no
+        # package (this path was never exercised on runners that lacked rpm tooling,
+        # so the omission was latent until runners started shipping rpmbuild).
+        shutil.copytree(tree, buildroot, dirs_exist_ok=True)
         spec_lines = [
             "Name: %s" % name,
             "Version: %s" % version,
@@ -180,6 +185,10 @@ def rebuild_rpm(rpm_in: str, jdk_java: str, rpm_out: str) -> None:
                 spec_lines.append(directive)
                 spec_lines.append(body.strip())
                 spec_lines.append("")
+        # File manifest MUST live inside a %files section; listing paths at the
+        # spec top level produces an empty package on modern rpmbuild. Paths are
+        # absolute (rooted at /); rpmbuild resolves them under the BuildRoot.
+        spec_lines.append("%files")
         walk = sorted(os.walk(tree), key=lambda item: item[0])
         for dirpath, dirnames, filenames in walk:
             rel = os.path.relpath(dirpath, tree)
@@ -225,6 +234,7 @@ def rebuild_rpm(rpm_in: str, jdk_java: str, rpm_out: str) -> None:
                 if filename.endswith(".rpm"):
                     produced.append(os.path.join(base, filename))
         if len(produced) != 1:
+            sys.stderr.write("rpmbuild stdout:\n" + build.stdout[-4000:] + "\nrpmbuild stderr:\n" + build.stderr[-4000:] + "\n")
             raise SystemExit(f"expected one rebuilt rpm, found {produced}")
         # nothing more here; verification happens below on the rebuilt package
 
