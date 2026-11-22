@@ -1,0 +1,609 @@
+//! OpenAI Responses API client for the Codex and Custom connections.
+//!
+//! Non-streaming, tool-free, strict JSON schema. Mirrors the Compose
+//! OpenAiResponsesClient behavior: `store=false`, empty tools, tool_choice none,
+//! parallel tool calls off, max_output_tokens, instructions + input + text format.
+//! Responses that contain tools, refusals, incomplete phases or the resolved
+//! credential are rejected before anything can be published.
+
+use crate::platform::AiSecret;
+use aps_json::Value;
+use aps_platform::CancellationToken;
+use futures::AsyncReadExt;
+use http_client::{AsyncBody, HttpClient, HttpRequestExt, Method, RedirectPolicy, Request, http};
+use std::fmt;
+use std::sync::Arc;
+use std::time::Duration;
+
+const TOTAL_TIMEOUT: Duration = Duration::from_secs(120);
+const ENVELOPE_LIMIT: usize = 1024 * 1024;
+/// Diagnostic preview of a non-200 body. Bounded because it is shown to the
+/// user, screened for the resolved credential and never persisted.
+/// Route-level statuses that justify one attempt at the versioned path.
+const ROUTE_FAILURES: [u16; 3] = [404, 405, 502];
+const ERROR_PREVIEW_LIMIT: usize = 4_096;
+const ERROR_PREVIEW_CHARS: usize = 600;
+const MAX_OUTPUT_TOKENS: u32 = 8192;
+
+pub struct ResponsesRequest<'a> {
+    pub endpoint: &'a str,
+    pub model: &'a str,
+    pub instructions: &'a str,
+    pub input: &'a str,
+    pub schema_name: &'a str,
+    pub schema: &'a Value,
+}
+
+pub struct ResponsesAnswer {
+    pub text: String,
+    pub model: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResponsesError {
+    Credential,
+    Configuration,
+    Cancelled,
+    Transport,
+    Timeout,
+    HttpStatus(u16, Option<String>),
+    InvalidResponse,
+    Incomplete,
+    ToolResponse,
+    Phase,
+    MissingOutput,
+    Refusal,
+    Content,
+    Limit,
+    SecretInResponse,
+}
+
+impl fmt::Display for ResponsesError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Credential => "E_AI_CREDENTIAL_UNAVAILABLE",
+            Self::Configuration => "E_AI_CONFIGURATION",
+            Self::Cancelled => "E_AI_CANCELLED",
+            Self::Transport => "E_AI_TRANSPORT",
+            Self::Timeout => "E_PROVIDER_TIMEOUT",
+            Self::HttpStatus(..) => "E_AI_HTTP_STATUS",
+            Self::InvalidResponse => "E_AI_RESPONSE_SCHEMA",
+            Self::Incomplete => "E_AI_RESPONSE_INCOMPLETE",
+            Self::ToolResponse => "E_AI_TOOL_RESPONSE",
+            Self::Phase => "E_AI_RESPONSE_PHASE",
+            Self::MissingOutput => "E_AI_FINAL_OUTPUT_MISSING",
+            Self::Refusal => "E_AI_REFUSAL",
+            Self::Content => "E_AI_RESPONSE_CONTENT",
+            Self::Limit => "E_AI_RESPONSE_LIMIT",
+            Self::SecretInResponse => "E_AI_SECRET_IN_RESPONSE",
+        })
+    }
+}
+impl std::error::Error for ResponsesError {}
+
+pub fn request_body(request: &ResponsesRequest<'_>) -> Vec<u8> {
+    let body = crate::chat::object([
+        ("model", request.model.into()),
+        ("store", Value::Bool(false)),
+        ("tools", Value::Array(Vec::new())),
+        ("tool_choice", "none".into()),
+        ("parallel_tool_calls", Value::Bool(false)),
+        ("max_output_tokens", Value::from(MAX_OUTPUT_TOKENS)),
+        ("instructions", request.instructions.into()),
+        ("input", request.input.into()),
+        (
+            "text",
+            crate::chat::object([(
+                "format",
+                crate::chat::object([
+                    ("type", "json_schema".into()),
+                    ("name", request.schema_name.into()),
+                    ("strict", Value::Bool(true)),
+                    ("schema", request.schema.clone()),
+                ]),
+            )]),
+        ),
+    ]);
+    aps_json::to_vec(&body, crate::model::json_limits(1024 * 1024)).unwrap_or_default()
+}
+
+/// Run one explicit, already-approved request. The credential is read only here
+/// and is never logged or included in error text.
+///
+/// A gateway is allowed one documented path correction: when the configured
+/// path is a bare `/responses` and the host answers with a route-level status
+/// (404, 405 or a proxy 502), the same request is retried once at
+/// `/v1/responses`, which is where OpenAI-compatible hosts mount the Responses
+/// API. No other failure is retried.
+pub async fn execute(
+    client: &Arc<dyn HttpClient>,
+    credential: &AiSecret,
+    request: &ResponsesRequest<'_>,
+    token: &CancellationToken,
+) -> Result<ResponsesAnswer, ResponsesError> {
+    if token.is_cancelled() {
+        return Err(ResponsesError::Cancelled);
+    }
+    if credential.is_empty() {
+        return Err(ResponsesError::Credential);
+    }
+    let body = request_body(request);
+    if body.is_empty() {
+        return Err(ResponsesError::Configuration);
+    }
+    match execute_at(client, credential, &body, request.endpoint, token).await {
+        Err(ResponsesError::HttpStatus(status, detail)) if ROUTE_FAILURES.contains(&status) => {
+            match versioned_alternate(request.endpoint) {
+                Some(alternate) => execute_at(client, credential, &body, &alternate, token).await,
+                None => Err(ResponsesError::HttpStatus(status, detail)),
+            }
+        }
+        result => result,
+    }
+}
+
+/// A Responses path without a version segment is the common gateway mistake: an
+/// OpenAI-compatible host mounts the API at `/v1/responses` while `/responses`
+/// answers with a routing failure.
+fn versioned_alternate(endpoint: &str) -> Option<String> {
+    let mut url = http_client::Url::parse(endpoint).ok()?;
+    if url.path().trim_end_matches('/') != "/responses" {
+        return None;
+    }
+    url.set_path("/v1/responses");
+    Some(url.to_string())
+}
+
+async fn execute_at(
+    client: &Arc<dyn HttpClient>,
+    credential: &AiSecret,
+    body: &[u8],
+    endpoint: &str,
+    token: &CancellationToken,
+) -> Result<ResponsesAnswer, ResponsesError> {
+    let authorization = credential_header(credential)?;
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri(endpoint)
+        .header(http::header::AUTHORIZATION, authorization)
+        .header(http::header::CONTENT_TYPE, "application/json")
+        .header(http::header::ACCEPT, "application/json")
+        .follow_redirects(RedirectPolicy::NoFollow)
+        .timeout(TOTAL_TIMEOUT)
+        .body(AsyncBody::from(body.to_vec()))
+        .map_err(|_| ResponsesError::Configuration)?;
+    let response = select_or_cancel(client.send(request), token).await?;
+    let response = response.map_err(|_| ResponsesError::Transport)?;
+    let status = response.status().as_u16();
+    if matches!(status, 408 | 504) {
+        return Err(ResponsesError::Timeout);
+    }
+    let content_type = response
+        .headers()
+        .get(http::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .to_owned();
+    let mut stream = response.into_body();
+    if status != 200 {
+        let preview = read_bounded(&mut stream, ERROR_PREVIEW_LIMIT, token).await?;
+        return Err(ResponsesError::HttpStatus(
+            status,
+            error_body_preview(credential, &preview),
+        ));
+    }
+    // Some OpenAI-compatible gateways label a plain JSON body as
+    // `text/event-stream`. The strict JSON parse below is the real gate; only a
+    // non-JSON media type is rejected here.
+    let media_type = content_type.split(';').next().unwrap_or("").trim();
+    if !media_type.eq_ignore_ascii_case("application/json")
+        && !media_type.eq_ignore_ascii_case("text/event-stream")
+    {
+        return Err(ResponsesError::InvalidResponse);
+    }
+    let mut body = Vec::new();
+    let mut buffer = [0u8; 8192];
+    loop {
+        let read = select_or_cancel(stream.read(&mut buffer), token)
+            .await?
+            .map_err(|_| ResponsesError::Transport)?;
+        if read == 0 {
+            break;
+        }
+        if body.len() + read > ENVELOPE_LIMIT {
+            return Err(ResponsesError::Limit);
+        }
+        body.extend_from_slice(&buffer[..read]);
+    }
+    if credential_appears(credential, &body) {
+        return Err(ResponsesError::SecretInResponse);
+    }
+    let (text, model) = parse_output(&body)?;
+    if credential_appears(credential, text.as_bytes())
+        || credential_appears(credential, model.as_bytes())
+    {
+        return Err(ResponsesError::SecretInResponse);
+    }
+    Ok(ResponsesAnswer { text, model })
+}
+
+/// Read a bounded diagnostic body. Overflow truncates instead of failing: this
+/// text only explains an error, it is never parsed as data.
+async fn read_bounded(
+    stream: &mut AsyncBody,
+    limit: usize,
+    token: &CancellationToken,
+) -> Result<Vec<u8>, ResponsesError> {
+    let mut body = Vec::new();
+    let mut buffer = [0u8; 4096];
+    while body.len() < limit {
+        let read = select_or_cancel(stream.read(&mut buffer), token)
+            .await?
+            .map_err(|_| ResponsesError::Transport)?;
+        if read == 0 {
+            break;
+        }
+        let take = read.min(limit - body.len());
+        body.extend_from_slice(&buffer[..take]);
+    }
+    Ok(body)
+}
+
+/// Local display copy of a provider error body, screened for the credential and
+/// stripped of control characters.
+fn error_body_preview(credential: &AiSecret, bytes: &[u8]) -> Option<String> {
+    if bytes.is_empty() {
+        return None;
+    }
+    if credential_appears(credential, bytes) {
+        return Some("[redacted]".to_owned());
+    }
+    let text = String::from_utf8_lossy(bytes);
+    let total = text.chars().count();
+    let mut preview: String = text
+        .chars()
+        .take(ERROR_PREVIEW_CHARS)
+        .map(|character| match character {
+            '\n' | '\t' => character,
+            other if other.is_control() => ' ',
+            other => other,
+        })
+        .collect();
+    if total > ERROR_PREVIEW_CHARS {
+        preview.push('…');
+    }
+    let preview = preview.trim().to_owned();
+    (!preview.is_empty()).then_some(preview)
+}
+
+fn credential_header(credential: &AiSecret) -> Result<http::HeaderValue, ResponsesError> {
+    let mut bytes = b"Bearer ".to_vec();
+    bytes.extend_from_slice(credential.as_bytes());
+    let mut value =
+        http::HeaderValue::from_bytes(&bytes).map_err(|_| ResponsesError::Credential)?;
+    bytes.fill(0);
+    value.set_sensitive(true);
+    Ok(value)
+}
+
+fn credential_appears(credential: &AiSecret, haystack: &[u8]) -> bool {
+    let needle = credential.as_bytes();
+    !needle.is_empty()
+        && haystack
+            .windows(needle.len())
+            .any(|window| window == needle)
+}
+
+async fn select_or_cancel<T>(
+    operation: impl std::future::Future<Output = T>,
+    token: &CancellationToken,
+) -> Result<T, ResponsesError> {
+    use futures::future::{Either, select};
+    use futures::pin_mut;
+    if token.is_cancelled() {
+        return Err(ResponsesError::Cancelled);
+    }
+    let monitor = async {
+        loop {
+            if token.is_cancelled() {
+                return;
+            }
+            async_io::Timer::after(Duration::from_millis(25)).await;
+        }
+    };
+    pin_mut!(operation, monitor);
+    match select(operation, monitor).await {
+        Either::Left((_, _)) if token.is_cancelled() => Err(ResponsesError::Cancelled),
+        Either::Left((value, _)) => Ok(value),
+        Either::Right(((), _)) => Err(ResponsesError::Cancelled),
+    }
+}
+
+/// Extract the single final answer text from a Responses envelope. Rejects
+/// tools, refusals, incomplete phases and ambiguous multiple final messages.
+pub fn parse_output(body: &[u8]) -> Result<(String, String), ResponsesError> {
+    let root = aps_json::parse_slice(body, crate::model::json_limits(ENVELOPE_LIMIT as u64))
+        .map_err(|_| ResponsesError::InvalidResponse)?;
+    let object = root.as_object().ok_or(ResponsesError::InvalidResponse)?;
+    if object
+        .get("error")
+        .is_some_and(|error| error != &Value::Null)
+    {
+        return Err(ResponsesError::InvalidResponse);
+    }
+    let status = object.get("status").and_then(Value::as_str);
+    if !matches!(status, None | Some("completed")) {
+        return Err(ResponsesError::Incomplete);
+    }
+    let model = object
+        .get("model")
+        .and_then(Value::as_str)
+        .ok_or(ResponsesError::InvalidResponse)?;
+    if model.is_empty() || model.len() > 256 || model.chars().any(char::is_control) {
+        return Err(ResponsesError::InvalidResponse);
+    }
+    if let Some(output) = object.get("output").and_then(Value::as_array) {
+        let mut messages = Vec::new();
+        for item in output {
+            let item = item.as_object().ok_or(ResponsesError::InvalidResponse)?;
+            match item.get("type").and_then(Value::as_str) {
+                Some("reasoning") => {}
+                Some("message") => messages.push(item),
+                _ => return Err(ResponsesError::ToolResponse),
+            }
+        }
+        let explicit_final = messages
+            .iter()
+            .filter(|message| message.get("phase").and_then(Value::as_str) == Some("final_answer"))
+            .copied()
+            .collect::<Vec<_>>();
+        let candidates: Vec<_> = if !explicit_final.is_empty() {
+            explicit_final
+        } else {
+            messages
+                .iter()
+                .filter(|message| {
+                    !matches!(
+                        message.get("phase").and_then(Value::as_str),
+                        Some("commentary")
+                    )
+                })
+                .copied()
+                .collect()
+        };
+        for message in &messages {
+            if !matches!(
+                message.get("phase").and_then(Value::as_str),
+                None | Some("commentary") | Some("final_answer")
+            ) {
+                return Err(ResponsesError::Phase);
+            }
+        }
+        if candidates.len() != 1 {
+            return Err(ResponsesError::MissingOutput);
+        }
+        let message = candidates[0];
+        let content = message
+            .get("content")
+            .and_then(Value::as_array)
+            .ok_or(ResponsesError::MissingOutput)?;
+        let mut text = String::new();
+        for item in content {
+            let item = item.as_object().ok_or(ResponsesError::MissingOutput)?;
+            match item.get("type").and_then(Value::as_str) {
+                Some("refusal") => return Err(ResponsesError::Refusal),
+                Some("output_text") => {
+                    let value = item
+                        .get("text")
+                        .and_then(Value::as_str)
+                        .ok_or(ResponsesError::MissingOutput)?;
+                    text.push_str(value);
+                }
+                _ => return Err(ResponsesError::Content),
+            }
+        }
+        if text.is_empty() || text.len() > 256 * 1024 {
+            return Err(if text.is_empty() {
+                ResponsesError::MissingOutput
+            } else {
+                ResponsesError::Limit
+            });
+        }
+        return Ok((text, model.to_owned()));
+    }
+    if let Some(text) = object.get("output_text").and_then(Value::as_str) {
+        if text.is_empty() || text.len() > 256 * 1024 {
+            return Err(ResponsesError::Limit);
+        }
+        return Ok((text.to_owned(), model.to_owned()));
+    }
+    Err(ResponsesError::MissingOutput)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aps_json::Value;
+
+    fn envelope(content_type: &str, text: &str) -> Vec<u8> {
+        let body = crate::chat::object([
+            ("status", "completed".into()),
+            ("model", "test-model".into()),
+            (
+                "output",
+                Value::Array(vec![crate::chat::object([
+                    ("type", "message".into()),
+                    (
+                        "content",
+                        Value::Array(vec![crate::chat::object([
+                            ("type", content_type.into()),
+                            ("text", text.into()),
+                        ])]),
+                    ),
+                ])]),
+            ),
+        ]);
+        aps_json::to_vec(&body, crate::model::json_limits(1024 * 1024)).unwrap()
+    }
+
+    #[test]
+    fn completed_with_explicit_null_error_is_not_an_error_response() {
+        let mut body: serde_json::Value =
+            serde_json::from_slice(&envelope("output_text", "ok")).unwrap();
+        body["error"] = serde_json::Value::Null;
+        assert_eq!(
+            parse_output(&serde_json::to_vec(&body).unwrap()).unwrap().0,
+            "ok"
+        );
+        body["error"] = serde_json::json!({"message":"bad"});
+        assert!(matches!(
+            parse_output(&serde_json::to_vec(&body).unwrap()),
+            Err(ResponsesError::InvalidResponse)
+        ));
+    }
+
+    #[test]
+    fn extracts_single_final_answer() {
+        let (text, model) = parse_output(&envelope("output_text", "hello")).unwrap();
+        assert_eq!(text, "hello");
+        assert_eq!(model, "test-model");
+    }
+
+    #[test]
+    fn rejects_refusal_and_tools() {
+        assert_eq!(
+            parse_output(&envelope("refusal", "")).unwrap_err(),
+            ResponsesError::Refusal
+        );
+        let tool = crate::chat::object([
+            ("status", "completed".into()),
+            ("model", "m".into()),
+            (
+                "output",
+                Value::Array(vec![crate::chat::object([(
+                    "type",
+                    "function_call".into(),
+                )])]),
+            ),
+        ]);
+        let bytes = aps_json::to_vec(&tool, crate::model::json_limits(1024 * 1024)).unwrap();
+        assert_eq!(
+            parse_output(&bytes).unwrap_err(),
+            ResponsesError::ToolResponse
+        );
+    }
+
+    struct RouteClient {
+        calls: std::sync::Mutex<Vec<String>>,
+    }
+
+    impl HttpClient for RouteClient {
+        fn user_agent(&self) -> Option<&http::HeaderValue> {
+            None
+        }
+        fn proxy(&self) -> Option<&http_client::Url> {
+            None
+        }
+        fn send(
+            &self,
+            request: Request<AsyncBody>,
+        ) -> futures::future::BoxFuture<
+            'static,
+            http_client::Result<http_client::Response<AsyncBody>>,
+        > {
+            self.calls.lock().unwrap().push(request.uri().to_string());
+            let versioned = request.uri().path() == "/v1/responses";
+            Box::pin(async move {
+                let (status, media, body) = if versioned {
+                    (200, "text/event-stream", envelope("output_text", "ok"))
+                } else {
+                    (502, "text/plain", b"error code: 502".to_vec())
+                };
+                Ok(http_client::Response::builder()
+                    .status(status)
+                    .header(http::header::CONTENT_TYPE, media)
+                    .body(AsyncBody::from(body))
+                    .unwrap())
+            })
+        }
+    }
+
+    #[test]
+    fn bare_responses_path_is_retried_once_at_the_versioned_path() {
+        let client = Arc::new(RouteClient {
+            calls: std::sync::Mutex::new(Vec::new()),
+        });
+        let dynamic: Arc<dyn HttpClient> = client.clone();
+        let credential = AiSecret::new("sk-route-test-123456").unwrap();
+        let token = CancellationToken::new();
+        let schema = Value::Object(Default::default());
+        let request = ResponsesRequest {
+            endpoint: "https://gateway.example/responses",
+            model: "m",
+            instructions: "i",
+            input: "{}",
+            schema_name: "s",
+            schema: &schema,
+        };
+        let answer =
+            futures::executor::block_on(execute(&dynamic, &credential, &request, &token)).unwrap();
+        assert_eq!(answer.text, "ok");
+        assert_eq!(
+            client.calls.lock().unwrap().as_slice(),
+            [
+                "https://gateway.example/responses",
+                "https://gateway.example/v1/responses"
+            ]
+        );
+    }
+
+    #[test]
+    fn versioned_alternate_only_corrects_a_bare_responses_path() {
+        assert_eq!(
+            versioned_alternate("https://host/responses").as_deref(),
+            Some("https://host/v1/responses")
+        );
+        assert_eq!(versioned_alternate("https://host/v1/responses"), None);
+        assert_eq!(versioned_alternate("https://host/v1/responses/"), None);
+    }
+
+    #[test]
+    fn error_body_preview_is_bounded_screened_and_control_free() {
+        let credential = AiSecret::new("sk-preview-secret").unwrap();
+        assert_eq!(error_body_preview(&credential, b""), None);
+        assert_eq!(error_body_preview(&credential, b"   "), None);
+        assert_eq!(
+            error_body_preview(&credential, b"{\"error\":\"model not found\"}"),
+            Some("{\"error\":\"model not found\"}".to_owned())
+        );
+        assert_eq!(
+            error_body_preview(&credential, b"key sk-preview-secret rejected"),
+            Some("[redacted]".to_owned())
+        );
+        let long = "x".repeat(ERROR_PREVIEW_CHARS + 10) + "\u{7}";
+        let preview = error_body_preview(&credential, long.as_bytes()).unwrap();
+        assert!(preview.ends_with('…'));
+        assert_eq!(preview.chars().count(), ERROR_PREVIEW_CHARS + 1);
+        assert!(!preview.contains('\u{7}'));
+    }
+
+    #[test]
+    fn request_body_freezes_tools_off_and_strict_schema() {
+        let schema = Value::Object(Default::default());
+        let body = request_body(&ResponsesRequest {
+            endpoint: "https://example.com/v1/responses",
+            model: "m",
+            instructions: "i",
+            input: "{}",
+            schema_name: "s",
+            schema: &schema,
+        });
+        let value = aps_json::parse_slice(&body, crate::model::json_limits(1024 * 1024)).unwrap();
+        assert_eq!(value.get("store").and_then(Value::as_bool), Some(false));
+        assert_eq!(
+            value.get("tool_choice").and_then(Value::as_str),
+            Some("none")
+        );
+        assert_eq!(value.get("stream"), None);
+    }
+}

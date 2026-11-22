@@ -1,0 +1,383 @@
+name: APS Desktop Release
+
+# Release packaging does not deny rustc warnings. The workspace still reports
+# them in the build log, but a platform-specific unused or dead-code warning
+# must not block a release; the lint gate belongs to a separate check.
+
+on:
+  push:
+    tags:
+      - "aps-desktop-v*"
+      - "v*"
+
+# A -rebuild.N tag suffix selects a new source commit without changing the
+# application or installer version. Keep the full tag in artifact filenames.
+
+permissions:
+  contents: write
+
+jobs:
+  firefox-profiler:
+    name: Build bundled Firefox Profiler
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Build pinned Firefox Profiler
+        run: |
+          npm install --global yarn@1.22.22
+          bash scripts/firefox-profiler.sh all
+          test -s third_party/firefox-profiler/dist/index.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firefox-profiler-dist
+          path: third_party/firefox-profiler/dist/
+          if-no-files-found: error
+
+  linux:
+    name: Linux ${{ matrix.arch }}
+    needs: firefox-profiler
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            deb_arch: amd64
+            rpm_arch: x86_64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            deb_arch: arm64
+            rpm_arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: 1.99.1
+          rustflags: ''
+          target: ${{ matrix.target }}
+      - name: Install build and packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            rpm pkg-config libfontconfig1-dev libfreetype-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
+            libx11-xcb-dev libxcb1-dev libxcb-randr0-dev libxcb-shape0-dev \
+            libxcb-xfixes0-dev libvulkan-dev
+      - name: Build binaries
+        working-directory: rust-desktop
+        run: cargo build --locked --release --target ${{ matrix.target }} -p aps-app -p aps-memory
+      - name: Download bundled Firefox Profiler
+        uses: actions/download-artifact@v4
+        with:
+          name: firefox-profiler-dist
+          path: dist/firefox-profiler
+      - name: Package deb and rpm
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          DEB_ARCH: ${{ matrix.deb_arch }}
+          RPM_ARCH: ${{ matrix.rpm_arch }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -e
+          version="${RELEASE_TAG#aps-desktop-v}"
+          version="${version#rust-desktop-v}"; version="${version#v}"
+          version="${version%-rebuild.*}"
+          root="$PWD/dist/aps-desktop-${RELEASE_TAG}-linux-${DEB_ARCH}"
+          libdir="$root/usr/lib/aps-desktop"
+          mkdir -p "$libdir" "$root/usr/bin" "$root/usr/share/applications" "$root/usr/share/icons/hicolor/1024x1024/apps" "$PWD/dist/rpm/BUILD" "$PWD/dist/rpm/RPMS" "$PWD/dist/rpm/SOURCES" "$PWD/dist/rpm/SPECS" "$PWD/dist/rpm/SRPMS"
+          cp "rust-desktop/target/${TARGET}/release/aps-app" "$libdir/aps-app"
+          cp "rust-desktop/target/${TARGET}/release/aps-memory-worker" "$libdir/aps-memory-worker"
+          chmod 0755 "$libdir/aps-app" "$libdir/aps-memory-worker"
+          # The app resolves packaged tools next to its executable, so both
+          # binaries live in /usr/lib/aps-desktop and /usr/bin only links to them.
+          PERFETTO_TOOLS_DIR="$libdir/resources/perfetto-tools" bash scripts/install-trace-processor.sh
+          cp -R dist/firefox-profiler "$libdir/resources/"
+          test -s "$libdir/resources/firefox-profiler/index.html"
+          ln -s ../lib/aps-desktop/aps-app "$root/usr/bin/aps-app"
+          ln -s ../lib/aps-desktop/aps-memory-worker "$root/usr/bin/aps-memory-worker"
+          cp rust-desktop/crates/aps-app/assets/icons/linux/app-icon.png "$root/usr/share/icons/hicolor/1024x1024/apps/com.androidperformancestudio.rust.png"
+          cat > "$root/usr/share/applications/com.androidperformancestudio.rust.desktop" <<EOF
+          [Desktop Entry]
+          Type=Application
+          Name=Android Performance Studio
+          Exec=/usr/bin/aps-app
+          Icon=com.androidperformancestudio.rust
+          StartupWMClass=com.androidperformancestudio.rust
+          Categories=Development;
+          Terminal=false
+          EOF
+          mkdir -p "$root/DEBIAN"
+          cat > "$root/DEBIAN/control" <<EOF
+          Package: aps-desktop
+          Version: ${version}
+          Section: devel
+          Priority: optional
+          Architecture: ${DEB_ARCH}
+          Maintainer: Android Performance Studio
+          Description: Android Performance Studio Rust desktop application
+          EOF
+          dpkg-deb --build --root-owner-group "$root" "dist/aps-desktop-${RELEASE_TAG}-linux-${DEB_ARCH}.deb"
+          cp "$libdir/aps-app" "dist/rpm/SOURCES/aps-app"
+          cp "$libdir/aps-memory-worker" "dist/rpm/SOURCES/aps-memory-worker"
+          cp "$libdir/resources/perfetto-tools/trace_processor_shell" "dist/rpm/SOURCES/trace_processor_shell"
+          cp -R "$libdir/resources/firefox-profiler" "dist/rpm/SOURCES/firefox-profiler"
+          cp "$root/usr/share/icons/hicolor/1024x1024/apps/com.androidperformancestudio.rust.png" dist/rpm/SOURCES/app-icon.png
+          cp "$root/usr/share/applications/com.androidperformancestudio.rust.desktop" dist/rpm/SOURCES/aps.desktop
+          cat > dist/rpm/SPECS/aps-desktop.spec <<EOF
+          Name: aps-desktop
+          Version: ${version}
+          Release: 1
+          Summary: Android Performance Studio Rust desktop application
+          License: Proprietary
+          BuildArch: ${RPM_ARCH}
+          %description
+          Android Performance Studio Rust desktop application.
+          %install
+          mkdir -p %{buildroot}/usr/lib/aps-desktop/resources/perfetto-tools %{buildroot}/usr/bin %{buildroot}/usr/share/applications %{buildroot}/usr/share/icons/hicolor/1024x1024/apps
+          install -m 0755 %{_sourcedir}/aps-app %{buildroot}/usr/lib/aps-desktop/aps-app
+          install -m 0755 %{_sourcedir}/aps-memory-worker %{buildroot}/usr/lib/aps-desktop/aps-memory-worker
+          install -m 0755 %{_sourcedir}/trace_processor_shell %{buildroot}/usr/lib/aps-desktop/resources/perfetto-tools/trace_processor_shell
+          cp -R %{_sourcedir}/firefox-profiler %{buildroot}/usr/lib/aps-desktop/resources/
+          ln -s ../lib/aps-desktop/aps-app %{buildroot}/usr/bin/aps-app
+          ln -s ../lib/aps-desktop/aps-memory-worker %{buildroot}/usr/bin/aps-memory-worker
+          install -m 0644 %{_sourcedir}/aps.desktop %{buildroot}/usr/share/applications/com.androidperformancestudio.rust.desktop
+          install -m 0644 %{_sourcedir}/app-icon.png %{buildroot}/usr/share/icons/hicolor/1024x1024/apps/com.androidperformancestudio.rust.png
+          %files
+          /usr/bin/aps-app
+          /usr/bin/aps-memory-worker
+          /usr/lib/aps-desktop
+          /usr/share/applications/com.androidperformancestudio.rust.desktop
+          /usr/share/icons/hicolor/1024x1024/apps/com.androidperformancestudio.rust.png
+          EOF
+          rpmbuild --define "_topdir $PWD/dist/rpm" -bb dist/rpm/SPECS/aps-desktop.spec
+          cp "dist/rpm/RPMS/${RPM_ARCH}/"*.rpm "dist/aps-desktop-${RELEASE_TAG}-linux-${RPM_ARCH}.rpm"
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-linux-${{ matrix.arch }}
+          path: |
+            dist/*.deb
+            dist/*.rpm
+          if-no-files-found: error
+
+  macos:
+    name: macOS ${{ matrix.arch }}
+    needs: firefox-profiler
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+          - arch: arm64
+            runner: macos-15
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: 1.99.1
+          rustflags: ''
+          target: ${{ matrix.target }}
+      - name: Prepare pinned macOS Trace Processor
+        run: |
+          set -euo pipefail
+          tools="$PWD/dist/Android Performance Studio.app/Contents/MacOS/resources/perfetto-tools"
+          PERFETTO_TOOLS_DIR="$tools" bash scripts/install-trace-processor.sh
+          tool="$tools/trace_processor_shell"
+          codesign --force --timestamp=none --sign - "$tool"
+          codesign --verify --strict "$tool"
+          # Signing changes the verified upstream bytes. Compile in the new hash
+          # instead of allowing a mutable checksum file beside the executable.
+          checksum="$(shasum -a 256 "$tool")"
+          printf 'APS_MACOS_PACKAGED_TRACE_PROCESSOR_SHA256=%s\n' "${checksum%% *}" >> "$GITHUB_ENV"
+      - name: Build binaries
+        working-directory: rust-desktop
+        run: cargo build --locked --release --target ${{ matrix.target }} -p aps-app -p aps-memory
+      - name: Download bundled Firefox Profiler
+        uses: actions/download-artifact@v4
+        with:
+          name: firefox-profiler-dist
+          path: dist/Android Performance Studio.app/Contents/Resources/firefox-profiler
+      - name: Package dmg and pkg
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          TARGET: ${{ matrix.target }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -e
+          version="${RELEASE_TAG#aps-desktop-v}"
+          version="${version#rust-desktop-v}"; version="${version#v}"
+          version="${version%-rebuild.*}"
+          app="dist/Android Performance Studio.app"
+          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+          cp "rust-desktop/target/${TARGET}/release/aps-app" "$app/Contents/MacOS/aps-app"
+          cp "rust-desktop/target/${TARGET}/release/aps-memory-worker" "$app/Contents/MacOS/aps-memory-worker"
+          cp rust-desktop/crates/aps-app/Info.plist "$app/Contents/Info.plist"
+          cp rust-desktop/crates/aps-app/assets/icons/macos/app-icon.icns "$app/Contents/Resources/app-icon.icns"
+          test -s "$app/Contents/Resources/firefox-profiler/index.html"
+          chmod 0755 "$app/Contents/MacOS/aps-app" "$app/Contents/MacOS/aps-memory-worker"
+          # Ad-hoc sign the remaining nested code and the bundle last. Do not
+          # re-sign Trace Processor: its bytes are pinned in the app. Signing the main
+          # executable by path is not used: on an intel host codesign treats that
+          # path as the bundle entry point and fails while any nested binary is
+          # still unsigned. An unsigned bundle is reported as damaged and System
+          # Settings offers no "Open Anyway"; an ad-hoc signature makes Gatekeeper
+          # offer that choice. Real distribution still needs Developer ID signing
+          # and notarization.
+          codesign --force --timestamp=none --sign - "$app/Contents/MacOS/aps-memory-worker"
+          codesign --force --timestamp=none --sign - "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          APS_TEST_PACKAGED_PERFETTO_RESOURCES="$PWD/$app/Contents/MacOS/resources" \
+            cargo test --locked --release --target "$TARGET" --manifest-path rust-desktop/Cargo.toml \
+            -p aps-perfetto --test pinned_tool signed_packaged_tool_opens_a_trace_and_rejects_modified_bytes -- --exact
+          bash scripts/package-macos-dmg.sh "$app" "dist/aps-desktop-${RELEASE_TAG}-macos-${ARCH}.dmg"
+          pkgbuild --component "$app" --install-location /Applications --version "$version" "dist/aps-desktop-${RELEASE_TAG}-macos-${ARCH}.pkg"
+      - name: Upload macOS packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-macos-${{ matrix.arch }}
+          path: |
+            dist/*.dmg
+            dist/*.pkg
+          if-no-files-found: error
+
+  windows:
+    name: Windows x86_64
+    needs: firefox-profiler
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: 1.99.1
+          rustflags: ''
+          target: x86_64-pc-windows-msvc
+      - name: Build binaries
+        working-directory: rust-desktop
+        run: cargo build --locked --release --target x86_64-pc-windows-msvc -p aps-app -p aps-memory
+      - name: Package Trace Processor
+        shell: bash
+        run: PERFETTO_TOOLS_DIR="$PWD/dist/resources/perfetto-tools" bash scripts/install-trace-processor.sh
+      - name: Download bundled Firefox Profiler
+        uses: actions/download-artifact@v4
+        with:
+          name: firefox-profiler-dist
+          path: dist/resources/firefox-profiler
+      - name: Install WiX
+        shell: pwsh
+        run: choco install wixtoolset -y --no-progress
+      - name: Package exe and msi
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $version = ($env:RELEASE_TAG -replace '^(?:aps-desktop-|rust-desktop-)?v', '') -replace '-rebuild\..*$', ''
+          $parts = (($version -replace '[^0-9.]', '.') -split '\.' | Where-Object { $_ -ne '' } | Select-Object -First 3)
+          while ($parts.Count -lt 3) { $parts += '0' }
+          $msiVersion = $parts -join '.'
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item rust-desktop/target/x86_64-pc-windows-msvc/release/aps-app.exe dist/aps-app.exe
+          Copy-Item rust-desktop/target/x86_64-pc-windows-msvc/release/aps-memory-worker.exe dist/aps-memory-worker.exe
+          if (-not (Test-Path "dist/resources/firefox-profiler/index.html" -PathType Leaf)) { throw "Missing bundled Firefox Profiler" }
+          Compress-Archive -Path dist/aps-app.exe, dist/aps-memory-worker.exe, dist/resources -DestinationPath "dist/aps-desktop-${env:RELEASE_TAG}-windows-x86_64.zip" -Force
+          @"
+          <?xml version="1.0" encoding="UTF-8"?>
+          <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+            <Product Id="*" Name="Android Performance Studio" Language="1033" Version="$msiVersion" Manufacturer="Android Performance Studio" UpgradeCode="7D3A2A7A-48B6-4EF0-8D8D-5C9D1E7E8F21">
+              <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="x64" />
+              <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+              <MediaTemplate EmbedCab="yes" />
+              <Icon Id="AppIcon" SourceFile="rust-desktop\crates\aps-app\assets\icons\windows\app-icon.ico" /><Property Id="ARPPRODUCTICON" Value="AppIcon" />
+              <Directory Id="TARGETDIR" Name="SourceDir">
+                <Directory Id="ProgramFiles64Folder">
+                  <Directory Id="INSTALLFOLDER" Name="Android Performance Studio" />
+                </Directory>
+              </Directory>
+              <Feature Id="MainFeature" Title="Android Performance Studio" Level="1">
+                <ComponentRef Id="AppComponent" />
+                <ComponentRef Id="WorkerComponent" />
+                <ComponentRef Id="TraceProcessorComponent" />
+                <ComponentGroupRef Id="FirefoxProfilerFiles" />
+              </Feature>
+            </Product>
+            <Fragment>
+              <Component Id="AppComponent" Directory="INSTALLFOLDER" Guid="*" Win64="yes">
+                <File Id="AppFile" Source="dist\aps-app.exe" KeyPath="yes" />
+              </Component>
+              <Component Id="WorkerComponent" Directory="INSTALLFOLDER" Guid="*" Win64="yes">
+                <File Id="WorkerFile" Source="dist\aps-memory-worker.exe" KeyPath="yes" />
+              </Component>
+              <DirectoryRef Id="INSTALLFOLDER">
+                <Directory Id="ResourcesDir" Name="resources">
+                  <Directory Id="FirefoxProfilerDir" Name="firefox-profiler" />
+                  <Directory Id="PerfettoToolsDir" Name="perfetto-tools">
+                    <Component Id="TraceProcessorComponent" Guid="*" Win64="yes">
+                      <File Id="TraceProcessorFile" Source="dist\resources\perfetto-tools\trace_processor_shell.exe" KeyPath="yes" />
+                    </Component>
+                  </Directory>
+                </Directory>
+              </DirectoryRef>
+            </Fragment>
+          </Wix>
+          "@ | Set-Content dist/aps-desktop.wxs
+          & heat.exe dir "dist\resources\firefox-profiler" -nologo -cg FirefoxProfilerFiles -dr FirefoxProfilerDir -srd -ag -scom -sreg -var var.FirefoxProfilerSource -out dist/firefox-profiler.wxs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & candle.exe -nologo -arch x64 "-dFirefoxProfilerSource=dist\resources\firefox-profiler" dist/aps-desktop.wxs dist/firefox-profiler.wxs -out "dist\"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & light.exe -nologo -out "dist/aps-desktop-${env:RELEASE_TAG}-windows-x86_64.msi" dist/aps-desktop.wixobj dist/firefox-profiler.wixobj
+      - name: Upload Windows packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-windows-x86_64
+          path: |
+            dist/aps-desktop-*-windows-x86_64.zip
+            dist/*.msi
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: [linux, macos, windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: packages-*
+          merge-multiple: true
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version="${RELEASE_TAG#aps-desktop-v}"
+          version="${version#rust-desktop-v}"; version="${version#v}"
+          version="${version%-rebuild.*}"
+          title="AndroidPerfermanceStudio ${version}"
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            # Re-running a tag refreshes the packaged assets and keeps the
+            # product-style release title instead of failing on the existing
+            # release.
+            gh release upload "${RELEASE_TAG}" release-assets/* --clobber
+            gh release edit "${RELEASE_TAG}" --title "${title}"
+          else
+            gh release create "${RELEASE_TAG}" release-assets/* --generate-notes --title "${title}"
+          fi

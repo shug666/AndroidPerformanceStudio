@@ -206,6 +206,13 @@
 - [ ] 选中节点被隐藏时，Canvas 是否完全不显示选中边框，还是用低透明虚线提示？建议首版不显示，后续根据用户反馈增加“显示隐藏层级边框”选项。
 - [ ] 隐藏状态在手动刷新成功后是完全清空，还是保留仍存在的 nodeId？建议首版刷新/切换窗口清空，避免误判新快照。
 
+## Uniform Desktop Backgrounds (2026-11-09)
+
+- Shared desktop base surfaces use one neutral color per appearance mode: light `#FAFAFB`, dark `#29292B`. Window chrome, workspace, panels, section headers, fields, property rows and preview surrounds use the same palette-owned value.
+- The configurable theme accent must not tint base surfaces, including Material tonal elevation. Keep accent on text, icons, borders and data marks. Optional workspace headers have no accent gradient or decorative background graphic.
+- Selection and search state fills remain visible and independent of the configured accent. Selected text contrasts with the fixed state fill, not with the accent. Risk/error feedback, syntax colors, data visualizations, third-party embedded content and the separate AI chat palette retain their semantic contracts.
+- Validation: light/dark with bright and dark accent choices; shared palette and Material elevation tests; rendered surface pixels and selected text contrast; affected desktop/profiler contracts and integration compilation.
+
 ## Desktop Form Inputs (2026-11-02)
 
 - Ordinary single-line app-owned form fields use shared `ViewerTextField` and `ViewerDimensions.textFieldHeight` (32dp), replacing the 56dp Material default. Use 8dp horizontal and 4dp vertical input padding, shared 13sp body text and the existing theme accent/border colors.
@@ -424,8 +431,14 @@ User-requested Android Studio-style leak analysis supersedes the earlier exclusi
 ## Status Feedback Visibility (2026-10-28)
 
 - Remove the app-shell global status bar and its permanent 28dp reservation. Navigation and retained workspace content extend to the window's bottom edge; do not replace the removed bar with a spacer. Destination and artifact identity remain in existing navigation/workspace surfaces.
-- Memory shows its own compact footer only during an operation, instance query, error, or nonblank warning/cleanup warning. Blank messages do not reserve height. Running captures/imports still expose Cancel even before a progress message arrives; errors retain Retry. Keep horizontal scrolling and selectable/copyable status text.
-- When Memory's footer is hidden, analysis content ends 4dp above the page bottom. When feedback appears, the same 4dp gap applies above that footer. Showing/hiding feedback must not clear snapshots, selection, details tabs, expansion, or splitter ratios. Other profilers' feature-owned feedback is not removed with the global shell bar.
+- Memory owns its 29px compact footer, permanently visible since 2026-11-08; see Memory Status Footer Always Visible for its idle content and precedence. Running captures/imports still expose Cancel even before a progress message arrives; errors retain Retry. Keep horizontal scrolling and selectable/copyable status text.
+- Analysis content ends 4dp above the permanent Memory footer. Showing/hiding feedback must not clear snapshots, selection, details tabs, expansion, or splitter ratios. Other profilers' feature-owned feedback is not removed with the global shell bar.
+
+## Memory Status Footer Always Visible (2026-11-08)
+
+- The Memory workspace keeps its 29px footer permanently visible instead of releasing its height when idle. The footer anchors the workspace bottom edge, so switching views, loading, importing and feedback no longer move the analysis surface between a 4dp-from-bottom and a 4dp-above-footer geometry.
+- Idle content is evidence, not decoration. With a published snapshot the footer shows the snapshot label plus the class, object and parse-warning counts; without one it shows the localized no-snapshot state. Loading, error and notice precedence is unchanged, and Cancel still replaces the idle text while a capture or import runs.
+- This supersedes the 2026-10-28 Status Feedback Visibility rule that the Memory footer appears only for active feedback. Blank feedback still never replaces the idle identity, and showing or hiding feedback still must not clear snapshots, selection, details tabs, expansion, or splitter ratios.
 
 ## CPU Stack Chart Bounds (2026-10-28)
 
@@ -466,9 +479,9 @@ User-requested Android Studio-style leak analysis supersedes the earlier exclusi
 
 ## Unified Resizable Frame Analysis (2026-10-28)
 
-- Keep the summary metrics outside one shared analysis card. Inside it, place the frame timeline above the deadline-miss intervals, problem frames, and single-frame details columns, with attribution and warnings below. Internal sections are unframed; retain their compact 8dp content padding without nested cards or exterior card gaps.
-- Use horizontal splitters to adjust timeline/body and body/attribution heights, and vertical splitters for the three analysis columns. Draw a centered 1dp divider inside a 7dp pointer target, with directional resize cursors, keyboard arrow steps, and accessibility progress adjustment.
-- Remember split proportions across frame selection, filtering, language, data updates, and temporary window constraints. Apply minimum sizes only to rendered geometry; hiding attribution removes its divider and reserved space without discarding its saved proportion.
+- Keep the summary metrics outside one shared analysis card. Inside it, place the frame timeline above the deadline-miss intervals, problem frames, and single-frame details columns. Attribution and warnings are in a scrollable dialog opened by a toolbar button immediately before AI analysis, not in a bottom pane. Internal sections are unframed; retain their compact 8dp content padding without nested cards or exterior card gaps.
+- Use a horizontal splitter to adjust timeline/body heights, and vertical splitters for the three analysis columns. Draw a centered 1dp divider inside a 7dp pointer target, with directional resize cursors, keyboard arrow steps, and accessibility progress adjustment.
+- Remember split proportions across frame selection, filtering, language, data updates, and temporary window constraints. Apply minimum sizes only to rendered geometry; the attribution dialog reserves no workspace height.
 - The timeline plot and axes fill the resized timeline region. Keep the time/duration mapping, Perfetto colors, frame selection, filtering, hover, evidence actions, and previous/next controls unchanged. Lists, detail properties, layout preview, and attribution keep independent scrolling; compact previews retain usable content height instead of painting into their titles.
 - The single card fills the remaining page with the standard 4dp bottom margin. When minimum sizes do not fit, make its interior vertically reachable and the three-column body horizontally reachable; do not create negative widths or allow section contents to paint across dividers.
 
@@ -476,7 +489,7 @@ User-requested Android Studio-style leak analysis supersedes the earlier exclusi
 ## AI 平台全局窗口增量（2026-10-31）
 
 - 产品依据：`docs/ai/conversation-window.md`、`docs/ai/dsh-chat-parity.md`、`agent-platform-todo.md`、ADR-0037；本轮以用户“AI 界面只保留对话，管理移入 AI 设置，参照 DSH”覆盖旧版管理标签页及常驻右侧证据栏布局。
-- 全局独立 Compose 窗口从 app menu、Navigation Rail 和 Cmd/Ctrl+Shift+A 打开；新建时没有报告也可普通聊天，使用明确的 `CHAT/CONVERSATION` 空上下文及无 Skill/子 Agent 的 `aps.chat`，不伪造性能证据、不开放源码/脚本/Artifact 权限，仍保留预检和显式确认。历史报告分析缺失绑定时显示 unavailable，不降级为普通聊天或把另一页面的数据当成当前上下文。
+- 全局独立 Compose 窗口从 app menu、Navigation Rail 和 Cmd/Ctrl+Shift+A 打开；新建时没有报告也可普通聊天，使用明确的 `CHAT/CONVERSATION` 空上下文及无 Skill/子 Agent 的 `aps.chat`，不伪造性能证据、不开放源码/脚本/Artifact 权限。对话内发送视为该次请求的执行授权，预检成功后直接执行，不再二次确认。历史报告分析缺失绑定时显示 unavailable，不降级为普通聊天或把另一页面的数据当成当前上下文。
 - 布局检查器“问题”（FINDINGS）区的“AI 分析”（Run AI）在桌面宿主中直接打开统一会话预检，仅在该窗口确认后调用已保存的 Provider、模型和 Agent，并沿用报告格式及权限设置；不再叠加布局页的旧确认框。发起时暂停自动扫描，默认仅提交当前选中节点的有界脱敏布局证据，不发送截图、运行时文字或源码片段。结果按节点引用回写 Findings；快照、活动窗口或时间线变化后取消旧任务，禁止旧结果覆盖新布局。独立运行布局检查器时仍保留原有本地预检。
 - 大布局可在“仅性能数据”模式分析有界摘要：投影最多 200 个节点、子树深度 8、每节点 24 个子节点，JSON UTF-8 不超过 48 KiB；按字节预算减少规则和节点，保留选中节点及可用的父节点上下文。`coverage.complete=false` 明确标注覆盖范围、裁剪与限制，原布局指标和实际发送树的指标分别记录，不以缺失节点推断整棵树无问题。未验证覆盖标记的截断输入仍拒绝，部分摘要不允许自动解析或上传源码。
 - 布局 AI 默认采用最小性能白名单：显示尺寸/密度、节点引用、控件类型短名、边界、可见性、透明度、父子关系、文字长度、规则命中及覆盖范围。包名、采集时间、截图存在标记、资源名称、无障碍描述长度和完整类名不写入性能 payload；规则仅携带 ID、级别、节点 ID 及白名单数值参数，不带自由文本说明。完整类名、资源名和原始文字留在本地，源码解析仍需单独显式授权。
@@ -501,16 +514,18 @@ User-requested Android Studio-style leak analysis supersedes the earlier exclusi
 - 连接保存使用带回滚的“保存并应用”操作，统一设置发布失败时恢复旧连接；无法恢复时保持不可用，不以新接口搭配旧模型继续运行。请求预检记录非秘密连接版本，连接变化后旧授权失效，需要重新预检，不能把已确认 payload 静默发往新 endpoint。
 - AI 设置中 OpenAI/Codex 和 Claude 的模型列表统一复用紧凑 macOS 风格 `DropdownSelector`，保留主题边框、展开箭头和选中态。控件宽度不随模型名变化，长名称省略，菜单限高滚动；加载中或列表为空时禁用，成功查询但无可选模型时显示明确的空结果提示，不伪装成请求失败，也不阻止手动填写模型或显式保存。
 - OpenAI/Codex 目录按模型 ID 最后一段识别文本模型家族和非文本排除项；网关命名空间只参与路由，不造成整批模型被误过滤。选择、请求和保存均保留服务端返回的完整 ID，不去掉前缀或合并不同命名空间的模型。
-- 执行先预检实际 immutable payload，明确 source snippets、字节、evidence/candidate 数及 provider/model；用户确认后发起，支持取消/重试/历史恢复，恢复不重放。
+- 执行先预检实际 immutable payload，冻结 source snippets、字节、evidence/candidate 数及 provider/model；对话内主动发送、重试和已排队消息预检成功后直接批准该冻结请求并执行，不显示二次确认。外部页面创建的待确认分析仍由用户确认；打开窗口、重组和历史恢复不授权、不发起请求。底层 payload/hash、连接版本、权限及源码上传校验不变。
 - 会话提供新建、搜索、置顶、重命名、分支、归档/取消归档、复制 ID；持久化有界脱敏问题和会话元数据，回复沿用已校验结构化结果。新建、打开历史和元数据操作不发起模型请求；历史恢复不重放。连续追问只携带同 Analysis Session/context 的最近 4 个成功 turn，作为不可信对话背景，不作为性能事实或权限。
 - 单个会话菜单增加紧凑 32dp 的删除项，始终先显示不可恢复的二次确认；取消、关闭确认框不发起删除或停止操作。确认后删除会话记录、消息及其内部 Agent 子任务；若删除当前会话，停止其请求并切换到新会话，删除其他会话不影响当前会话、草稿与运行。用户显式创建的分支不随父会话隐式删除，存在分支依赖时返回明确错误并保留记录；共享 Artifact 内容不因会话删除而任意移除。
-- 输入支持 Enter 预检、Shift+Enter 换行、IME 提交保护、空输入上箭头取回问题、两次独立 Escape 停止；忙碌时问题进入本地会话队列，下一次仍需独立预检与确认。与 DSH 的 Steer/持久化 Inbox/互补发送快捷键差距按参照文档列出，不显示假能力。
-- 会话中的失败、不可用与中断消息显示带刷新图标的“重试”；点击某条消息只重试该条问题，不误取最后一条问题，不覆盖未发送草稿。预检失败可保留失败输入并在修正设置后重试；报告入口没有手写问题时也可重试原报告。每次读取最新已保存 Provider、模型、Agent、报告格式和语言，生成新 run 并重新确认；忙碌、证据未绑定或源码未授权时禁用，不重放旧授权。
+- 输入支持 Enter 发送、Shift+Enter 换行、IME 提交保护、空输入上箭头取回问题、两次独立 Escape 停止；忙碌时问题进入本地会话队列，成功后按顺序独立预检并执行一次，不重复确认，不重放旧授权。与 DSH 的 Steer/持久化 Inbox/互补发送快捷键差距按参照文档列出，不显示假能力。
+- 会话中的失败、不可用与中断消息显示带刷新图标的“重试”；点击某条消息只重试该条问题，不误取最后一条问题，不覆盖未发送草稿。预检失败可保留失败输入并在修正设置后重试；报告入口没有手写问题时也可重试原报告。每次读取最新已保存 Provider、模型、Agent、报告格式和语言，生成新 run 并直接执行；忙碌、证据未绑定或源码未授权时禁用，不重放旧授权。
 - 输入框底部右侧依次为模型选择入口、4dp 间距、发送/停止按钮；发送/停止始终是最右侧控件，距输入框右边保留 12dp 内边距，并在状态切换和模型名变化时保持相同位置及 28dp 尺寸。模型入口位于按钮左侧，长名称在剩余空间中省略，不挤压发送按钮；弹出模型列表带选中态、加载/空/错误状态和显式刷新，宽高有界且可滚动，上下文入口仍位于左侧。
 - 设置页成功加载并应用的模型目录按 Provider 和连接版本缓存，供对话菜单复用；缺失时读取当前已保存连接，显式刷新绕过缓存。未保存草稿或过期请求不得替换对话目录。模型切换不提交问题，运行或待确认时禁用；下一次发送、重试或排队预检使用最新已保存模型。
 - 每次从导航栏、菜单或协调器打开 AI 都产生新的窗口激活请求：已有窗口恢复最小化、移至前台并请求焦点，不重建 Runtime、不清空草稿或取消执行。仅将可见开关重复设为 true 不视为完成激活。
 - 长对话的滚动导航固定于整个消息区域最右下角，位于输入区上方，与消息文字保留独立侧边空间；32dp 的回到顶部/回到最新消息图标按钮上下竖排、间隔 6dp，距视口右边和底边各 12dp。短内容隐藏；上箭头仅离开顶部时显示，下箭头仅未到底部时显示。回到顶部暂停自动跟随，回到底部恢复跟随；滚动不触发模型或其他业务操作。
 - 对话显示用户问题、结构化 Findings、Evidence/Source 跳转、子任务/Skill timeline 和已验证 HTML/Markdown Artifact；HTML 由固定惰性模板转义生成。摘要与 Findings 共用原生 Markdown 显示子集：段落、标题、嵌套列表/任务项、引用、可横向滚动的表格、分隔线、强调和代码。正文 14sp/24sp、段落间距 16dp，h1/h2/h3 为 21/30、19/28、18/26；代码块带语言、复制、换行切换和轻量着色，8dp 圆角沿用本地约束。HTTP(S) 链接仅显示主题样式，不执行导航；HTML、图片及不安全链接惰性显示，不从模型文本读取文件或远程资源。附件、任意源码浏览、完整 CommonMark/数学公式、另存到任意目录、Token/速度精确统计等必须有真实后端和独立验收后才能呈现为可用功能；不能用占位按钮宣称 DSH 完全对齐。
+- 会话显示按本机 Deepseek-chat 的 `src/app/global.css`、`src/components/messages/UserMessage.module.css` 和 `src/components/markdown/markdown.css` 调整：宽／窄消息列上限 752／640dp，用户气泡右对齐、22dp 圆角、16sp/24sp，Markdown 正文 16sp/28sp，三级主标题分别为 24/34、22/32、20/30。代码使用浅深两套背景及 12dp 圆角，表格以行分隔线为主，超宽内容仍在块内横向滚动。该更新只覆盖消息和 Markdown 的视觉规格；不改侧栏、输入区、证据权限或消息操作。
+- AI 页头和会话菜单都可通过系统文件选择器预览 UTF-8 `.md`／`.markdown`。预览复用惰性 Markdown 渲染器，仅阅读明确选中的普通文件（最多 65,536 字符），不作为附件发送或写入会话。保留 HTML、图片和外部链接的原有安全边界，不执行脚本、不加载远程资源；不宣称支持 Deepseek-chat 的 KaTeX 或 Mermaid 渲染。
 - 中英、明暗、900/1280 布局、键盘/焦点/语义测试与截图独立于实际 provider、沙箱和跨平台 Release 证据。
 
 ### CPU AI Key Facts (2026-11-04)
@@ -527,3 +542,787 @@ User-requested Android Studio-style leak analysis supersedes the earlier exclusi
 - 新入口的性能 payload UTF-8 合计最多 8 KiB、短摘要合计最多 2 KiB；适配器先做本地有界聚合，保留 omitted/缺失值/单位，不上传原始 profile、SQL、对象字段运行值、网络 URL/headers/body、Trace 正文或源码。帧/启动/内存/GPU/回归摘要最多 8 行；电量最多 4 轮且每轮 8 条能量记录，网络最多 6 个慢请求且状态码和阶段最多 4 项。
 - 方法录制使用独立 `METHOD_RECORDING` / `method-recording-summary`，最多 8 个方法及 self/total 微秒、调用/线程数、时钟和质量计数，不伪造统计采样或纯 CPU 时间。共享内置包以 1.4.0 版本扩展白名单，不修改已安装旧版本文件内容。
 - Trace 只有当前 artifact 对应的已执行诊断数值结果可分析，GPU 仅制品身份元数据，源码页仅可验证快照元数据；没有对应测量时不能展示推断的 GPU 时序、泄漏证明、阻塞或 ANR 根因。真实 Provider、设备和各平台 GUI 验收独立于本地接线测试。
+
+### Rust Network workspace port (2026-11-06)
+
+- Reference: `NetworkProfilerMainPage.kt`, `NetworkProfilerScreen.kt` and
+  `NetworkWorkspacePanels.kt` under `desktop-viewer/network-profiler`. Preserve
+  the 40dp command bar, five summary metrics, coverage strip, activity region,
+  Requests/Domains controls, eight-column request table and request detail pane.
+  The shell must not add another decorative page-title row above Network.
+- Use existing Rust `studio` tokens and the shared 16/13/11 typography tiers,
+  continuous title-bar background and theme-owned dividers. Summary metrics use
+  the reference proportions; the table scrolls horizontally below 900dp.
+- Measure the actual page width: below 1000dp, stack request/detail panes;
+  otherwise use the reference's approximately 1.8:1 ratio. Header/body share a
+  table scroll surface; table and details scroll independently. Request rows
+  remain focusable controls with evidence labels, not pointer-only surfaces.
+- Filters and sorting apply to the full selected HAR before bounded pagination;
+  request identity remains the original entry index, never its sorted row index.
+  The search draft is applied by Enter or Apply and is not a source upload.
+  Failed/cancelled queries retain the last published page and query identity.
+- Preserve `aps-network-rust-minimized-v1`: no raw URL, hostname, timestamp,
+  header, cookie, body or arbitrary method enters persisted/published UI state,
+  exports or AI. Activity/domain/phase/content regions state unavailable or
+  not retained rather than manufacturing reference data. HTTP status is not
+  call outcome; missing outcome/completeness remains Unknown. Median/P95 use
+  actual valid HAR durations, with sample and omission counts.
+- JSON/CSV controls explicitly export the current minimized page, not a whole
+  session or full HAR. Live capture and HAR export remain disabled until real
+  adapters exist. AI opens the existing explicit consent/preflight flow.
+- Test sources may be authored/compiled, but execution, native visual parity,
+  device/provider acceptance and packaged validation remain deferred under the
+  ongoing rewrite policy; build success is not full Network feature parity.
+
+### Rust Settings reference port (2026-11-07)
+
+- Reference: `DesktopAppSettingsPage.kt`, `ThemeColorPicker.kt`,
+  `LayoutInspectorSettingsContent.kt`, `CanvasBorderColors.kt`, and
+  `CaptureSettingsSection.kt`. Preserve the six settings destinations in order:
+  General, Configuration, Layout Inspector, Simpleperf, AI, About. The settings
+  rail is 176dp with embedded 16dp reference icons, 2dp row gaps and accent
+  selection; content uses 4dp workspace padding, 8dp compact padding and shared
+  16/13/11 typography. About contains product name and the actual Rust version.
+- General uses 320dp selectors / 200dp menus, System language/theme choices,
+  six scale choices (80–150%), a label-visibility switch, eight two-column
+  38dp accent presets, a 240×140 HSV surface, an 18dp rainbow hue strip,
+  and immediate validated RGB/RRGGBB/AARRGGBB input. Invalid drafts never change
+  the applied color. Presets and reset synchronize the picker without becoming
+  an accidental custom accent. System theme follows native appearance changes.
+- Configuration exposes the SDK draft, Browse / Apply / Clear, plus actual Rust
+  CPU/HAR engine choices. SDK validation, atomic Rust-owned persistence and
+  runtime publication are transactional; no Compose preferences or environment
+  variables are overwritten. Running operations keep their existing executable.
+- Layout Inspector preserves three cards, six switches, the two hit-order
+  choices, the discrete 1–10 archive multiplier and independent normal / hover /
+  selected ARGB fields with per-field reset and six preset colors. Visibility
+  controls and hit/color settings affect the real offline Inspector projection;
+  preview bounds changes also update the shared preference.
+- Simpleperf preserves six card groups. Supported duration/frequency defaults
+  update untouched capture fields; frozen plans and user drafts remain stable.
+  Its draft controls remain editable before a device or process is selected;
+  target validation happens when a capture plan is prepared.
+  Native fixed/following chart information boxes are real preferences. Event
+  probing, templates and scope/Period/CallGraph selection are
+  disabled until supported, not written as ineffective preferences.
+- AI retains a fixed page title and centered Provider / Agent / Skill / Policy
+  controls with independently scrolling contents. The currently trusted catalog
+  and session-local editor are real; unavailable remote provider persistence,
+  extension management and execution-policy controls stay disabled with reasons.
+  Opening settings never discovers credentials, sends requests or grants tools.
+- Preferences use strict atomic version 3 storage and read version 1/2 without
+  touching Compose. No test execution or native screenshot matching is claimed
+  during the rewrite. Display scale affects rem-based controls and base fonts;
+  explicit-pixel profiler surfaces still require final scaling/visual acceptance.
+
+### Rust Home reference port (2026-11-07)
+
+- Reference: the current `desktop-app/.../AppHomePage.kt` and its dashboard
+  projections, not the older commercial mockup. Home has no hero, migration
+  banner, duplicate page title or AI/capture action bar. Reuse the shared Studio
+  colors, theme-owned accent/dividers and 16/13/11 typography.
+- Preserve 4dp workspace/card gaps, two equal-width real metrics, four 92dp
+  shortcut cards and eleven 78dp module cards, with Source Workspaces last.
+  Measure actual page width: a 320dp rail is beside the main column from 900dp
+  content width; below it, date/devices follow all main content. Main-column
+  module breakpoints are 560/820dp and shortcut breakpoints are 380/720dp.
+  One whole-page vertical viewport owns scrolling; recent columns share a
+  horizontal surface when narrow.
+- Start Capture and Run Startup Test only navigate. Trace/HPROF imports open an
+  explicit native picker and navigate only after an ordinary file is selected;
+  cancellation preserves the current route. Home-only native File actions use
+  the same handlers. No shortcut automatically captures or runs a benchmark.
+- Device projection is read-only and reuses the shared discovery owner. Count
+  online devices only; distinguish initial loading, successful zero and failure,
+  render every discovered status and preserve projection while refreshing.
+  Home must not select devices or authorize profiler operations.
+- Recent has exactly Name / Package / Type / Captured / Action, weighted
+  2.2/1.6/0.85/1.3/0.8, at most six entries and compact keyboard-focusable Open
+  text. The Rust-owned CPU index is currently the only persistent adapter;
+  Layout/Trace/Memory missing adapters are explicitly identified, including in
+  empty states. No Compose indexes are read or migrated. The metric counts the
+  displayed projection, not total history; unknown package/capture time is `—`.
+- Home reads metadata/stat information off the UI thread, without parsing or
+  hashing full profiles, creating/migrating a database or modifying indexes.
+  Checkpointed immutable SQLite reads fail closed on malformed schemas, pending
+  journal data or concurrent changes. Explicit Open repeats CPU binding,
+  snapshot digest and parser validation. Re-entering Home refreshes history;
+  device notifications do not trigger history reads.
+- Date uses the already-pinned GPUI local-date adapter and localized names, not
+  shell commands, a network service or UTC substitution. Regression sources may
+  be authored and compiled; execution, native screenshot/pixel matching,
+  keyboard, real-device and package acceptance remain separate deferred gates.
+
+### Rust Network UI fidelity continuation (2026-11-07)
+
+- Continue from the existing dedicated Network workspace rather than adding a
+  second implementation. Current Compose `NetworkProfilerScreen.kt`,
+  `NetworkWorkspacePanels.kt` and `NetworkProfilerMainPage.kt` remain the oracle.
+  Preserve the fixed 40dp toolbar and shared 4dp page/card rhythm. Import, live
+  capture, JSON, HAR, CSV, raw bundle and AI actions keep the reference grouping;
+  unsupported live/HAR/raw actions are disabled with specific reasons. Rust
+  JSON/CSV labels continue to disclose that they export only the published page.
+- The primary controls are Requests / Domains, outcome, count and elastic search;
+  below 1000dp actual page width they use two main rows. HTTP status, method and
+  sorting are Rust extensions in a collapsible secondary region, with an active
+  filter count when collapsed. Search drafts survive tab changes. Whole-session
+  queries, Enter/Apply, Reset and bounded paging remain intact. Outcome controls
+  cannot relabel HTTP response classes as transport success/failure.
+- Request columns share the exact reference weights
+  `0.65/2.35/0.58/0.78/0.72/0.68/0.82/0.95`; header and body use one 900dp-minimum
+  horizontal surface, method is semibold, and all HTTP 4xx/5xx use the error tone.
+  This tone does not establish the call outcome. Wide panes use 1.8:1; narrow
+  panes stack at 1:1.2 with independently scrollable list and detail areas.
+- Only the shell viewport and Network page own their respective boundaries;
+  Network is not wrapped in another shell vertical scroller. The toolbar stays
+  fixed, the natural-height content scrolls, and list/detail retain minimum
+  usable pane space on short windows. Wrapped filters/messages add natural
+  content height rather than overflowing a guessed fixed page height. Only the
+  36dp detail title stays fixed; all detail evidence/actions scroll together.
+- Detail follows the reference header/subtitle, method/outcome/bytes summary,
+  confidence legend, evidence card, ten phase rows and four distinct content
+  blocks. The minimized artifact is called a HAR entry, never a verified HTTP
+  exchange/redirect chain. Timing header/body phases remain distinct from
+  header/body content evidence. Phase durations and confidence remain unavailable
+  rather than inferred from the total source duration. Detail-copy reconstructs
+  the fixed minimized whitelist and cannot recover arbitrary extra cells/raw URL.
+- A transfer summary with all sizes unknown is `—`, not `0 B`. Partial known sizes
+  are labeled a known subtotal; zero is retained only when supported by known
+  measurements or a successfully empty session. No fake timeline, domains,
+  protocol, connection reuse, exchange count or completeness is introduced.
+- Full Network feature parity still needs real capture and richer explicit
+  adapters. Native screenshot/pixel matching, keyboard/device/import interaction,
+  provider and packaged acceptance are deferred separately from compile checks;
+  no tests are executed during this rewrite stage.
+
+### Rust Battery workspace reference port (2026-11-07)
+
+- Reference: `BatteryProfilerMainPage.kt`, `BatterySessionWorkspace.kt`,
+  `BatteryProfilerScreen.kt`, `BatteryRunWorkspace.kt` and
+  `BatteryWorkspaceEvidence.kt` in `desktop-viewer/battery-profiler/battery-app`.
+  Preserve the compact command bar, experiment-session rail, main results
+  viewport and copyable footer status; the shell owns shared device/process
+  selection. Reuse Studio colors, theme accent/dividers, 4dp workspace/card gaps,
+  8dp card padding and the shared 16/13/11 typography tiers. No decorative second
+  page header or independent design-token layer is introduced.
+- The result flow is summary metrics, source capability/attribution strip,
+  baseline-comparison boundary, six-column run table, selected-run workspace and
+  diagnostics. Run columns retain the reference's 70/100/110/90/110/100 weights
+  and shared horizontal scrolling below a 580dp minimum table width. Summary
+  cards adapt to available width and show p90, sample count and missing count.
+  Statistics use the reference nearest-rank quantile, including the lower middle
+  median for an even number of samples. Temperatures may be negative Celsius.
+- The selected-run workspace keeps the two snapshot/history chart regions and
+  eight resource tabs: Wakelocks, Alarms, Jobs, Sensors, Energy, Network, History,
+  Warnings. All eight resource tabs remain present even without Energy records;
+  only a scalar energy metric without samples is omitted. Below 860dp actual
+  workspace width, charts and table/inspector stack;
+  wider layouts use a 290dp evidence inspector. Search filters the full selected
+  run's resource collection before bounded pagination. Stable evidence identity
+  uses source indices, not filtered positions or duplicate names; changing the
+  run or resource tab resets its selection, query and page.
+- Rust currently reads a schema-v1 derived report, not raw snapshots. Raw charge
+  samples, history tracks, packet/radio breakdowns, device/boot/accumulator
+  continuity and experiment cohorts cannot be reconstructed from totals. Keep
+  those chart/inspector regions visible with explicit unavailable explanations;
+  do not draw simulated samples, infer power rails or label byte aggregates as
+  request events. Session navigation lists only genuinely loaded/saved evidence;
+  a loaded report is not automatically a persisted capture session.
+- Missing timers/counters are `—`, never measured zero. An explicitly present
+  empty timer array means zero reported timer records, not verified inactivity.
+  Preserve timer confidence, energy source/scope/confidence, symbols and imported
+  warnings verbatim; unknown labels are not trusted. Alarm counts cannot be
+  relabeled wakeup-only counts. Timer sums can overlap and are not CPU time.
+  Never sum component totals with their children or mix energy sources, scopes,
+  confidence or units into one scalar. A scalar energy metric is allowed only
+  for compatible, unambiguous imported record identities and retains its labels;
+  a system-model estimate is not hardware-measured energy.
+- Baseline regression remains unavailable unless explicit matching workload,
+  device/boot, stats-period continuity, charging, thermal and duration evidence
+  exists. Equal UID, package name or run duration alone is insufficient. Do not
+  present a percentage delta or significance claim from an unqualified report.
+- Live experiment, automatic app launch, global BatteryStats reset, bugreport /
+  Legacy Historian and raw-bundle export need real Rust adapters. Keep unsupported
+  controls disabled with specific reasons; selecting a device or opening a
+  configuration dialog grants no capture/reset authority. Reference configuration
+  shows Interactive/Timed/Repeated/low-frequency Online, duration 15/30/60/120/
+  300/600s, polling 5/10/15/30/60s, measured runs 1/3/5/10 and cooldown 0/15/30/
+  60/120s (Repeated only), without storing fake applied preferences.
+- JSON/CSV export labels disclose the published runs-page scope, not a lossless
+  session archive. AI still requires the existing explicit preflight/confirmation
+  and may only receive a bounded, appropriately scoped evidence projection.
+  Build/catalog/format checks are separate from GUI fidelity, device capture,
+  provider and packaged acceptance. Regression sources may be authored and
+  compiled; test execution remains deferred during the rewrite.
+
+### Rust Startup workspace repair (2026-11-07)
+
+- Reference: current `StartupProfilerMainPage.kt`, `StartupProfilerScreen.kt`,
+  `StartupWorkspaceControls.kt` and `StartupWorkspaceMetrics.kt`, not the generic
+  Rust artifact list. Keep a fixed compact command bar, Cold/Warm/Hot cards,
+  scenario configuration, four metrics, waterfall region, seven-column runs
+  table, baseline boundary and evidence rail visible even before an import.
+  Reuse Studio tokens, 4dp workspace/card gaps, 8dp panel padding and 16/13/11
+  typography; do not add another shell title or decorative banner.
+- Measure actual content width: at 1100dp use a 300dp evidence rail with an
+  independent viewport; below it stack evidence after the main content in one
+  viewport. Table header/body share horizontal scrolling below 760dp with
+  weights 0.7/1/1/1/1/1.1/0.8. Toolbar actions scroll horizontally when narrow.
+- Rust currently imports Startup CSV only. Mode cards explicitly filter the
+  imported requested mode, never establish observed mode or authorize capture.
+  Live configuration/start, Agent phases, baseline comparison and Open Trace
+  remain disabled with specific adapter/evidence reasons. An imported Trace path
+  is metadata, not authority to open a local file. Do not draw invented phases
+  or treat total time as TTID, TTFD or Agent first frame.
+- Query/filter statistics and exports use the same immutable published page;
+  compute whole-cohort statistics off the UI thread. Selection uses stable
+  Startup run IDs, independent of Frame state, and resets to the first visible
+  run when the selected ID leaves the current page. Failed/cancelled operations
+  retain the previous published page, filter, summary and selection.
+- Retain missing durations and sources as unavailable; imported values and
+  compiler/profile/environment/trace declarations are not independently
+  verified. Only explicit whitelisted evidence fields are projected. Diagnostics
+  stay verbatim and bounded in the UI. JSON/CSV labels disclose current-page
+  scope and are not a lossless report round-trip.
+- Cold preparation never trusts `am force-stop` to be synchronous and never
+  aborts on a title-bar PID disappearing, which is the expected effect of the
+  experiment. Poll the package process table, require continuous absence for the
+  configured settle delay, retry the stop once after a bounded wait, and stop the
+  experiment before any measured launch only if a process survives; that failure
+  names the observed PIDs and processes instead of implying the selected process
+  is invalid. The preparation is re-confirmed immediately before the measured
+  launch: a restart inside that gap is stopped again, and only a package that
+  stays alive is reported instead of publishing a launch as Cold.
+- Author regression coverage and run formatting/compilation checks only during
+  the rewrite. Test execution, native screenshot fidelity, keyboard/device,
+  provider and package acceptance remain distinct deferred gates.
+
+### Rust GPU Analysis Hub reference port (2026-11-07)
+
+- Reference: `GpuAnalysisHubScreen.kt`, `GpuAnalysisHubArtifacts.kt` and
+  `GpuHubModel.kt` in `desktop-viewer/gpu-inspector-integration/presentation`,
+  plus `GpuIntegrationMainPage.kt` in `gpu-integration-app`. Preserve the compact
+  analysis toolbar, four summary cards, artifact rail, tabbed analysis center and
+  capability/open-with rail. Reuse Studio workspace/card gaps, shared colors and
+  16/13/11 typography rather than adding a second page header or token system.
+  The Compose reference uses a 1100dp wide-layout boundary, 264dp artifact rail,
+  300dp insight rail, 236dp stacked artifact rail and two-row summary below 900dp.
+  Narrow content stacks the regions and owns their scrolling at page level.
+- Retain Overview, Artifacts, Related analysis and Tool capability tabs, the
+  artifact metadata preview and the kind/file/device/package/API/captured/status/
+  action table contract. A session-local multi-artifact collection is not a
+  persistent catalog restoration. Only explicit imported metadata may supply
+  device, package, API and capture time; file modification time is not capture
+  time. Current device properties do not retroactively become artifact metadata.
+- Keep file identity (recorded size and SHA-256) distinct from current location.
+  Verification, relocation and open routes must check the selected artifact;
+  relocation accepts matching content only and preserves the previous artifact
+  on mismatch, cancellation or failure. Summary availability derives from actual
+  verification state, not existence, filename or extension alone. Selection,
+  query and bounded pagination must not substitute filtered positions for stable
+  artifact identity.
+- Device graphics properties come from explicit authorized device-context reads,
+  not selection alone. AGI configuration, version/help probe, GUI launch and
+  artifact-open capability are separate evidence states. A successful launch
+  does not imply supported automation arguments or successful artifact opening;
+  disclose GUI-only/manual opening when no verified artifact-open route exists.
+  No inferred launch arguments, invented driver/API details or unsupported
+  cross-artifact relationship claims are introduced.
+- GPU counters, shader hotspots, render passes, draw calls and overdraw remain
+  explicit unavailable panels until stable parsers supply real evidence. AGI and
+  Perfetto retain their separate analysis responsibilities. Never fabricate
+  graphics metrics or convert unrelated CPU/Frame evidence into GPU counters.
+- All application-owned GPU display strings have paired English/Simplified
+  Chinese catalog entries. Format arguments use semantic names; artifact names,
+  paths, identifiers, arguments and imported diagnostics remain verbatim.
+  Catalog/format/compiler checks do not establish native screenshot fidelity,
+  keyboard interaction, authorized device behavior, real AGI compatibility,
+  provider or packaged acceptance. Tests may be authored and compiled, but test
+  execution remains deferred during the rewrite.
+
+### Rust Benchmark Regression reference port (2026-11-07)
+
+- Reference: `BenchmarkReportsScreen.kt`, `BenchmarkComparisonTable.kt`,
+  `BenchmarkTrendPanel.kt`, `BenchmarkReportsState.kt` and
+  `BenchmarkCompareSettingsDialog.kt` under the Compose benchmark presentation,
+  plus `BenchmarkRegressionMainPage.kt`. Preserve the compact header action row
+  beginning with baseline/current selectors, four summary cards, comparison
+  table, 210dp trend region, 320dp report/inspector rail and bottom status line.
+  Reuse shared Studio colors, spacing and 16/13/11 typography. Narrow content
+  must keep all regions reachable without compressing evidence or table columns.
+- Comparison columns retain the reference benchmark/baseline/current/delta/
+  severity/confidence/classification weights 2.4/1/1/1.2/1/1/1.2. Search and
+  classification/severity filters operate on stable case/metric identities;
+  selection and bounded paging never substitute filtered row positions for
+  source identity. Empty/loading/error/disabled states preserve prior evidence.
+- Baseline/current choices refer to actual imported runs. The session-local
+  collection is not restored SQLite history; trend labels follow import order
+  unless explicit build identities exist. Compare only one case/metric/unit at
+  a time, display genuine samples/medians, flag incomplete or differing cohort
+  identities and low sample counts, and never invent build/commit chronology.
+- Reuse Rust `RegressionPolicy` and its versioned analyzer contract. Relative
+  and absolute thresholds, raw sample minimum, BCa bootstrap iterations,
+  confidence level and inconclusive handling are distinct controls. Do not
+  invent unsupported arbitrary release blocking patterns or confidence classes.
+  A numerical confidence interval is not an Exact/Derived confidence label;
+  without that label, do not infer reference High/Low regression severity.
+  Missing/incompatible/inconclusive evidence stays fail-closed under the active
+  gate policy rather than becoming a fabricated performance score.
+- Report Summary and Comparison Inspector retain decision, policy, compatibility,
+  reasons, samples and trace metadata. Imported trace paths are evidence, not
+  authorization to open arbitrary local files. PDF/report sharing/orchestration
+  require real adapters and remain visibly disabled when absent. Current-page
+  JSON/CSV exports disclose their bounded comparison/policy scope and are not a
+  lossless input archive, PDF, restored report catalog or publication.
+- Every application-owned Benchmark string has paired English/Simplified Chinese
+  catalog entries and semantic named format arguments. Preserve imported metric
+  names, case identities, paths and unknown diagnostics verbatim. Formatting,
+  catalog validation and compilation do not establish native pixel fidelity,
+  keyboard/device execution, real release acceptance or packaged qualification.
+  Regression sources may be authored/compiled, but test execution remains deferred.
+
+### Rust Benchmark Regression Compose-parity completion (2026-11-08)
+
+The 2026-11-07 reference port kept the page session-local and left PDF, report
+sharing and orchestration disabled because no adapter existed. This entry
+supersedes those three limitations only; the analyzer contract above is unchanged.
+
+- The page is a dedicated `BenchmarkWorkspace` (`aps-app/src/benchmark.rs` with
+  `benchmark/{model,page,table,trend,rail,dialogs,ai}.rs`), not the generic import
+  workspace. It owns the Compose state machine: persistent run catalogue,
+  baseline/current selection with reparse-from-source, compare + gate evaluation,
+  exported-report catalogue, orchestration runtime, filters/selection, AI context.
+- `aps-benchmark` gained the missing adapters as ports of the Compose modules:
+  SQLite run store (`benchmark_run/metric/case/trace` plus history queries),
+  exported-report JSON index, JSON/CSV/Markdown/JUnit/SARIF/PDF writers (the PDF is
+  a dependency-free PDF 1.4 writer), and Macrobenchmark plan/command/streaming
+  runner/result locator. Imported-run content identity is the SHA-256 of the JSON
+  bytes, so re-importing identical bytes replaces the catalogue row.
+- Compose-visible evidence semantics are ported where they do not weaken the
+  analyzer: structured compatibility issues with hard/soft classification,
+  Exact/Partial evidence confidence from actual raw sample counts, release-gate
+  policy (blocking patterns, allowed regressions, minimum confidence, fail on
+  regression, inconclusive handling) and its versioned decision/reasons. Regression
+  verdicts still come from the Rust BCa/practical-threshold engine; the compare
+  dialog exposes its controls (relative/absolute threshold, minimum samples, BCa
+  iterations, confidence level, same-device requirement) next to the gate policy.
+- Report files are written only through the user's save dialog and recorded in the
+  local report index; Share Report reveals the file in the platform file manager.
+  Run Benchmark executes the target project's own Gradle wrapper after an explicit
+  Start with cancellation, timeout and bounded streamed output, then imports the
+  produced JSON like an ordinary import. Recorded trace artifacts open through the
+  Trace Analyzer import path (the same evidence boundary as every other page).
+- No Compose source changed. Strings remain English/Simplified Chinese catalog
+  pairs; imported identities, paths and diagnostics stay verbatim. Native
+  fidelity, real device/benchmark acceptance and packaged qualification remain
+  separate evidence gates - this entry records implementation, not those gates.
+
+### Rust AI settings local configuration import (2026-11-08)
+
+The Rust settings port exposed "读取本地配置" only on Codex/Claude and left
+`AiRuntime::import_local_config` returning `E_AI_IMPORT_NOT_FOUND`; the
+OpenAI-compatible Custom connection was manual-only. This entry supersedes that
+gap for the Rust desktop app; Compose source and its settings behavior are
+unchanged.
+
+- Every Provider card now shows the same compact "读取本地配置" action. Codex and
+  Claude read their own static files; the OpenAI-compatible Custom connection
+  reads the local Codex configuration, because a third-party gateway exists only
+  as a `model_providers` entry there. `ProviderKind::local_config_source` owns
+  that mapping, and the imported connection keeps its own kind, so a Custom
+  import never inherits a Codex credential.
+- Import is a real bounded read again: home directory from
+  `aps_platform::home_directory`, an explicit environment map, the ported
+  symlink-rejecting 256 KiB `aps-ai::platform::import` reader, and the stable
+  `E_AI_IMPORT_*` failure taxonomy. No credential helper runs and nothing is
+  written.
+- The imported secret never reaches the page. The runtime holds it in pending
+  imports and writes it to the credential store only when "保存并应用" is confirmed
+  without a replacement key; importing again without a secret drops the stale
+  pending value so it cannot be saved later by accident.
+- An imported API endpoint clears the model-list endpoint input, then drops the
+  discovered catalog and its endpoint pairing, because the API and model-list
+  endpoints must share one origin. Import failure keeps the draft untouched.
+
+### Rust Frame Analyzer exported-analysis import (2026-11-08)
+
+The Rust Frame Analyzer shipped Export → JSON (`frame-analysis.json`, Compose
+schemaVersion 3) but File > Open only parsed gfxinfo FrameStats text, so opening
+an exported report failed with "No usable frame rows were found in
+frame-analysis.json." This entry supersedes that gap for the Rust desktop app;
+Compose source and its File > Open behavior are unchanged.
+
+- File > Open accepts both inputs; the JSON branch is content-detected by a
+  leading `{`, so behavior never depends on a file name. The picker prompt names
+  both formats (`Import FrameStats or frame-analysis.json`).
+- The importer reads only the bounded frame rows through the shared `aps_json`
+  limit boundary, rebuilds `FrameSample`s and re-runs `FrameJankAnalyzer`, so the
+  opened page is self-consistent with the source filter, clusters, attributions
+  and view filters. Exported verdicts, clusters and summary are derived data; the
+  live page never trusts them as state.
+- Unsupported schema versions, unusable rows and malformed documents fail closed
+  with explicit messages instead of the gfxinfo "no usable frame rows" error. The
+  existing bounded text read, SHA-256 content identity and provenance fields are
+  reused, and the imported session persists like any other import.
+- The session keeps the real frame source, package and capabilities, and warns
+  that the report does not identify device/API level and that the exported rows
+  were re-analyzed by the current analyzer.
+- Verified against the user's Compose export (503 frames): the imported summary
+  matched the export (0.0% deadline misses, p50 8.02 ms, p95 13.23 ms, worst
+  123.51 ms) and the page rendered 503 frames with no error. A debug-only
+  `APS_RUST_OPEN_FRAME_JSON` seam opens a report on launch for native
+  verification; release builds never read it.
+
+### Themed Card Surfaces (2026-11-08)
+
+- The persisted accent color (主题色 / Accent) now owns the card surfaces of every
+  profiler workspace, not only the Memory page. `StudioColors` derives the
+  Compose `withWorkspaceStyle()` palette from the active theme accent: cards use
+  an 8% accent panel over the dark base (white cards on the light workspace),
+  section headers and alternating surfaces 6% (the title-bar surface in light),
+  card borders 22% accent (the neutral divider in light) and fields the darker
+  control surface (white in light). Window chrome keeps the title-bar surface, so
+  the rail, title bar and toolbars never compete with the cards.
+- This supersedes the flat-sheet rule that every background in the window painted
+  the title bar color, and the Memory-only workspace-style override that lived in
+  `import/memory/widgets.rs`. No page may re-derive a panel or section palette:
+  `StudioColors::from_theme` is the single source, so changing the accent repaints
+  cards, KPI tiles, table headers, settings cards and inspector panels together
+  while the shell chrome stays stable.
+- Accent-derived `selected_row` tints follow the same source (32% over the dark
+  card, 20% over the light card) instead of hardcoded blue selection colors.
+
+### Memory Empty-State Structure (2026-11-08)
+
+- The Memory workspace never replaces a view with a full-page placeholder before
+  an HPROF is imported. The Classes view keeps its primary filter bar, eight KPI
+  cards, heap-distribution card and the classifier/instance panes; Overview,
+  Dominators and Diff already kept their metric cards, tables and panes. Only
+  data cells are empty.
+- Empty data is explicit, never fabricated: KPI and Overview cards show the
+  localized "Unavailable" value instead of zero, the distribution card keeps its
+  title and bar with a no-snapshot legend, and the classifier/instance tables
+  keep their headers plus the existing import and selection hints. The permanent
+  footer continues to report "No snapshot".
+- Unavailable placeholders derive from `MemoryState::loaded()`, so importing the
+  first snapshot replaces them with real metrics without changing the layout.
+
+### Rust AI settings model discovery (2026-11-08)
+
+After "读取本地配置" the AI settings page could not refresh models: the button only
+enabled for an already-saved credential or a typed key, discovery read the saved
+connection rather than the visible draft, and the app never installed an HTTP
+client (GPUI's default is a null client), so any provider request failed with
+`E_AI_MODEL_CATALOG_NETWORK`.
+
+- "读取本地配置" enables "刷新模型" and starts discovery as soon as an import
+  supplies a credential; the imported secret stays in the runtime's pending
+  imports until Save.
+- Settings discovery uses the visible draft (endpoint pair, credential kind,
+  typed key) through `AiRuntime::load_draft_models`; it never reads or caches the
+  saved connection. A typed key wins, then the saved credential for that
+  provider/kind, then the last local import; the result is not cached because the
+  connection is not saved yet.
+- The app installs a real GPUI HTTP client (`aps-app/src/net.rs`) through the
+  existing host-process boundary: each request runs the system `curl`, headers
+  (including the authorization value) travel through curl's config on stdin so
+  secrets never enter the process argument list, the bounded JSON request body is
+  staged in a private app-owned file for the duration of the request, and the
+  response head returns immediately while the body streams into `AsyncBody` so
+  SSE responses keep working.
+- Verified with a loopback OpenAI-compatible gateway (import -> auto refresh ->
+  picker lists the gateway models; manual refresh repeats the request with the
+  imported bearer token) and with a real HTTPS host (the HTTP status surfaces as
+  `E_AI_HTTP_STATUS` instead of a transport failure).
+- The AI chat model menu reads the saved connection only. An import/refresh on
+  the settings page without "保存并应用" left the menu with a generic failure; it
+  now names the missing saved credential (`E_AI_MODEL_CATALOG_CREDENTIAL`), maps
+  provider HTTP/list failures explicitly, and every catalog error state offers
+  "打开 AI 设置". The settings page also marks an unsaved connection instead of
+  letting the applied-provider line imply the draft already reaches the chat.
+- A runtime test proves Save publishes the catalog: after `save_connection` with
+  models, the chat menu's `load_models(provider, false)` returns them without a
+  provider request.
+- `APS_RUST_AI_MEMORY_SECRETS` (debug builds only) opens the AI runtime with the
+  in-memory credential store, so native checks never write the user's login
+  Keychain.
+
+### Trace Analyzer Footer Status (2026-11-08)
+
+- The Trace Analyzer keeps one footer. The bottom status bar shows the device
+  selection and, immediately after it, the current operation feedback
+  (import/diagnostic run, failure, or last completion). No second status bar is
+  stacked above the footer while an import or preset runs.
+- Long feedback ellipsizes inside the bar and remains selectable; failures use
+  the error color and keep precedence over completion text. This deliberately
+  supersedes the Compose workspace's separate `TraceWorkspaceStatus` strip for
+  the Rust rewrite; do not restore it for parity.
+- No header-area notice row sits between the toolbar and the workspace. The
+  imported trace name and duration render in the footer status instead of a
+  separate notice line with its own copy action, and preset/capture completion
+  text also reports through the footer. Device refresh and tool failures keep
+  their existing error rows.
+
+### Neutral Card Surfaces (2026-11-08)
+
+- Card fills are neutral in every workspace; this supersedes the Themed Card
+  Surfaces entry above. The persisted accent (主题色 / Accent) no longer paints any
+  card, KPI tile, table header, panel or settings card, and no page-local card
+  helper tints its own fill with the accent or a semantic tone.
+- `StudioColors::for_mode_with_accent` keeps the Compose base palette
+  (`ViewerPalettes.dark`/`light`) and composites no accent into `panel`,
+  `section_background`, `border` or `field`: dark cards use the neutral base
+  panel over the title-bar workspace with the shared divider for borders, and
+  light cards stay white over the toolbar workspace.
+- The accent is limited to interactive state and labels: text, focus, outlines,
+  controls, charts and selection (`selected_row` remains the accent tint over the
+  neutral panel). Semantic tones still color KPI outlines, labels, icons and
+  bars, but never the card fill.
+- Ownership stays in `aps-app/src/studio.rs` as the single palette source; the
+  page-local accent/tone card fills were deleted from
+  `import/memory/dashboard.rs`, `shell/home_page.rs`, `frame/page.rs`,
+  `import/network.rs` and `trace/page.rs`. Do not reintroduce
+  `panel.blend(accent|tone)` card fills.
+
+### Source Workspace Rail Insets (2026-11-08)
+
+- The Source Workspaces three-pane rail is symmetric around its workspace cards.
+  The shell divider sits directly on the rail's left edge and leaves no splitter
+  gutter, so the card used to sit 4 px from the left divider but 7 px from the
+  splitter's 1 px line.
+- The rail now applies the splitter gutter (`layout::SPLITTER_HALO`, half of the
+  7 px splitter around its 1 px line) as a leading inset and removes it from
+  `workspace_content_width`, so the card fills the remaining content box with a
+  gutter + 4 px padding gap on both sides. The same gutter keeps the workspace
+  search row symmetric (9 px / 9 px). Splitter geometry, pane widths and the
+  minimum content width are unchanged.
+- The earlier equal-inset rule only compensated scrollbar chrome and still holds:
+  scrollbar width is never subtracted from the content width. Symmetry now also
+  accounts for the missing divider gutter on the shell edge.
+
+### Source Workspace Card Actions (2026-11-08)
+
+- The workspace card actions (同步 / AI 源码上传 / 移除) never leave the card
+  border. At the rail's 220 px minimum the three labels cannot share one line, so
+  the action row wraps onto a second row; at the default 360 px rail they still
+  sit on one row.
+- The row is full-width and wraps with the shared 6 px gap, matching the Capture
+  page's wrapping action rows. No label is truncated, so the AI upload state
+  (allowed / blocked) stays readable at every rail width.
+
+### Rust Bitmap Thumbnail Grid (2026-11-11)
+
+- Bitmap image dumps display as a wrapping thumbnail grid in an independently
+  bounded vertical scroll viewport, replacing the text-only image selector.
+- Each 164 x 166 px tile contains a 112 px-high, aspect-preserving image and
+  compact original index, dimensions and PNG byte count. Tile dimensions remain
+  stable while images load; narrower windows reduce the number of columns.
+- Clicking a tile retains the existing selected-image state and updates the
+  metadata strip above the grid plus the adjacent original-image preview. The
+  preview stays fixed while the grid scrolls. Selection and keyboard focus use
+  existing controls and Studio tokens; extraction, capture, exports and evidence
+  semantics do not change.
+
+### Rust Compose Hierarchy Indentation (2026-11-11)
+
+- When system Composables are hidden, their descendants are displayed beneath
+  the nearest retained ancestor. Omitted system wrappers consume no indentation;
+  native View ancestors, siblings and hosted Android Views retain their place
+  in the displayed tree. No class-name heuristic or blanket root-depth reset is
+  used when Compose metadata is absent.
+- Keep display depth per original node separately from captured `depth` and
+  `parent_index`. Rows and horizontal width measurement share the same indent
+  calculation, and only displayed rows contribute to the content width.
+- Search and collapse never renumber nodes or mutate the captured tree. Enabling
+  all system nodes retains the full captured depth.
+
+### CPU Capture Planning In Settings (2026-11-11)
+
+- Settings adds Capture Planning after Simpleperf. This extends the earlier
+  six-section settings navigation; the CPU capture entry and legacy Capture
+  route both open this settings section, not a separate application workspace.
+- Embed the existing capture entity, reusing its draft inputs, selected target,
+  frozen plan, recording state and output. Simpleperf settings continue editing
+  the same sampling inputs; entering or switching settings never plans or records.
+- Keep one capture-owned scrolling viewport and expose its plan, confirm,
+  stop/save, cancel and clear menu commands only while this section is active.
+  Captured CPU output remains reachable through File > Open Captured CPU.
+- Auto-open completed protobuf output only while Capture Planning is visible
+  and the CPU workspace can accept it. Background completion, raw-only output
+  and occupied CPU workspaces preserve the existing manual-open behavior.
+
+### Rust CPU Function Details Placement (2026-11-12)
+
+- In the wide CPU workspace, function details begin directly below the timeline
+  resize handle. Analysis tabs, filters and call-stack breadcrumbs belong to
+  the left analysis column rather than pushing the details pane downward.
+- A selected flame-graph block's function, resource, inclusive weight and sample
+  count appear after the function-details content in the same scrollable pane,
+  not in a footer beneath the flame graph. Keep the summary selectable and
+  wrapping, preserving imported symbols/resources and localized metric labels.
+- Preserve the details visibility toggle and the existing stacked details pane
+  below 1000 px window width. Details and selection summary scroll together
+  without compressing their content. Chart selection, hover, zoom and analysis
+  queries retain their current behavior.
+
+### Rust CPU Flame Graph Colors (2026-11-12)
+
+- Flame-graph function blocks use the bundled Firefox Profiler category colors,
+  not a depth-based palette: User/Native is yellow, Kernel is orange,
+  DEX/OAT/JIT is green, and the scheduler Off-CPU pseudo-frame is blue.
+- Light and dark values preserve Firefox's Photon-derived fills and normal
+  opacity. Hover and selection use the category's highlighted fill, while
+  search matches and non-function aggregate markers retain their existing
+  semantic states.
+- Call-tree function cells place a fixed 10 px category swatch between the
+  disclosure arrow (or its leaf-row spacer) and the function name. Swatches
+  reuse the chart's opaque category fill for the active light/dark theme and
+  remain the same color on selection. Include their width in horizontal scroll
+  measurement without changing row height or arrow/row click behavior.
+
+### Rust CPU Flame Graph Geometry (2026-11-12)
+
+- Match the bundled Firefox Profiler flame graph, not a generic chart: 16 px
+  rows, the root row at the bottom, and the whole graph bottom-aligned inside
+  the available pane with blank space above it. The graph fills the pane width
+  even though the bounded drawing packet stays at its fixed logical width; box
+  x/width and hit testing scale between packet and display coordinates.
+- Reuse the official box treatment: snap left and right edges to even device
+  pixels, inset the right edge by 0.8 device pixels, and leave one device pixel
+  between rows. Labels use the official 10 px style, the category-specific
+  selected text color (dark text on yellow, white on orange/green/blue) and
+  the official light/dark foreground and canvas background.
+- Keep the existing drag zoom, selection, hover tooltip, context menu and
+  statistical-weight semantics. Snapping and bottom alignment affect painting
+  only; hit testing keeps the unsnapped packet geometry.
+
+### Rust CPU Stack Chart (2026-11-13)
+
+- Stack Chart uses time-spanning call-node boxes, not the one-pixel sample
+  histogram. Adjacent samples of the same call node merge into one box; a
+  different ancestry splits the box even when the function name matches. Rows
+  are top-down at the official 16 px height, fill the available pane width, and
+  draw one thread (the selected thread, or the highest-sample thread when the
+  filter says All).
+- Boxes floor their left edge, ceil their width, add the official 0.4 device
+  pixel border column and leave one CSS pixel between rows. Labels use the
+  official 10 px category text, and the canvas uses the official light/dark
+  background with 1 px side borders. The previous "one-pixel sample points"
+  notice is removed because boxes now have real sampled intervals.
+- Drag zoom, time filters, selection, tooltip and call-node details retain
+  their existing semantics. Box time ranges are sampled intervals, never
+  method execution durations.
+
+### Rust CPU Thread Activity Tracks (2026-11-12)
+
+- Thread tracks follow the bundled Firefox Profiler's default `cpu-category`
+  timeline, not its stack-height graph. Each expanded track reserves the
+  official 6 px marker lane, a 25 px activity graph, a 1 px gap and a 5 px
+  sample strip. The activity graph stacks per-pixel category contributions with
+  Firefox's Photon selected/unselected fills, category gravity and its 3/2/2
+  box-blur smoothing.
+- Exported simpleperf profiles carry no per-sample CPU delta, so every sample
+  covers its full sampling interval at 100%, matching Firefox's own fallback
+  when `threadCPUDelta` is absent. Do not invent CPU utilization, thread states
+  or idle time that simpleperf did not observe.
+- A sample's category is the Firefox category of its leaf frame, derived with
+  the same symbol/resource rule the bundled Gecko exporter writes. Native
+  tracks and the official viewer therefore classify and color the same exported
+  sample identically.
+- Preserve sampled timestamps, thread identity and record ordinals in the
+  bounded display packet. Decimation keeps the first representative per
+  quarter pixel and discloses omitted samples. Clicks resolve the original
+  nearest sample, including points omitted from the drawing packet.
+- A click opens the call tree, selects the sample's exact self/leaf call node,
+  expands its ancestors, scrolls it into view and displays function details.
+  Numeric ancestry is shared with the query engine; transformed and inverted
+  projections resolve their actual retained self node, not a name match.
+- Selecting a sample may change the analysis thread but never removes the
+  available thread tracks. Keep thread-label filtering and time-range drag
+  separate. New imports and explicit filter changes clear stale selection.
+- Highlighted samples use Firefox's selected fills; other samples use the
+  category's unselected alpha. The sample strip follows the official Photon
+  blue values (light blue-40/blue-70, dark blue-50/blue-65) and the 10 device
+  pixel cap. Samples may paint a taller selected band inside an unselected
+  category band, matching the official sawtooth selection overlay.
+
+### Rust CPU Viewer Selection (2026-11-12)
+
+- Simpleperf settings expose Native Rust, bundled Firefox Profiler and online
+  Firefox Profiler as a persisted single-choice preference. Changing it never
+  opens a browser, exports a report, records a device or uploads profile data.
+- CPU toolbar and File > Export expose an explicit open-selected-viewer action.
+  Successful file, saved-snapshot and captured-profile imports also hand the
+  profile to the selected engine. With the bundled local Firefox engine that
+  handoff opens the system browser and returns the shell to Home; the app does
+  not also present the native analysis for the same import, so only one profile
+  view opens. The explicit open action keeps the current page. Native and online
+  engines retain their existing behavior; choosing a preference alone never
+  launches a viewer. An engine change during local export cancels the handoff.
+  Bundled mode exports the loaded session as Gecko gzip and serves the pinned
+  `third_party/firefox-profiler/dist` build from a loopback-only server in the
+  system browser; no embedded webview or second parser replaces APS ownership of
+  the imported session.
+- Local assets and the private profile endpoint reject traversal and foreign
+  origins. Closing/replacing the CPU session shuts down the owned server.
+  Missing build assets or storage produce an error, never silent online fallback.
+- Reopening the selected local viewer for the current profile reuses the live
+  viewer URL and does not hand a second tab or window to the browser. A new
+  import or closing the session clears that identity so the next profile opens
+  normally.
+- Online mode asks for a destination and opens the official site only after a
+  successful non-overwriting export. The user imports that file manually; no
+  automatic profile upload, localhost profile URL or postMessage crosses into
+  the official site. Cancelling the save dialog leaves the browser unopened.
+
+### Rust Firefox AI Query Extension (2026-11-12)
+
+- The local viewer exposes a versioned, read-only pull interface for context,
+  threads, selection, function detail and bounded call-tree evidence. APS issues
+  commands; the browser never owns prompts, providers, credentials or AI execution.
+- APS owns the adapter under `integrations/firefox-profiler/`. The loopback host
+  injects an external script in the served response only. Upstream source,
+  production assets and the pinned submodule remain unchanged and independently
+  updateable. Upstream selector compatibility is checked, not assumed permanent.
+- Each host page and browser document has a separate identity. Node IDs bind to
+  the document, view revision and call-node index, never display-name matching.
+  Thread/range/filter/selection changes invalidate old view IDs. Foreign profile
+  sources, unsupported views and missing upstream interfaces fail explicitly.
+- Token, Host and Origin checks, strict JSON budgets and the bounded mailbox
+  constrain transport. Reload, profile replacement, timeout and shutdown cancel
+  pending work. The API is local-only; the official online site is not extended.
+- The CPU AI entry asynchronously pulls one snapshot and validates allowlisted
+  evidence against the source digest, query generation, viewer epoch and current
+  request/navigation epoch before using the existing AI conversation/preflight.
+  Browser errors never substitute native CPU selection. Numeric weights retain
+  their reported units and are not reinterpreted as exact method durations.
+
+### Rust Bitmap Gallery Height (2026-11-21)
+
+- The Bitmap image dump page is a bounded flex column: the workspace root fills
+  the remaining height and hands it to the gallery row, so the thumbnail grid
+  and the selected-image preview always get a non-zero size. An auto-height root
+  collapses every nested flexible pane to zero height and the gallery disappears
+  while the summary still reports the extracted images.
+- The selected-image metadata strip is a plain, non-scrollable text row. A
+  horizontally scrollable strip in the same column consumes the height of the
+  gallery list that follows it, leaving the grid invisible.
+- The thumbnail list itself scrolls vertically inside the page; the grid keeps
+  its wrapping multi-column layout, fixed 164 x 166 tiles and the adjacent
+  preview. Bitmap findings, Native heap, ART samples and leak tables use the
+  same bounded page root so their scrolling rows are laid out too.
+- A tile labels its PNG size in KB (MB past a megabyte) instead of a raw byte
+  count, and the accessibility label carries the same text. The page's PNG
+  storage total uses the shared memory byte label instead of a bare `B`.
+
+### Memory Capture Entry (2026-11-21)
+
+- Every capture has exactly one entry. The bitmap dump and the native heap
+  capture live on their own pages, immediately after 导入产物/导出产物, and are
+  no longer offered in the toolbar; ART samples still capture from the memory
+  toolbar's capture group.
+- Each of those page captures occupies a single action slot: it starts the
+  capture when idle and becomes 取消操作 while one runs, so the page never
+  renders a separate cancel button beside it. The Bitmap findings state (an
+  imported HPROF without a bitmap dump) reuses that same slot instead of adding
+  a second capture or a disabled export.
