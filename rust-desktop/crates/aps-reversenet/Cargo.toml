@@ -1,0 +1,12 @@
+[package]
+name = "aps-reversenet"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+aps-adb = { path = "../aps-adb" }
+# net + os-poll are opt-in features in mio 1.2.2 (default is only "log");
+# both are already compiled into the pinned mio 1.2.2 in Cargo.lock.
+mio = { version = "=1.2.2", features = ["net", "os-poll"] }

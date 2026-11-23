@@ -240,6 +240,8 @@ dependencies = [
  "aps-network",
  "aps-perfetto",
  "aps-platform",
+ "aps-reversenet",
+ "aps-screencast",
  "aps-source",
  "aps-startup",
  "aps-storage",
@@ -443,6 +445,21 @@ version = "0.8.2"
 dependencies = [
  "aps-contracts",
  "aps-primitives",
+]
+
+[[package]]
+name = "aps-reversenet"
+version = "0.8.2"
+dependencies = [
+ "aps-adb",
+ "mio",
+]
+
+[[package]]
+name = "aps-screencast"
+version = "0.8.2"
+dependencies = [
+ "aps-adb",
 ]
 
 [[package]]
