@@ -103,6 +103,11 @@ jobs:
           PERFETTO_TOOLS_DIR="$libdir/resources/perfetto-tools" bash scripts/install-trace-processor.sh
           cp -R dist/firefox-profiler "$libdir/resources/"
           test -s "$libdir/resources/firefox-profiler/index.html"
+          # Winscope viewer closure: committed static assets (ADR 0037), verified
+          # by the app via winscope-viewer-manifest.json before hosting.
+          cp -R rust-desktop/crates/aps-winscope/assets/winscope-viewer "$libdir/resources/"
+          cp rust-desktop/crates/aps-winscope/assets/winscope-viewer-manifest.json "$libdir/resources/winscope-viewer-manifest.json"
+          test -s "$libdir/resources/winscope-viewer/index.html"
           ln -s ../lib/aps-desktop/aps-app "$root/usr/bin/aps-app"
           ln -s ../lib/aps-desktop/aps-memory-worker "$root/usr/bin/aps-memory-worker"
           cp rust-desktop/crates/aps-app/assets/icons/linux/app-icon.png "$root/usr/share/icons/hicolor/1024x1024/apps/com.androidperformancestudio.rust.png"
@@ -131,6 +136,8 @@ jobs:
           cp "$libdir/aps-memory-worker" "dist/rpm/SOURCES/aps-memory-worker"
           cp "$libdir/resources/perfetto-tools/trace_processor_shell" "dist/rpm/SOURCES/trace_processor_shell"
           cp -R "$libdir/resources/firefox-profiler" "dist/rpm/SOURCES/firefox-profiler"
+          cp -R "$libdir/resources/winscope-viewer" "dist/rpm/SOURCES/winscope-viewer"
+          cp "$libdir/resources/winscope-viewer-manifest.json" "dist/rpm/SOURCES/winscope-viewer-manifest.json"
           cp "$root/usr/share/icons/hicolor/1024x1024/apps/com.androidperformancestudio.rust.png" dist/rpm/SOURCES/app-icon.png
           cp "$root/usr/share/applications/com.androidperformancestudio.rust.desktop" dist/rpm/SOURCES/aps.desktop
           cat > dist/rpm/SPECS/aps-desktop.spec <<EOF
@@ -148,6 +155,8 @@ jobs:
           install -m 0755 %{_sourcedir}/aps-memory-worker %{buildroot}/usr/lib/aps-desktop/aps-memory-worker
           install -m 0755 %{_sourcedir}/trace_processor_shell %{buildroot}/usr/lib/aps-desktop/resources/perfetto-tools/trace_processor_shell
           cp -R %{_sourcedir}/firefox-profiler %{buildroot}/usr/lib/aps-desktop/resources/
+          cp -R %{_sourcedir}/winscope-viewer %{buildroot}/usr/lib/aps-desktop/resources/
+          install -m 0644 %{_sourcedir}/winscope-viewer-manifest.json %{buildroot}/usr/lib/aps-desktop/resources/winscope-viewer-manifest.json
           ln -s ../lib/aps-desktop/aps-app %{buildroot}/usr/bin/aps-app
           ln -s ../lib/aps-desktop/aps-memory-worker %{buildroot}/usr/bin/aps-memory-worker
           install -m 0644 %{_sourcedir}/aps.desktop %{buildroot}/usr/share/applications/com.androidperformancestudio.rust.desktop
@@ -213,6 +222,11 @@ jobs:
         with:
           name: firefox-profiler-dist
           path: dist/Android Performance Studio.app/Contents/Resources/firefox-profiler
+      - name: Stage Winscope viewer closure
+        run: |
+          mkdir -p "dist/Android Performance Studio.app/Contents/Resources/winscope-viewer"
+          cp -R rust-desktop/crates/aps-winscope/assets/winscope-viewer/. "dist/Android Performance Studio.app/Contents/Resources/winscope-viewer/"
+          cp rust-desktop/crates/aps-winscope/assets/winscope-viewer-manifest.json "dist/Android Performance Studio.app/Contents/Resources/winscope-viewer-manifest.json"
       - name: Package dmg and pkg
         env:
           RELEASE_TAG: ${{ github.ref_name }}

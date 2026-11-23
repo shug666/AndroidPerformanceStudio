@@ -21,6 +21,7 @@ use crate::{
     source::SourceWorkspace,
     targets::{TargetListsChanged, TargetSelectionChanged, TargetsWorkspace},
     trace::TraceWorkspace,
+    winscope::WinscopeWorkspace,
 };
 use aps_ui_foundation::{
     AccentColor, Destination, DisplayScale, Language, LayoutPreferences, Settings, TextKey,
@@ -273,6 +274,7 @@ fn debug_route_destination(route: &str) -> Option<Destination> {
         "network" => Destination::Network,
         "gpu" => Destination::Gpu,
         "benchmark" => Destination::Benchmark,
+        "winscope" => Destination::Winscope,
         "source" => Destination::SourceWorkspaces,
         "ai" => Destination::Ai,
         "settings" => Destination::Settings,
@@ -685,6 +687,7 @@ pub struct Studio {
     frame: Entity<FrameWorkspace>,
     benchmark: Entity<BenchmarkWorkspace>,
     inspector: Entity<InspectorWorkspace>,
+    winscope: Entity<WinscopeWorkspace>,
     imports: HashMap<Destination, Entity<ImportWorkspace>>,
     focus: FocusHandle,
     notice: Option<String>,
@@ -856,6 +859,18 @@ impl Studio {
         inspector.update(cx, |inspector, _| {
             inspector.set_studio(studio_handle.clone())
         });
+        // The Winscope page owns its proxy/viewer service lifecycle; the shell
+        // only routes navigation and language changes to it.
+        let winscope = cx.new(|cx| {
+            WinscopeWorkspace::new(
+                settings.language.resolved(),
+                settings_path
+                    .as_ref()
+                    .and_then(|path| path.parent())
+                    .map(std::path::Path::to_path_buf),
+                cx,
+            )
+        });
         let imports: HashMap<Destination, Entity<ImportWorkspace>> = [
             Destination::Memory,
             Destination::Network,
@@ -1023,6 +1038,9 @@ impl Studio {
             this.invalidate_ai(Destination::Benchmark, None, cx);
             this.refresh_route_menus(cx);
         }));
+        // Winscope page state (service running/capture mirror) repaints the
+        // shell when the page is visible.
+        subscriptions.push(cx.observe(&winscope, |_, _, cx| cx.notify()));
         // A benchmark case may record trace artifacts; opening one goes through the
         // same Trace Analyzer import path as every other page.
         subscriptions.push(
@@ -1338,6 +1356,7 @@ impl Studio {
             frame,
             benchmark,
             inspector,
+            winscope,
             imports,
             focus,
             notice,
@@ -2020,7 +2039,10 @@ impl Studio {
             | Destination::Home
             | Destination::Capture
             | Destination::MethodRecording => self.open_cpu(&OpenProfile, window, cx),
-            Destination::SourceWorkspaces | Destination::Ai | Destination::Settings => {}
+            | Destination::SourceWorkspaces
+            | Destination::Winscope
+            | Destination::Ai
+            | Destination::Settings => {}
         }
     }
 
@@ -2191,6 +2213,7 @@ impl Studio {
             Destination::MethodRecording => {
                 self.push_workspace_menus(&self.method, language, &mut build, cx)
             }
+            Destination::Winscope => {}
             Destination::Benchmark => {
                 self.push_workspace_menus(&self.benchmark, language, &mut build, cx)
             }
@@ -2423,6 +2446,9 @@ impl Studio {
         });
         self.inspector.update(cx, |inspector, cx| {
             inspector.set_language(self.settings.language.resolved(), window, cx)
+        });
+        self.winscope.update(cx, |winscope, cx| {
+            winscope.set_language(self.settings.language.resolved(), cx)
         });
         for import in self.imports.values() {
             import.update(cx, |import, cx| {
@@ -2877,6 +2903,7 @@ fn navigation_icon_data(destination: Destination) -> &'static [u8] {
         }
         Destination::Cpu => include_bytes!("../assets/navigation/ic_nav_cpu_profiler.svg"),
         Destination::Trace => include_bytes!("../assets/navigation/ic_nav_trace_analyzer.svg"),
+        Destination::Winscope => include_bytes!("../assets/navigation/ic_nav_winscope.svg"),
         Destination::Memory => include_bytes!("../assets/navigation/ic_nav_memory_profiler.svg"),
         Destination::Frame => include_bytes!("../assets/navigation/ic_nav_frame_profiler.svg"),
         Destination::Startup => {
@@ -3039,6 +3066,7 @@ impl Render for Studio {
             Destination::LayoutInspector,
             Destination::Cpu,
             Destination::Trace,
+            Destination::Winscope,
             Destination::Memory,
             Destination::Frame,
             Destination::Startup,
@@ -3054,6 +3082,7 @@ impl Render for Studio {
             Destination::Ai => self.ai.clone().into_any_element(),
             Destination::Capture => self.settings_page(cx),
             Destination::MethodRecording => self.method.clone().into_any_element(),
+            Destination::Winscope => self.winscope.clone().into_any_element(),
             Destination::SourceWorkspaces => self.source.clone().into_any_element(),
             Destination::Trace => self.trace.clone().into_any_element(),
             Destination::Frame => self.frame.clone().into_any_element(),

@@ -68,5 +68,6 @@
   "home_weekday_thu": "Thu",
   "home_weekday_fri": "Fri",
   "home_weekday_sat": "Sat",
-  "home_weekday_sun": "Sun"
+  "home_weekday_sun": "Sun",
+  "home_winscope_description": "Capture Winscope system traces (window manager, SurfaceFlinger, input) and inspect them in the bundled browser viewer."
 }

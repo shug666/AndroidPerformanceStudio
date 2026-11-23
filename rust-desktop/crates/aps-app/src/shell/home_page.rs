@@ -27,7 +27,7 @@ struct HomeModule {
     destination: Destination,
     description: TextKey,
 }
-const MODULES: [HomeModule; 11] = [
+const MODULES: [HomeModule; 12] = [
     HomeModule {
         destination: Destination::LayoutInspector,
         description: TextKey::HomeLayoutDescription,
@@ -39,6 +39,10 @@ const MODULES: [HomeModule; 11] = [
     HomeModule {
         destination: Destination::Trace,
         description: TextKey::HomeTraceDescription,
+    },
+    HomeModule {
+        destination: Destination::Winscope,
+        description: TextKey::HomeWinscopeDescription,
     },
     HomeModule {
         destination: Destination::Memory,
@@ -893,6 +897,7 @@ mod tests {
                 Destination::LayoutInspector,
                 Destination::Cpu,
                 Destination::Trace,
+                Destination::Winscope,
                 Destination::Memory,
                 Destination::Frame,
                 Destination::Startup,

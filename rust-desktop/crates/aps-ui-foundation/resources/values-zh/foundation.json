@@ -24,5 +24,6 @@
   "foundation_source_workspaces": "源码工作区",
   "foundation_simplified_chinese": "简体中文",
   "foundation_startup_profiler": "启动分析器",
-  "foundation_trace_analyzer": "Trace 分析器"
+  "foundation_trace_analyzer": "Trace 分析器",
+  "foundation_winscope": "Winscope"
 }

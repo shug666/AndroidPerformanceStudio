@@ -1,0 +1,18 @@
+{
+  "winscope": "Winscope",
+  "winscope_start_service": "Start Service",
+  "winscope_stop_service": "Stop Service",
+  "winscope_open_viewer": "Open Viewer",
+  "winscope_service_stopped": "Service stopped",
+  "winscope_service_starting": "Starting…",
+  "winscope_service_running": "Service running (proxy :5544, viewer :{port})",
+  "winscope_capture_idle": "No capture in progress",
+  "winscope_capture_recording": "Recording on {device}",
+  "winscope_capture_targets": "Sources: {sources}",
+  "winscope_capture_legacy_path": "Legacy path (non-Perfetto)",
+  "winscope_capture_perfetto_path": "Perfetto path",
+  "winscope_stop_browser_drives_capture": "Capture is driven from the Winscope viewer opened in your browser; this page mirrors its state.",
+  "winscope_viewer_url_label": "Viewer URL (copy into the browser if it did not open)",
+  "winscope_token_label": "Session token (paste into the viewer retry dialog if prompted)",
+  "winscope_error_prefix": "Error: {error}"
+}

@@ -244,6 +244,7 @@ dependencies = [
  "aps-startup",
  "aps-storage",
  "aps-ui-foundation",
+ "aps-winscope",
  "embed-resource",
  "flate2",
  "futures",
@@ -484,6 +485,18 @@ name = "aps-ui-foundation"
 version = "0.8.2"
 dependencies = [
  "aps-json",
+]
+
+[[package]]
+name = "aps-winscope"
+version = "0.8.2"
+dependencies = [
+ "aps-adb",
+ "base64 0.23.1",
+ "flate2",
+ "rand 0.9.5",
+ "serde_json",
+ "sha2 0.11.0",
 ]
 
 [[package]]

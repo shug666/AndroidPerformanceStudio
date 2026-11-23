@@ -24,5 +24,6 @@
   "foundation_source_workspaces": "Source Workspaces",
   "foundation_simplified_chinese": "Simplified Chinese",
   "foundation_startup_profiler": "Startup Profiler",
-  "foundation_trace_analyzer": "Trace Analyzer"
+  "foundation_trace_analyzer": "Trace Analyzer",
+  "foundation_winscope": "Winscope"
 }

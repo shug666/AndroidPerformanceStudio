@@ -1,0 +1,18 @@
+{
+  "winscope": "Winscope",
+  "winscope_start_service": "启动服务",
+  "winscope_stop_service": "停止服务",
+  "winscope_open_viewer": "打开查看器",
+  "winscope_service_stopped": "服务未启动",
+  "winscope_service_starting": "启动中…",
+  "winscope_service_running": "服务运行中（代理 :5544，查看器 :{port}）",
+  "winscope_capture_idle": "没有进行中的抓取",
+  "winscope_capture_recording": "正在录制（{device}）",
+  "winscope_capture_targets": "数据源：{sources}",
+  "winscope_capture_legacy_path": "传统路径（非 Perfetto）",
+  "winscope_capture_perfetto_path": "Perfetto 路径",
+  "winscope_stop_browser_drives_capture": "抓取由浏览器中打开的 Winscope 查看器驱动；本页面同步显示其状态。",
+  "winscope_viewer_url_label": "查看器地址（若浏览器未自动打开，请复制到浏览器）",
+  "winscope_token_label": "会话 token（若查看器提示连接失败，可粘贴到重试对话框）",
+  "winscope_error_prefix": "错误：{error}"
+}

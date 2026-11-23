@@ -68,5 +68,6 @@
   "home_weekday_thu": "周四",
   "home_weekday_fri": "周五",
   "home_weekday_sat": "周六",
-  "home_weekday_sun": "周日"
+  "home_weekday_sun": "周日",
+  "home_winscope_description": "抓取 Winscope 系统级 trace（窗口管理器、SurfaceFlinger、输入），在浏览器查看器中检查。"
 }
