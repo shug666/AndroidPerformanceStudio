@@ -179,97 +179,6 @@ jobs:
             dist/*.rpm
           if-no-files-found: error
 
-  macos:
-    name: macOS ${{ matrix.arch }}
-    needs: firefox-profiler
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x86_64
-            runner: macos-15-intel
-            target: x86_64-apple-darwin
-          - arch: arm64
-            runner: macos-15
-            target: aarch64-apple-darwin
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: 1.99.1
-          rustflags: ''
-          target: ${{ matrix.target }}
-      - name: Prepare pinned macOS Trace Processor
-        run: |
-          set -euo pipefail
-          tools="$PWD/dist/Android Performance Studio.app/Contents/MacOS/resources/perfetto-tools"
-          PERFETTO_TOOLS_DIR="$tools" bash scripts/install-trace-processor.sh
-          tool="$tools/trace_processor_shell"
-          codesign --force --timestamp=none --sign - "$tool"
-          codesign --verify --strict "$tool"
-          # Signing changes the verified upstream bytes. Compile in the new hash
-          # instead of allowing a mutable checksum file beside the executable.
-          checksum="$(shasum -a 256 "$tool")"
-          printf 'APS_MACOS_PACKAGED_TRACE_PROCESSOR_SHA256=%s\n' "${checksum%% *}" >> "$GITHUB_ENV"
-      - name: Build binaries
-        working-directory: rust-desktop
-        run: cargo build --locked --release --target ${{ matrix.target }} -p aps-app -p aps-memory
-      - name: Download bundled Firefox Profiler
-        uses: actions/download-artifact@v4
-        with:
-          name: firefox-profiler-dist
-          path: dist/Android Performance Studio.app/Contents/Resources/firefox-profiler
-      - name: Stage Winscope viewer closure
-        run: |
-          mkdir -p "dist/Android Performance Studio.app/Contents/Resources/winscope-viewer"
-          cp -R rust-desktop/crates/aps-winscope/assets/winscope-viewer/. "dist/Android Performance Studio.app/Contents/Resources/winscope-viewer/"
-          cp rust-desktop/crates/aps-winscope/assets/winscope-viewer-manifest.json "dist/Android Performance Studio.app/Contents/Resources/winscope-viewer-manifest.json"
-      - name: Package dmg and pkg
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-          TARGET: ${{ matrix.target }}
-          ARCH: ${{ matrix.arch }}
-        run: |
-          set -e
-          version="${RELEASE_TAG#aps-desktop-v}"
-          version="${version#rust-desktop-v}"; version="${version#v}"
-          version="${version%-rebuild.*}"
-          app="dist/Android Performance Studio.app"
-          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-          cp "rust-desktop/target/${TARGET}/release/aps-app" "$app/Contents/MacOS/aps-app"
-          cp "rust-desktop/target/${TARGET}/release/aps-memory-worker" "$app/Contents/MacOS/aps-memory-worker"
-          cp rust-desktop/crates/aps-app/Info.plist "$app/Contents/Info.plist"
-          cp rust-desktop/crates/aps-app/assets/icons/macos/app-icon.icns "$app/Contents/Resources/app-icon.icns"
-          test -s "$app/Contents/Resources/firefox-profiler/index.html"
-          chmod 0755 "$app/Contents/MacOS/aps-app" "$app/Contents/MacOS/aps-memory-worker"
-          # Ad-hoc sign the remaining nested code and the bundle last. Do not
-          # re-sign Trace Processor: its bytes are pinned in the app. Signing the main
-          # executable by path is not used: on an intel host codesign treats that
-          # path as the bundle entry point and fails while any nested binary is
-          # still unsigned. An unsigned bundle is reported as damaged and System
-          # Settings offers no "Open Anyway"; an ad-hoc signature makes Gatekeeper
-          # offer that choice. Real distribution still needs Developer ID signing
-          # and notarization.
-          codesign --force --timestamp=none --sign - "$app/Contents/MacOS/aps-memory-worker"
-          codesign --force --timestamp=none --sign - "$app"
-          codesign --verify --deep --strict --verbose=2 "$app"
-          APS_TEST_PACKAGED_PERFETTO_RESOURCES="$PWD/$app/Contents/MacOS/resources" \
-            cargo test --locked --release --target "$TARGET" --manifest-path rust-desktop/Cargo.toml \
-            -p aps-perfetto --test pinned_tool signed_packaged_tool_opens_a_trace_and_rejects_modified_bytes -- --exact
-          bash scripts/package-macos-dmg.sh "$app" "dist/aps-desktop-${RELEASE_TAG}-macos-${ARCH}.dmg"
-          pkgbuild --component "$app" --install-location /Applications --version "$version" "dist/aps-desktop-${RELEASE_TAG}-macos-${ARCH}.pkg"
-      - name: Upload macOS packages
-        uses: actions/upload-artifact@v4
-        with:
-          name: packages-macos-${{ matrix.arch }}
-          path: |
-            dist/*.dmg
-            dist/*.pkg
-          if-no-files-found: error
-
   windows:
     name: Windows x86_64
     needs: firefox-profiler
@@ -367,7 +276,7 @@ jobs:
 
   publish:
     name: Publish release
-    needs: [linux, macos, windows]
+    needs: [linux, windows]
     runs-on: ubuntu-24.04
     steps:
       - name: Download packages
