@@ -11,8 +11,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CLOSURE = ROOT / "desktop-viewer/winscope-viewer/winscope-resources/winscope-viewer"
-MANIFEST = ROOT / "desktop-viewer/winscope-viewer/winscope-resources/winscope-viewer-manifest.json"
+CLOSURE = ROOT / "rust-desktop/crates/aps-winscope/assets/winscope-viewer"
+MANIFEST = ROOT / "rust-desktop/crates/aps-winscope/assets/winscope-viewer-manifest.json"
 
 PROVENANCE = {
     "source": "AOSP Winscope production bundle (user-provided dist/prod closure)",
