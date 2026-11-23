@@ -34,7 +34,10 @@ python3 -B scripts/check_rust_architecture.py
 * **Known legitimate collaborations.** GPU may consume Perfetto analysis and
   Startup capture may use its public recording adapter (not the Trace UI). CPU
   may consume the Simpleperf engine, and storage may implement source repository
-  contracts. These directed edges do not entitle the reverse direction. Shared
+  contracts. Winscope consumes only the adb locator contract (executable
+  resolution) and owns its own root-shell transport because the adb adapter is
+  deliberately read-only; it never reaches into adb's private client. These
+  directed edges do not entitle the reverse direction. Shared
   hash/encoding primitives belong to `aps-primitives`, not an analyzer.
 * **Read-only Frame MCP adapter.** `aps-frame-mcp` consumes the shared Frame
   report reader and evidence projections from `aps-analysis`. It owns its
