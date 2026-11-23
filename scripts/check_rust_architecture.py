@@ -9,7 +9,8 @@ import sys
 # Short names omit the common aps- prefix. The shell composes features, not engines.
 NORMAL = {
     'app': 'adb ai analysis battery benchmark capture contracts cpu frame gpu json layout-inspector memory '
-           'method-recording network perfetto platform source startup storage ui-foundation winscope',
+           'method-recording network perfetto platform source startup storage ui-foundation winscope '
+           'screencast reversenet',
     'cli': 'adb ai analysis battery benchmark capture contracts cpu har-engine json layout-inspector '
            'memory method-recording perfetto platform startup',
     'analysis': 'contracts frame json',
@@ -26,7 +27,7 @@ NORMAL = {
     'ui-foundation': '',
     'winscope': 'adb',
     'screencast': 'adb',
-    'reverse-net': 'adb',
+    'reversenet': 'adb',
 }
 ALLOWED = {('aps-' + src, 'normal', 'aps-' + dst)
            for src, names in NORMAL.items() for dst in names.split()}
