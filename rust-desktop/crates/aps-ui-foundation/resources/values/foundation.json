@@ -25,5 +25,7 @@
   "foundation_simplified_chinese": "Simplified Chinese",
   "foundation_startup_profiler": "Startup Profiler",
   "foundation_trace_analyzer": "Trace Analyzer",
-  "foundation_winscope": "Winscope"
+  "foundation_winscope": "Winscope",
+  "foundation_screencast": "Screencast",
+  "foundation_reverse_net": "Reverse Tethering"
 }

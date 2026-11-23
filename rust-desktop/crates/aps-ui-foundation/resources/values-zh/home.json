@@ -69,5 +69,7 @@
   "home_weekday_fri": "周五",
   "home_weekday_sat": "周六",
   "home_weekday_sun": "周日",
-  "home_winscope_description": "抓取 Winscope 系统级 trace（窗口管理器、SurfaceFlinger、输入），在浏览器查看器中检查。"
+  "home_winscope_description": "抓取 Winscope 系统级 trace（窗口管理器、SurfaceFlinger、输入），在浏览器查看器中检查。",
+  "home_screencast_description": "基于 scrcpy 实时投屏设备画面，注入触摸、滚动、按键与文本。",
+  "home_reverse_net_description": "通过 adb 把本机网络共享给设备，并审计其流量、DNS 与 IPv6 泄漏。"
 }

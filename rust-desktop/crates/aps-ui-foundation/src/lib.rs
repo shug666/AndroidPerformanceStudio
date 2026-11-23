@@ -252,13 +252,15 @@ pub enum Destination {
     Benchmark,
     MethodRecording,
     Winscope,
+    Screencast,
+    ReverseNet,
     SourceWorkspaces,
     Ai,
     Settings,
 }
 
 impl Destination {
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 19] = [
         Self::Home,
         Self::LayoutInspector,
         Self::Cpu,
@@ -273,6 +275,8 @@ impl Destination {
         Self::Benchmark,
         Self::MethodRecording,
         Self::Winscope,
+        Self::Screencast,
+        Self::ReverseNet,
         Self::SourceWorkspaces,
         Self::Ai,
         Self::Settings,
@@ -294,6 +298,8 @@ impl Destination {
             Self::Benchmark => language.text(TextKey::FoundationBenchmarkRegression),
             Self::MethodRecording => language.text(TextKey::FoundationMethodRecording),
             Self::Winscope => language.text(TextKey::FoundationWinscope),
+            Self::Screencast => language.text(TextKey::FoundationScreencast),
+            Self::ReverseNet => language.text(TextKey::FoundationReverseNet),
             Self::SourceWorkspaces => language.text(TextKey::FoundationSourceWorkspaces),
             Self::Ai => language.text(TextKey::FoundationAiAnalysis),
             Self::Settings => language.text(TextKey::FoundationSettings),
@@ -316,7 +322,7 @@ mod tests {
 
     #[test]
     fn navigation_is_complete_unique_and_localized() {
-        assert_eq!(Destination::ALL.len(), 17);
+        assert_eq!(Destination::ALL.len(), 19);
         let mut seen = HashSet::new();
         for destination in Destination::ALL {
             assert!(seen.insert(destination));
@@ -324,7 +330,7 @@ mod tests {
             assert!(!destination.label(Language::SimplifiedChinese).is_empty());
         }
         assert_eq!(Destination::ALL[0], Destination::Home);
-        assert_eq!(Destination::ALL[16], Destination::Settings);
+        assert_eq!(Destination::ALL[18], Destination::Settings);
     }
 
     #[test]

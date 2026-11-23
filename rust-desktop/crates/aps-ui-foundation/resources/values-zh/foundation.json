@@ -25,5 +25,7 @@
   "foundation_simplified_chinese": "简体中文",
   "foundation_startup_profiler": "启动分析器",
   "foundation_trace_analyzer": "Trace 分析器",
-  "foundation_winscope": "Winscope"
+  "foundation_winscope": "Winscope",
+  "foundation_screencast": "设备投屏",
+  "foundation_reverse_net": "反向供网"
 }

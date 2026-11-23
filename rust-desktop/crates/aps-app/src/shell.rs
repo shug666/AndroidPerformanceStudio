@@ -18,6 +18,8 @@ use crate::{
     import::ImportWorkspace,
     inspector::{InspectorPanelVisibility, InspectorPanelsChanged, InspectorWorkspace},
     method::MethodWorkspace,
+    reverse_net::ReverseNetWorkspace,
+    screencast::ScreencastWorkspace,
     source::SourceWorkspace,
     targets::{TargetListsChanged, TargetSelectionChanged, TargetsWorkspace},
     trace::TraceWorkspace,
@@ -275,6 +277,8 @@ fn debug_route_destination(route: &str) -> Option<Destination> {
         "gpu" => Destination::Gpu,
         "benchmark" => Destination::Benchmark,
         "winscope" => Destination::Winscope,
+        "screencast" => Destination::Screencast,
+        "reverse-net" => Destination::ReverseNet,
         "source" => Destination::SourceWorkspaces,
         "ai" => Destination::Ai,
         "settings" => Destination::Settings,
@@ -688,6 +692,8 @@ pub struct Studio {
     benchmark: Entity<BenchmarkWorkspace>,
     inspector: Entity<InspectorWorkspace>,
     winscope: Entity<WinscopeWorkspace>,
+    screencast: Entity<ScreencastWorkspace>,
+    reverse_net: Entity<ReverseNetWorkspace>,
     imports: HashMap<Destination, Entity<ImportWorkspace>>,
     focus: FocusHandle,
     notice: Option<String>,
@@ -871,6 +877,14 @@ impl Studio {
                 cx,
             )
         });
+        // The screencast page owns its scrcpy session; the reverse-net page owns
+        // its relay controller. Both follow the same shell wiring as winscope.
+        let screencast = cx.new(|cx| {
+            ScreencastWorkspace::new(settings.language.resolved(), window, cx)
+        });
+        let reverse_net = cx.new(|cx| {
+            ReverseNetWorkspace::new(settings.language.resolved(), cx)
+        });
         let imports: HashMap<Destination, Entity<ImportWorkspace>> = [
             Destination::Memory,
             Destination::Network,
@@ -1041,6 +1055,8 @@ impl Studio {
         // Winscope page state (service running/capture mirror) repaints the
         // shell when the page is visible.
         subscriptions.push(cx.observe(&winscope, |_, _, cx| cx.notify()));
+        subscriptions.push(cx.observe(&screencast, |_, _, cx| cx.notify()));
+        subscriptions.push(cx.observe(&reverse_net, |_, _, cx| cx.notify()));
         // A benchmark case may record trace artifacts; opening one goes through the
         // same Trace Analyzer import path as every other page.
         subscriptions.push(
@@ -1357,6 +1373,8 @@ impl Studio {
             benchmark,
             inspector,
             winscope,
+            screencast,
+            reverse_net,
             imports,
             focus,
             notice,
@@ -2041,6 +2059,8 @@ impl Studio {
             | Destination::MethodRecording => self.open_cpu(&OpenProfile, window, cx),
             | Destination::SourceWorkspaces
             | Destination::Winscope
+            | Destination::Screencast
+            | Destination::ReverseNet
             | Destination::Ai
             | Destination::Settings => {}
         }
@@ -2214,6 +2234,8 @@ impl Studio {
                 self.push_workspace_menus(&self.method, language, &mut build, cx)
             }
             Destination::Winscope => {}
+            Destination::Screencast => {}
+            Destination::ReverseNet => {}
             Destination::Benchmark => {
                 self.push_workspace_menus(&self.benchmark, language, &mut build, cx)
             }
@@ -2449,6 +2471,12 @@ impl Studio {
         });
         self.winscope.update(cx, |winscope, cx| {
             winscope.set_language(self.settings.language.resolved(), cx)
+        });
+        self.screencast.update(cx, |screencast, cx| {
+            screencast.set_language(self.settings.language.resolved(), cx)
+        });
+        self.reverse_net.update(cx, |reverse_net, cx| {
+            reverse_net.set_language(self.settings.language.resolved(), cx)
         });
         for import in self.imports.values() {
             import.update(cx, |import, cx| {
@@ -2904,6 +2932,8 @@ fn navigation_icon_data(destination: Destination) -> &'static [u8] {
         Destination::Cpu => include_bytes!("../assets/navigation/ic_nav_cpu_profiler.svg"),
         Destination::Trace => include_bytes!("../assets/navigation/ic_nav_trace_analyzer.svg"),
         Destination::Winscope => include_bytes!("../assets/navigation/ic_nav_winscope.svg"),
+        Destination::Screencast => include_bytes!("../assets/navigation/ic_nav_screencast.svg"),
+        Destination::ReverseNet => include_bytes!("../assets/navigation/ic_nav_reverse_net.svg"),
         Destination::Memory => include_bytes!("../assets/navigation/ic_nav_memory_profiler.svg"),
         Destination::Frame => include_bytes!("../assets/navigation/ic_nav_frame_profiler.svg"),
         Destination::Startup => {
@@ -3067,6 +3097,8 @@ impl Render for Studio {
             Destination::Cpu,
             Destination::Trace,
             Destination::Winscope,
+            Destination::Screencast,
+            Destination::ReverseNet,
             Destination::Memory,
             Destination::Frame,
             Destination::Startup,
@@ -3083,6 +3115,8 @@ impl Render for Studio {
             Destination::Capture => self.settings_page(cx),
             Destination::MethodRecording => self.method.clone().into_any_element(),
             Destination::Winscope => self.winscope.clone().into_any_element(),
+            Destination::Screencast => self.screencast.clone().into_any_element(),
+            Destination::ReverseNet => self.reverse_net.clone().into_any_element(),
             Destination::SourceWorkspaces => self.source.clone().into_any_element(),
             Destination::Trace => self.trace.clone().into_any_element(),
             Destination::Frame => self.frame.clone().into_any_element(),

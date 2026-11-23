@@ -69,5 +69,7 @@
   "home_weekday_fri": "Fri",
   "home_weekday_sat": "Sat",
   "home_weekday_sun": "Sun",
-  "home_winscope_description": "Capture Winscope system traces (window manager, SurfaceFlinger, input) and inspect them in the bundled browser viewer."
+  "home_winscope_description": "Capture Winscope system traces (window manager, SurfaceFlinger, input) and inspect them in the bundled browser viewer.",
+  "home_screencast_description": "Mirror a device screen over scrcpy, watch it live and inject touch, scroll, keys and text.",
+  "home_reverse_net_description": "Share this computer's network with the device over adb and audit its traffic, DNS and IPv6 leaks."
 }

@@ -12,6 +12,7 @@ mod import_timing;
 mod inspector;
 mod method;
 mod net;
+mod reverse_net;
 mod notifications;
 mod perfetto_tool;
 mod perfetto_viewer;
@@ -22,6 +23,7 @@ mod studio;
 mod targets;
 mod trace;
 mod user_guide;
+mod screencast;
 mod winscope;
 
 use aps_ui_foundation::{Settings, ThemeMode as StudioTheme, typography};

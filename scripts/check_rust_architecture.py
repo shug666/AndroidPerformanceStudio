@@ -25,6 +25,8 @@ NORMAL = {
     'source': 'contracts platform', 'startup': 'adb json perfetto platform', 'storage': 'contracts json source',
     'ui-foundation': '',
     'winscope': 'adb',
+    'screencast': 'adb',
+    'reverse-net': 'adb',
 }
 ALLOWED = {('aps-' + src, 'normal', 'aps-' + dst)
            for src, names in NORMAL.items() for dst in names.split()}
