@@ -73,12 +73,16 @@ impl LaunchedServer {
 }
 
 fn drain_to_string<R: Read>(handle: Option<R>) -> String {
+    String::from_utf8_lossy(&drain_to_bytes(handle)).into_owned()
+}
+
+fn drain_to_bytes<R: Read>(handle: Option<R>) -> Vec<u8> {
     let Some(mut handle) = handle else {
-        return String::new();
+        return Vec::new();
     };
     let mut sink = Vec::new();
     let _ = handle.read_to_end(&mut sink);
-    String::from_utf8_lossy(&sink).into_owned()
+    sink
 }
 
 /// Fire-and-forget stderr/stdout drainer for the long-lived session shell.
@@ -131,6 +135,14 @@ impl AdbOutput {
     }
 }
 
+/// Byte-preserving capture used by the raw run core; stdout stays untouched.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+struct RawAdbOutput {
+    stdout: Vec<u8>,
+    stderr: String,
+    success: bool,
+}
+
 /// Blocking adb runner bound to one executable. Shell commands are passed as
 /// argv lists (`Command::args`), so every argument reaches the device shell
 /// individually — no `sh -c` re-quoting hazards (spec §A.12).
@@ -167,6 +179,24 @@ impl AdbRunner {
         timeout: Duration,
         cancel: Option<&std::sync::atomic::AtomicBool>,
     ) -> (AdbOutput, AdbOutcome) {
+        let (raw, outcome) = self.run_raw(arguments, timeout, cancel);
+        let output = AdbOutput {
+            stdout: String::from_utf8_lossy(&raw.stdout).into_owned(),
+            stderr: raw.stderr,
+            success: raw.success,
+        };
+        (output, outcome)
+    }
+
+    /// Byte-preserving core of [`Self::run`]: stdout is never coerced through
+    /// UTF-8, so binary streams survive intact. The timeout branch marks the
+    /// output failed with the same annotation `run` has always appended.
+    fn run_raw(
+        &self,
+        arguments: &[&str],
+        timeout: Duration,
+        cancel: Option<&std::sync::atomic::AtomicBool>,
+    ) -> (RawAdbOutput, AdbOutcome) {
         let spawn = Command::new(&self.executable)
             .args(arguments)
             .stdout(Stdio::piped())
@@ -177,8 +207,8 @@ impl AdbRunner {
             Ok(child) => child,
             Err(error) => {
                 return (
-                    AdbOutput {
-                        stdout: String::new(),
+                    RawAdbOutput {
+                        stdout: Vec::new(),
                         stderr: format!("unable to spawn adb: {error}"),
                         success: false,
                     },
@@ -188,7 +218,7 @@ impl AdbRunner {
         };
         let stdout_handle = child.stdout.take();
         let stderr_handle = child.stderr.take();
-        let stdout_sink = std::thread::spawn(move || drain_to_string(stdout_handle));
+        let stdout_sink = std::thread::spawn(move || drain_to_bytes(stdout_handle));
         let stderr_sink = std::thread::spawn(move || drain_to_string(stderr_handle));
 
         let started = Instant::now();
@@ -208,25 +238,21 @@ impl AdbRunner {
             match child.try_wait() {
                 Ok(Some(status)) => {
                     let stdout = stdout_sink.join().unwrap_or_default();
-                    let stderr = stderr_sink.join().unwrap_or_default();
-                    let mut output = AdbOutput {
-                        stdout,
-                        stderr,
-                        success: status.success(),
-                    };
+                    let mut stderr = stderr_sink.join().unwrap_or_default();
+                    let mut success = status.success();
                     if timed_out {
-                        output.success = false;
-                        output.stderr.push_str("\nadb command timed out");
-                        return (output, AdbOutcome::TimedOut);
+                        success = false;
+                        stderr.push_str("\nadb command timed out");
+                        return (RawAdbOutput { stdout, stderr, success }, AdbOutcome::TimedOut);
                     }
-                    return (output, AdbOutcome::Completed);
+                    return (RawAdbOutput { stdout, stderr, success }, AdbOutcome::Completed);
                 }
                 Ok(None) => std::thread::sleep(Duration::from_millis(20)),
                 Err(error) => {
                     let stdout = stdout_sink.join().unwrap_or_default();
                     let _ = stderr_sink.join();
                     return (
-                        AdbOutput {
+                        RawAdbOutput {
                             stdout,
                             stderr: format!("adb wait failed: {error}"),
                             success: false,
@@ -236,6 +262,41 @@ impl AdbRunner {
                 }
             }
         }
+    }
+
+    /// One bounded `adb -s <serial> shell <argv…>` command (10 s budget): the
+    /// device-side escape hatch for features that have no scrcpy control
+    /// socket, e.g. input injection while the mirror is not running. Arguments
+    /// travel as individual argv entries (spec §A.12: no `sh -c`).
+    pub fn shell(&self, serial: &str, arguments: &[&str]) -> AdbOutput {
+        let mut argv = Vec::with_capacity(arguments.len() + 3);
+        argv.push("-s");
+        argv.push(serial);
+        argv.push("shell");
+        argv.extend_from_slice(arguments);
+        let (output, _) = self.run(&argv, Duration::from_secs(COMMAND_TIMEOUT_SECS), None);
+        output
+    }
+
+    /// One bounded `adb -s <serial> exec-out <argv…>` command (10 s budget)
+    /// with byte-preserving stdout: the binary-stream channel for device
+    /// payloads such as `screencap -p`, whose PNG bytes the lossy-UTF-8 `run`
+    /// capture would corrupt. Errors carry the adb stderr text (possibly
+    /// empty — callers fall back to their own message).
+    pub fn exec_out_bytes(&self, serial: &str, arguments: &[&str]) -> Result<Vec<u8>, String> {
+        let mut argv: Vec<&str> = Vec::with_capacity(arguments.len() + 3);
+        argv.extend(["-s", serial, "exec-out"]);
+        argv.extend_from_slice(arguments);
+        let (raw, _) = self.run_raw(&argv, Duration::from_secs(COMMAND_TIMEOUT_SECS), None);
+        if !raw.success {
+            let stderr = raw.stderr.trim().to_owned();
+            return Err(if stderr.is_empty() {
+                "adb exec-out command failed".to_owned()
+            } else {
+                stderr
+            });
+        }
+        Ok(raw.stdout)
     }
 
     /// The device-server shell: no effective timeout (24 h ceiling), runs
@@ -540,6 +601,89 @@ mod tests {
     fn embedded_server_jar_is_complete() {
         assert_eq!(SCRCPY_SERVER_JAR.len(), 90_640);
         assert_eq!(&SCRCPY_SERVER_JAR[..2], b"PK", "a jar is a zip");
+    }
+
+    /// `shell` prepends `-s <serial> shell` and forwards every argument as its
+    /// own argv entry (spec §A.12: no `sh -c`), on the standard 10 s budget.
+    #[cfg(unix)]
+    #[test]
+    fn shell_prepends_serial_and_forwards_each_argument() {
+        use std::fs::Permissions;
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = std::env::temp_dir().join(format!(
+            "aps-screencast-shell-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|elapsed| elapsed.as_nanos())
+                .unwrap_or_default()
+        ));
+        std::fs::create_dir_all(&directory).expect("stub dir");
+        let log_path = directory.join("adb-log.txt");
+        let log = log_path.to_string_lossy().replace('\'', "'\\''");
+        let stub_path = directory.join("adb");
+        std::fs::write(
+            &stub_path,
+            format!("#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{log}'\nexit 0\n"),
+        )
+        .expect("stub script");
+        std::fs::set_permissions(&stub_path, Permissions::from_mode(0o755)).expect("exec bit");
+        let runner = AdbRunner::from_executable(stub_path);
+
+        let output = runner.shell("FAKE003", &["input", "keyevent", "4"]);
+        assert!(output.success);
+
+        let log = std::fs::read_to_string(&log_path).expect("stub log");
+        assert_eq!(
+            log.lines().collect::<Vec<_>>(),
+            ["-s", "FAKE003", "shell", "input", "keyevent", "4"]
+        );
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    /// `exec-out` keeps binary stdout intact (a non-UTF-8 PNG signature must
+    /// not be coerced through UTF-8) and forwards `-s <serial> exec-out` argv.
+    #[cfg(unix)]
+    #[test]
+    fn exec_out_bytes_preserve_binary_stdout() {
+        use std::fs::Permissions;
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = std::env::temp_dir().join(format!(
+            "aps-screencast-execout-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|elapsed| elapsed.as_nanos())
+                .unwrap_or_default()
+        ));
+        std::fs::create_dir_all(&directory).expect("stub dir");
+        let log_path = directory.join("adb-log.txt");
+        let log = log_path.to_string_lossy().replace('\'', "'\\''");
+        let stub_path = directory.join("adb");
+        // Emit the PNG signature: octal \211 = 0x89, then PNG\r\n\x1a\n.
+        std::fs::write(
+            &stub_path,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{log}'\nprintf '\\211PNG\\r\\n\\032\\n'\n"
+            ),
+        )
+        .expect("stub script");
+        std::fs::set_permissions(&stub_path, Permissions::from_mode(0o755)).expect("exec bit");
+        let runner = AdbRunner::from_executable(stub_path);
+
+        let bytes = runner
+            .exec_out_bytes("FAKE004", &["screencap", "-p"])
+            .expect("binary capture");
+        assert_eq!(bytes, [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]);
+
+        let log = std::fs::read_to_string(&log_path).expect("stub log");
+        assert_eq!(
+            log.lines().collect::<Vec<_>>(),
+            ["-s", "FAKE004", "exec-out", "screencap", "-p"]
+        );
+        let _ = std::fs::remove_dir_all(&directory);
     }
 
     /// Constants mirror the spec (§1.2, §6, task adb-timeout table).

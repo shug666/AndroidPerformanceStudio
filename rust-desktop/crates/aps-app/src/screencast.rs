@@ -7,6 +7,7 @@
 use crate::studio;
 use aps_adb::{AdbClient, AdbLocator};
 use aps_platform::CancellationToken;
+use aps_screencast::launcher::{AdbOutput, AdbRunner};
 use aps_screencast::session::FrameReceiver;
 use aps_screencast::{BgraFrame, ScrcpySession, ScrcpySessionState, ScreencastQuality};
 use aps_ui_foundation::{Language, TextKey, typography};
@@ -30,6 +31,10 @@ const KEYCODE_BACK: i32 = 4;
 const KEYCODE_HOME: i32 = 3;
 const KEYCODE_APP_SWITCH: i32 = 187;
 const KEYCODE_POWER: i32 = 26;
+/// Android keycodes for the adb fallback of the screen toggle: wake lights the
+/// display, sleep turns it off (no scrcpy control socket exists off-cast).
+const KEYCODE_WAKEUP: i32 = 224;
+const KEYCODE_SLEEP: i32 = 223;
 const ACTION_DOWN: u8 = 0;
 const ACTION_UP: u8 = 1;
 const ACTION_MOVE: u8 = 2;
@@ -66,6 +71,10 @@ pub(crate) struct ScreencastWorkspace {
     screen_off: bool,
     power_key_active: bool,
     error: Option<String>,
+    /// Last screenshot destination path (info notice under the status line).
+    notice: Option<String>,
+    /// A screenshot capture or its save dialog is in flight.
+    screenshot_busy: bool,
     generation: u64,
     canvas_bounds: Option<Bounds<Pixels>>,
     pointer_pressed: bool,
@@ -94,6 +103,8 @@ impl ScreencastWorkspace {
             screen_off: false,
             power_key_active: false,
             error: None,
+            notice: None,
+            screenshot_busy: false,
             generation: 0,
             canvas_bounds: None,
             pointer_pressed: false,
@@ -222,6 +233,7 @@ impl ScreencastWorkspace {
         self.generation = self.generation.wrapping_add(1);
         let generation = self.generation;
         self.error = None;
+        self.notice = None;
         if let Some(session) = self.session.take() {
             session.stop();
         }
@@ -268,6 +280,7 @@ impl ScreencastWorkspace {
         self.frame = None;
         self.frame_size = None;
         self.state = ScrcpySessionState::Idle;
+        self.notice = None;
         cx.notify();
     }
 
@@ -276,6 +289,12 @@ impl ScreencastWorkspace {
             ScrcpySessionState::Running { width, height, .. } => Some((*width, *height)),
             _ => None,
         }
+    }
+
+    /// Whether the scrcpy control socket is live: control messages ride the
+    /// session while casting and fall back to adb otherwise.
+    fn is_running(&self) -> bool {
+        matches!(self.state, ScrcpySessionState::Running { .. })
     }
 
     /// Contain-fit viewport for the latest frame inside the canvas bounds
@@ -343,25 +362,143 @@ impl ScreencastWorkspace {
     }
 
     fn tap_navigation_key(&mut self, keycode: i32, cx: &mut Context<Self>) {
-        if let Some(session) = self.session.as_ref() {
-            session.tap_keycode(keycode);
+        if self.is_running() {
+            if let Some(session) = self.session.as_ref() {
+                session.tap_keycode(keycode);
+            }
+        } else {
+            self.adb_inject_keycode(keycode, cx);
         }
         cx.notify();
     }
 
     fn toggle_screen_power(&mut self, cx: &mut Context<Self>) {
-        if let Some(session) = self.session.as_ref() {
-            self.screen_off = !self.screen_off;
-            session.set_display_power(!self.screen_off);
+        let turn_on = self.screen_off;
+        self.screen_off = !turn_on;
+        if self.is_running() {
+            // `on` lights the display without sleeping (session §6.3 target).
+            if let Some(session) = self.session.as_ref() {
+                session.set_display_power(turn_on);
+            }
+        } else {
+            let keycode = if turn_on {
+                KEYCODE_WAKEUP
+            } else {
+                KEYCODE_SLEEP
+            };
+            self.adb_inject_keycode(keycode, cx);
         }
         cx.notify();
     }
 
     fn toggle_power_key(&mut self, cx: &mut Context<Self>) {
-        if let Some(session) = self.session.as_ref() {
-            self.power_key_active = !self.power_key_active;
-            session.tap_keycode(KEYCODE_POWER);
+        self.power_key_active = !self.power_key_active;
+        if self.is_running() {
+            if let Some(session) = self.session.as_ref() {
+                session.tap_keycode(KEYCODE_POWER);
+            }
+        } else {
+            self.adb_inject_keycode(KEYCODE_POWER, cx);
         }
+        cx.notify();
+    }
+
+    /// Sends one keycode to the selected device through a direct
+    /// `adb shell input keyevent`: the fallback whenever the scrcpy control
+    /// socket does not exist (before the first cast, while connecting, after a
+    /// drop). Failures surface in the error banner; success clears nothing.
+    fn adb_inject_keycode(&mut self, keycode: i32, cx: &mut Context<Self>) {
+        let Some(serial) = self.selected.clone() else {
+            return;
+        };
+        let task = cx.background_executor().spawn(async move {
+            let runner = AdbRunner::locate(None)?;
+            let output = runner.shell(&serial, &["input", "keyevent", &keycode.to_string()]);
+            if output.success {
+                Ok(())
+            } else {
+                Err(bounded_adb_error(&output))
+            }
+        });
+        cx.spawn(async move |this, cx| {
+            let result = task.await;
+            if let Err(error) = result {
+                this.update(cx, |this, cx| {
+                    this.error = Some(error);
+                    cx.notify();
+                })
+                .ok();
+            }
+        })
+        .detach();
+    }
+
+    /// Captures the device screen as a PNG and saves it through the standard
+    /// save dialog. The capture (`adb exec-out screencap -p`, native
+    /// resolution regardless of the cast quality) starts immediately so the
+    /// dialog opens while the device works; cancelling the dialog discards
+    /// the capture. The saved path lands in the notice line.
+    fn capture_screenshot(&mut self, cx: &mut Context<Self>) {
+        if self.screenshot_busy {
+            return;
+        }
+        let Some(serial) = self.selected.clone() else {
+            return;
+        };
+        self.screenshot_busy = true;
+        let language = self.language;
+        let directory = aps_platform::home_directory().unwrap_or_else(|_| std::env::temp_dir());
+        let suggested = suggested_screenshot_name(&serial, unix_millis());
+        let capture = cx.background_executor().spawn(async move {
+            let runner = AdbRunner::locate(None)?;
+            let bytes = runner.exec_out_bytes(&serial, &["screencap", "-p"])?;
+            if !is_png(&bytes) {
+                return Err(
+                    language.text(TextKey::ScreencastScreenshotInvalid).to_owned(),
+                );
+            }
+            Ok(bytes)
+        });
+        let picker = cx.prompt_for_new_path(&directory, Some(&suggested));
+        cx.spawn(async move |this, cx| {
+            let chosen = picker.await;
+            let captured = capture.await;
+            let outcome = match chosen {
+                Ok(Ok(Some(path))) => match captured {
+                    Ok(bytes) => {
+                        let destination = path.clone();
+                        let write = cx.background_executor().spawn(async move {
+                            std::fs::write(&destination, &bytes).map_err(|_| {
+                                language
+                                    .text(TextKey::ScreencastScreenshotWriteFailed)
+                                    .to_owned()
+                            })
+                        });
+                        write.await.map(|_| Some(path))
+                    }
+                    Err(error) => Err(error),
+                },
+                // Cancelled: discard quietly; picker failure: surface it.
+                Ok(Ok(None)) => Ok(None),
+                _ => Err(language
+                    .text(TextKey::ScreencastScreenshotPickerFailed)
+                    .to_owned()),
+            };
+            this.update(cx, |this, cx| {
+                this.screenshot_busy = false;
+                match outcome {
+                    Ok(Some(path)) => {
+                        this.error = None;
+                        this.notice = Some(path.display().to_string());
+                    }
+                    Ok(None) => {}
+                    Err(error) => this.error = Some(error),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
         cx.notify();
     }
 
@@ -390,6 +527,54 @@ impl ScreencastWorkspace {
         }
         cx.notify();
     }
+}
+
+/// Flattens an adb failure into one bounded line for the error banner (device
+/// stderr is external text; the first non-empty line keeps it short).
+fn bounded_adb_error(output: &AdbOutput) -> String {
+    bounded_error_text(&output.merged())
+}
+
+/// Bounds any adb-side failure text to its first non-empty line, 200 chars.
+fn bounded_error_text(text: &str) -> String {
+    let line = text
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("adb command failed");
+    let mut text: String = line.chars().take(200).collect();
+    if line.chars().count() > 200 {
+        text.push('…');
+    }
+    text
+}
+
+/// PNG file signature; `screencap -p` must open its stdout stream with it.
+const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+
+fn is_png(bytes: &[u8]) -> bool {
+    bytes.starts_with(&PNG_SIGNATURE)
+}
+
+/// `screencap_<sanitized serial>_<unix millis>.png`; serials may contain `:`
+/// (TCP devices), which is replaced so the name stays a valid file name.
+fn suggested_screenshot_name(serial: &str, unix_millis: u128) -> String {
+    let sanitized: String = serial
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.') {
+            c
+        } else {
+            '_'
+        })
+        .collect();
+    format!("screencap_{sanitized}_{unix_millis}.png")
+}
+
+fn unix_millis() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis())
+        .unwrap_or_default()
 }
 
 /// Wraps BGRA bytes into GPUI's render image; the byte order matches GPUI's
@@ -601,6 +786,18 @@ impl Render for ScreencastWorkspace {
                     .child(crate::studio::selectable(self.status_text(language))),
             );
 
+        if let Some(notice) = &self.notice {
+            body = body.child(
+                div()
+                    .text_size(px(typography::SUPPORTING))
+                    .text_color(theme.muted_foreground)
+                    .child(crate::studio::selectable(language.format(
+                        TextKey::ScreencastScreenshotSaved,
+                        &[("path", notice)],
+                    ))),
+            );
+        }
+
         if let Some(error) = &self.error {
             body = body.child(
                 div()
@@ -626,6 +823,10 @@ impl ScreencastWorkspace {
         theme: &gpui_kit::component::Theme,
         cx: &Context<Self>,
     ) -> AnyElement {
+        // Device control stays usable whenever a device is connected: while
+        // casting the keys ride the scrcpy control socket, otherwise they fall
+        // back to `adb shell input` (see `adb_inject_keycode`).
+        let has_device = self.selected.is_some();
         let mut row = div().flex().flex_wrap().items_center().gap_2();
 
         for (label, keycode, key_id) in [
@@ -636,7 +837,7 @@ impl ScreencastWorkspace {
             row = row.child(
                 Button::new(key_id)
                     .label(language.text(label))
-                    .disabled(!is_running)
+                    .disabled(!has_device)
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.tap_navigation_key(keycode, cx);
                     })),
@@ -646,7 +847,7 @@ impl ScreencastWorkspace {
             .child(
                 Button::new("screencast-power")
                     .label(language.text(TextKey::ScreencastPowerKey))
-                    .disabled(!is_running)
+                    .disabled(!has_device)
                     .on_click(cx.listener(|this, _, _, cx| this.toggle_power_key(cx))),
             )
             .child(
@@ -656,8 +857,14 @@ impl ScreencastWorkspace {
                     } else {
                         language.text(TextKey::ScreencastScreenOff)
                     })
-                    .disabled(!is_running)
+                    .disabled(!has_device)
                     .on_click(cx.listener(|this, _, _, cx| this.toggle_screen_power(cx))),
+            )
+            .child(
+                Button::new("screencast-screenshot")
+                    .label(language.text(TextKey::ScreencastScreenshot))
+                    .disabled(!has_device || self.screenshot_busy)
+                    .on_click(cx.listener(|this, _, _, cx| this.capture_screenshot(cx))),
             );
 
         // Device picker: compact toggle buttons over the online devices; the
@@ -779,5 +986,37 @@ impl ScreencastWorkspace {
                     .on_click(cx.listener(|this, _, window, cx| this.send_text(window, cx))),
             )
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[::core::prelude::v1::test]
+    fn png_signature_check_accepts_real_signature_and_rejects_truncated_output() {
+        let mut png = PNG_SIGNATURE.to_vec();
+        png.extend_from_slice(b"rest of the file");
+        assert!(is_png(&png));
+        assert!(is_png(&PNG_SIGNATURE));
+        assert!(!is_png(&[]));
+        assert!(!is_png(&PNG_SIGNATURE[..4]));
+        // `adb shell` CRLF corruption turns 0x0a into 0x0d 0x0a.
+        let mut corrupted = PNG_SIGNATURE;
+        corrupted[6] = 0x0d;
+        assert!(!is_png(&corrupted));
+    }
+
+    #[::core::prelude::v1::test]
+    fn suggested_screenshot_name_sanitizes_tcp_serials_and_keeps_extension() {
+        assert_eq!(
+            suggested_screenshot_name("emulator-5554", 1_763_948_379_123),
+            "screencap_emulator-5554_1763948379123.png"
+        );
+        // TCP serials contain a colon, which is invalid in Windows file names.
+        assert_eq!(
+            suggested_screenshot_name("192.168.1.5:5555", 42),
+            "screencap_192.168.1.5_5555_42.png"
+        );
     }
 }
