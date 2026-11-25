@@ -12,7 +12,8 @@
 //!
 //! Module map: `quality` (§7 presets), `control` (§2 writer), `device_message`
 //! (§3 reader), `video_stream` (§4 reader), `decoder` (§5 backend), `launcher`
-//! (§1 push/reverse/argv/cleanup + adb runner), `session` (§6 state machine).
+//! (§1 push/reverse/argv/cleanup + adb runner), `session` (§6 state machine),
+//! `record` (host-side MP4 recording tee).
 //!
 //! Bundled assets: `assets/scrcpy-server` is the upstream scrcpy-server v3.1
 //! jar (included via `include_bytes!` in `launcher`); `assets/scrcpy-LICENSE`
@@ -23,6 +24,7 @@ pub mod decoder;
 pub mod device_message;
 pub mod launcher;
 pub mod quality;
+pub mod record;
 pub mod session;
 pub mod video_stream;
 

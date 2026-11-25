@@ -6,11 +6,13 @@
 //!
 //! Deviations forced by the blocking (non-async) Rust model, behavior-
 //! equivalent: the coroutine scope becomes a dedicated thread per start; the
-//! frame `SharedFlow(extraBufferCapacity=4)` becomes a bounded channel (4) —
-//! when the consumer is slower than decode, arriving frames are dropped
-//! (Kotlin suspends the emitter instead); `finish` sets the terminal state
-//! before the adb cleanup runs (Kotlin ran cleanup first, keeping the old
-//! state visible ~1 s longer).
+//! video decode loop is split into a socket-read thread plus a decode thread
+//! joined by a bounded access-unit queue (so a decode pickup never delays the
+//! packet read); the frame `SharedFlow(extraBufferCapacity=4)` becomes a
+//! bounded channel (4) — when the consumer is slower than decode, arriving
+//! frames are dropped (Kotlin suspends the emitter instead); `finish` sets
+//! the terminal state before the adb cleanup runs (Kotlin ran cleanup first,
+//! keeping the old state visible ~1 s longer).
 //!
 //! The launch pipeline sits behind the [`LaunchEnvironment`] trait so tests
 //! can inject a fake launcher/adb (spec §10 `ScrcpySessionTest`).
@@ -22,10 +24,11 @@ use crate::decoder::{BgraFrame, FrameDecoder};
 use crate::device_message::{DeviceMessageReader, drain_device_messages};
 use crate::launcher::{ACCEPT_TIMEOUT_MS, AdbRunner, LaunchError, LaunchedServer};
 use crate::quality::ScreencastQuality;
+use crate::record::VideoRecorder;
 use crate::video_stream::{StreamReader, VIDEO_CODEC_H264};
 use std::io::ErrorKind;
 use std::net::{Shutdown, TcpListener, TcpStream};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -167,6 +170,9 @@ struct SessionInner {
     video_socket: Mutex<Option<TcpStream>>,
     control_socket: Mutex<Option<TcpStream>>,
     frames_sender: Mutex<Option<SyncSender<BgraFrame>>>,
+    /// Active MP4 recording (§6.2 video loop tees packets into it); taken by
+    /// `stop_recording` or finalized off-thread in `finish`.
+    recorder: Mutex<Option<VideoRecorder>>,
     /// Registered only after a successful launch (Kotlin's `launched` field).
     launched: Mutex<Option<LaunchedServer>>,
     /// `startGuard` (§6.2): CAS'd false→true for the whole run, released when
@@ -206,6 +212,7 @@ impl ScrcpySession {
                 control_socket: Mutex::new(None),
                 frames_sender: Mutex::new(None),
                 launched: Mutex::new(None),
+                recorder: Mutex::new(None),
                 start_guard: AtomicBool::new(false),
                 stop_requested: AtomicBool::new(false),
             }),
@@ -360,6 +367,45 @@ impl ScrcpySession {
         self.write_control(|writer| writer.set_display_power(on));
     }
 
+    // ---- recording (host-side MP4 remux tee) ----
+
+    /// Whether a recording is currently attached to the video loop.
+    pub fn is_recording(&self) -> bool {
+        lock(&self.inner.recorder).is_some()
+    }
+
+    /// Starts recording the raw video stream into `path` (usually `.mp4`).
+    /// Requires a Running session; sends `RESET_VIDEO` so a mid-session start
+    /// always begins on the server's re-sent codec config + an IDR.
+    pub fn start_recording(&self, path: &Path) -> Result<(), String> {
+        if !matches!(self.state(), ScrcpySessionState::Running { .. }) {
+            return Err("the screencast session is not running".to_owned());
+        }
+        let mut guard = lock(&self.inner.recorder);
+        if guard.is_some() {
+            return Err("a recording is already active".to_owned());
+        }
+        let executable = crate::decoder::discover_executable().ok_or_else(|| {
+            "ffmpeg executable not found; set FFMPEG_EXECUTABLE or install ffmpeg on PATH"
+                .to_owned()
+        })?;
+        // Seeded framerate: the stream is VFR, so active periods play
+        // real-time and idle stretches compress (see `record`).
+        let recorder = VideoRecorder::spawn(&executable, path.to_path_buf(), self.inner.config.quality.max_fps())?;
+        *guard = Some(recorder);
+        drop(guard);
+        self.write_control(|writer| writer.reset_video());
+        Ok(())
+    }
+
+    /// Stops the active recording: closes the muxer's stdin and waits (bounded)
+    /// for the MP4 trailer. `None` when nothing is recording (already finalized
+    /// by a session end).
+    pub fn stop_recording(&self) -> Option<Result<PathBuf, String>> {
+        let recorder = lock(&self.inner.recorder).take()?;
+        Some(recorder.finish())
+    }
+
     // ---- internals ----
 
     fn running_size(&self) -> Option<(u32, u32)> {
@@ -427,7 +473,21 @@ impl SessionInner {
         };
         if transitioned {
             *lock(&self.frames_sender) = None;
-            if let Some(launched) = lock(&self.launched).take() {
+            // Finalize a live recording off-thread: the MP4 trailer write must
+            // never block `stop()` or the session thread (the file stays
+            // valid even when the session ended unexpectedly).
+            if let Some(recorder) = lock(&self.recorder).take() {
+                let _ = std::thread::Builder::new()
+                    .name("aps-screencast-recorder-finish".to_owned())
+                    .spawn(move || match recorder.finish() {
+                        Ok(path) => {
+                            eprintln!("[screencast] recording finalized on session end: {path:?}")
+                        }
+                        Err(error) => eprintln!("[screencast] recording finalize failed: {error}"),
+                    });
+            }
+            let launched = lock(&self.launched).take();
+            if let Some(launched) = launched {
                 let environment = self.environment.clone();
                 let serial = self.config.serial.clone();
                 let _ = std::thread::Builder::new()
@@ -571,8 +631,63 @@ fn run_session(inner: Arc<SessionInner>) {
             width: metadata.width,
             height: metadata.height,
         });
+        // NOTE: the sender clone must be bound in its own statement —
+        // `if let Some(sender) = lock(...).clone()` would keep the MutexGuard
+        // temporary alive for the whole loop body, self-deadlocking every
+        // `finish()` inside the loop (they re-lock `frames_sender`).
         let sender = lock(&inner.frames_sender).clone();
         if let Some(sender) = sender {
+            // Decode thread (§6.2 split): the socket read loop must never wait
+            // on a decode pickup — a slow frame would delay every subsequent
+            // packet and grow the tunnel latency. A bounded access-unit queue
+            // absorbs encoder bursts; sustained overload backpressures into
+            // the socket buffer (device encoder throttles) exactly as before.
+            const AU_CHANNEL_CAPACITY: usize = 8;
+            let (au_sender, au_receiver) = sync_channel::<crate::video_stream::VideoPacket>(
+                AU_CHANNEL_CAPACITY,
+            );
+            let (stream_width, stream_height) = (metadata.width, metadata.height);
+            let decode_inner = inner.clone();
+            let spawned = std::thread::Builder::new()
+                .name("aps-screencast-decode".to_owned())
+                .spawn(move || {
+                    for packet in au_receiver {
+                        if packet.is_config() {
+                            // §4: config packets go to configure and never
+                            // count as frames.
+                            decoder.configure(&packet.payload);
+                        } else {
+                            match decoder.decode(&packet.payload, stream_width, stream_height) {
+                                Ok(Some(frame)) => {
+                                    // Bounded channel: drop the frame when the
+                                    // consumer is behind (Kotlin suspends; net
+                                    // effect is the same newest-frame display
+                                    // behavior).
+                                    if let Err(TrySendError::Disconnected(_)) =
+                                        sender.try_send(frame)
+                                    {
+                                        // Consumer gone; keep decoding.
+                                    }
+                                }
+                                Ok(None) => {} // no complete frame yet (§5 smooth cadence)
+                                Err(error) => {
+                                    eprintln!("[screencast] decoder failed: {error}");
+                                    decode_inner.finish(ScrcpySessionState::Disconnected);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    // §6.4 step 2: decoder reset when the thread unwinds.
+                    decoder.reset();
+                });
+            if spawned.is_err() {
+                eprintln!("[screencast] unable to spawn the decode thread");
+                inner.finish(ScrcpySessionState::Failed(
+                    "unable to spawn the decode thread".to_owned(),
+                ));
+                return;
+            }
             loop {
                 if inner.stop_requested.load(Ordering::SeqCst) {
                     inner.finish(ScrcpySessionState::Idle);
@@ -585,28 +700,26 @@ fn run_session(inner: Arc<SessionInner>) {
                         break;
                     }
                     Ok(Some(packet)) => {
-                        if packet.is_config() {
-                            // §4: config packets go to configure and never count as frames.
-                            decoder.configure(&packet.payload);
-                        } else {
-                            match decoder.decode(&packet.payload, metadata.width, metadata.height) {
-                                Ok(Some(frame)) => {
-                                    // Bounded channel: drop the frame when the consumer
-                                    // is behind (Kotlin suspends; net effect is the same
-                                    // newest-frame display behavior).
-                                    if let Err(TrySendError::Disconnected(_)) =
-                                        sender.try_send(frame)
-                                    {
-                                        // Consumer gone; keep draining the stream.
-                                    }
-                                }
-                                Ok(None) => {} // no complete frame yet (§5 smooth cadence)
-                                Err(error) => {
-                                    eprintln!("[screencast] decoder failed: {error}");
-                                    inner.finish(ScrcpySessionState::Disconnected);
-                                    break;
-                                }
+                        // Recorder tee: every packet (config + access units)
+                        // feeds the MP4 muxer while a recording is active —
+                        // before the decode hand-off, so a recording continues
+                        // even while the decoder is behind. A dead muxer
+                        // disables the recording; the UI clears its indicator
+                        // via `is_recording`.
+                        {
+                            let mut guard = lock(&inner.recorder);
+                            if let Some(recorder) = guard.as_mut()
+                                && let Err(error) = recorder.write(&packet.payload)
+                            {
+                                eprintln!("[screencast] recorder failed: {error}");
+                                guard.take();
                             }
+                        }
+                        // Hand the packet to the decode thread. A send failure
+                        // means the thread exited (decoder failure above).
+                        if au_sender.send(packet).is_err() {
+                            inner.finish(ScrcpySessionState::Disconnected);
+                            break;
                         }
                     }
                     Err(error) => {
@@ -625,8 +738,6 @@ fn run_session(inner: Arc<SessionInner>) {
             }
         }
     }
-    // §6.4 step 2: decoder reset on loop exit.
-    decoder.reset();
 }
 
 /// Accepts one connection before the shared 15 s deadline (§1.2 soTimeout).

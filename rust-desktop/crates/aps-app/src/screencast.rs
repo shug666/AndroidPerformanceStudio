@@ -21,11 +21,17 @@ use gpui_kit::{
     *,
 };
 use std::sync::Arc;
+use std::sync::mpsc::TryRecvError;
 use std::time::Duration;
 
 /// Device discovery cadence (the Kotlin controller polled every 2 s; 1 s keeps
 /// the picker responsive without saturating adb).
 const DEVICE_POLL: Duration = Duration::from_millis(1_000);
+/// Idle wait of the frame pump between drain attempts while the stream is
+/// quiet; the first frame after an idle stretch may arrive up to this late.
+/// Frames themselves are pumped immediately (no pacing) so the display shows
+/// every decoded frame at stream cadence instead of the poll cadence.
+const FRAME_PUMP_IDLE_WAIT: Duration = Duration::from_millis(8);
 /// Keycodes reused from the control contract (spec §2.3).
 const KEYCODE_BACK: i32 = 4;
 const KEYCODE_HOME: i32 = 3;
@@ -46,6 +52,18 @@ const BUTTON_SECONDARY: i32 = 2;
 struct DeviceOption {
     serial: String,
     display_name: String,
+}
+
+/// Result of one frame-pump drain pass.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PumpOutcome {
+    /// At least one frame arrived: already promoted and repainted.
+    Frames,
+    /// Channel empty (stream quiet or between frames).
+    Idle,
+    /// The receiver is dead (session ended) or the workspace generation moved
+    /// on: the pump exits.
+    Disconnected,
 }
 
 /// Contain-fit viewport of the current frame inside the canvas bounds
@@ -71,10 +89,15 @@ pub(crate) struct ScreencastWorkspace {
     screen_off: bool,
     power_key_active: bool,
     error: Option<String>,
-    /// Last screenshot destination path (info notice under the status line).
+    /// Last finalized save (screenshot/recording path), already formatted.
     notice: Option<String>,
     /// A screenshot capture or its save dialog is in flight.
     screenshot_busy: bool,
+    /// Destination of the active recording (`None` = not recording; mirrored
+    /// from the session's `is_recording` by the poll as a safety net).
+    recording: Option<String>,
+    /// A recording start/stop or its save dialog is in flight.
+    record_busy: bool,
     generation: u64,
     canvas_bounds: Option<Bounds<Pixels>>,
     pointer_pressed: bool,
@@ -105,6 +128,8 @@ impl ScreencastWorkspace {
             error: None,
             notice: None,
             screenshot_busy: false,
+            recording: None,
+            record_busy: false,
             generation: 0,
             canvas_bounds: None,
             pointer_pressed: false,
@@ -120,7 +145,9 @@ impl ScreencastWorkspace {
         cx.notify();
     }
 
-    /// Bounded-cadence poll: refresh devices and drain one frame per pass.
+    /// Bounded-cadence poll: syncs the session state and the recording
+    /// indicator. Frames are drained by [`Self::spawn_frame_pump`] at stream
+    /// cadence, never by this poll.
     fn spawn_poll(&mut self, generation: u64, cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx| loop {
             cx.background_executor().timer(DEVICE_POLL).await;
@@ -137,9 +164,14 @@ impl ScreencastWorkspace {
                             this.state = state;
                             cx.notify();
                         }
+                        // Safety net: a recording that the session finalized
+                        // on its own (device disconnect, stream end) must
+                        // release the UI indicator.
+                        if this.recording.is_some() && !session.is_recording() {
+                            this.recording = None;
+                            cx.notify();
+                        }
                         let is_active = session.is_active();
-                        drop(session);
-                        this.drain_frame(cx);
                         keep_polling = is_active || running;
                     }
                     keep_polling
@@ -147,6 +179,31 @@ impl ScreencastWorkspace {
                 .unwrap_or(false);
             if !alive {
                 break;
+            }
+        })
+        .detach();
+    }
+
+    /// Frame pump: drains the decoded-frame channel at stream cadence and
+    /// repaints on every promoted frame — the display loop mirrors scrcpy's
+    /// own (newest frame wins; bursts coalesce). Runs until the session ends
+    /// or a new generation replaces it.
+    fn spawn_frame_pump(&mut self, generation: u64, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| loop {
+            let outcome = this
+                .update(cx, |this, cx| {
+                    if this.generation != generation {
+                        return PumpOutcome::Disconnected;
+                    }
+                    this.drain_frame(cx)
+                })
+                .unwrap_or(PumpOutcome::Disconnected);
+            match outcome {
+                PumpOutcome::Disconnected => break,
+                PumpOutcome::Frames => {}
+                PumpOutcome::Idle => {
+                    cx.background_executor().timer(FRAME_PUMP_IDLE_WAIT).await;
+                }
             }
         })
         .detach();
@@ -208,19 +265,38 @@ impl ScreencastWorkspace {
 
     /// Drains the frame channel and promotes the newest frame to a render
     /// image; extra frames are dropped (the display semantics keep only the
-    /// latest frame).
-    fn drain_frame(&mut self, cx: &mut Context<Self>) {
+    /// latest frame). Reports whether frames arrived, the channel went quiet,
+    /// or the session ended.
+    fn drain_frame(&mut self, cx: &mut Context<Self>) -> PumpOutcome {
         let Some(receiver) = self.frames.as_ref() else {
-            return;
+            return PumpOutcome::Disconnected;
         };
         let mut latest = None;
-        while let Ok(frame) = receiver.try_recv() {
-            latest = Some(frame);
+        let mut connected = true;
+        loop {
+            match receiver.try_recv() {
+                Ok(frame) => latest = Some(frame),
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => {
+                    connected = false;
+                    break;
+                }
+            }
         }
+        let promoted = latest.is_some();
         if let Some(frame) = latest {
             self.frame_size = Some((frame.width, frame.height));
             self.frame = Some(Arc::new(to_render_image(frame)));
             cx.notify();
+        }
+        if !connected {
+            self.frames = None;
+            return PumpOutcome::Disconnected;
+        }
+        if promoted {
+            PumpOutcome::Frames
+        } else {
+            PumpOutcome::Idle
         }
     }
 
@@ -260,6 +336,7 @@ impl ScreencastWorkspace {
                         this.screen_off = false;
                         this.power_key_active = false;
                         this.spawn_poll(generation, cx);
+                        this.spawn_frame_pump(generation, cx);
                     }
                     Err(error) => this.error = Some(error),
                 }
@@ -281,6 +358,7 @@ impl ScreencastWorkspace {
         self.frame_size = None;
         self.state = ScrcpySessionState::Idle;
         self.notice = None;
+        self.recording = None;
         cx.notify();
     }
 
@@ -489,10 +567,109 @@ impl ScreencastWorkspace {
                 match outcome {
                     Ok(Some(path)) => {
                         this.error = None;
-                        this.notice = Some(path.display().to_string());
+                        this.notice = Some(this.language.format(
+                            TextKey::ScreencastScreenshotSaved,
+                            &[("path", &path.display().to_string())],
+                        ));
                     }
                     Ok(None) => {}
                     Err(error) => this.error = Some(error),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// Starts a recording: the save dialog runs first (the session streams
+    /// straight into the chosen MP4 once confirmed), then the session tees
+    /// the video stream into a remuxing ffmpeg process. Requires a running
+    /// cast (the video stream is the recording source).
+    fn start_recording(&mut self, cx: &mut Context<Self>) {
+        if self.record_busy {
+            return;
+        }
+        let Some(session) = self.session.clone() else {
+            return;
+        };
+        self.record_busy = true;
+        let language = self.language;
+        let directory = aps_platform::home_directory().unwrap_or_else(|_| std::env::temp_dir());
+        let serial = self.selected.clone().unwrap_or_default();
+        let suggested = suggested_recording_name(&serial, unix_millis());
+        let picker = cx.prompt_for_new_path(&directory, Some(&suggested));
+        cx.spawn(async move |this, cx| {
+            let chosen = picker.await;
+            let outcome = match chosen {
+                Ok(Ok(Some(path))) => {
+                    let started = cx
+                        .background_executor()
+                        .spawn(async move { session.start_recording(&path).map(|_| path) })
+                        .await;
+                    match started {
+                        Ok(path) => Ok(Some(path)),
+                        Err(error) => Err(language.format(
+                            TextKey::ScreencastRecordUnavailable,
+                            &[("error", &bounded_error_text(&error))],
+                        )),
+                    }
+                }
+                // Cancelled: discard quietly; picker failure: surface it.
+                Ok(Ok(None)) => Ok(None),
+                _ => Err(language
+                    .text(TextKey::ScreencastScreenshotPickerFailed)
+                    .to_owned()),
+            };
+            this.update(cx, |this, cx| {
+                this.record_busy = false;
+                match outcome {
+                    Ok(Some(path)) => {
+                        this.error = None;
+                        this.recording = Some(path.display().to_string());
+                    }
+                    Ok(None) => {}
+                    Err(error) => this.error = Some(error),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// Stops the active recording: the session closes the muxer's stdin and
+    /// waits for the MP4 trailer off the UI thread, then the saved path lands
+    /// in the notice line.
+    fn stop_recording(&mut self, cx: &mut Context<Self>) {
+        let Some(session) = self.session.clone() else {
+            return;
+        };
+        self.record_busy = true;
+        let task = cx.background_executor().spawn(async move {
+            session
+                .stop_recording()
+                .map(|result| result.map(|path| path.display().to_string()))
+        });
+        cx.spawn(async move |this, cx| {
+            let outcome = task.await;
+            this.update(cx, |this, cx| {
+                this.record_busy = false;
+                this.recording = None;
+                match outcome {
+                    Some(Ok(path)) => {
+                        this.error = None;
+                        this.notice = Some(this.language.format(
+                            TextKey::ScreencastRecordSaved,
+                            &[("path", &path)],
+                        ));
+                    }
+                    // The session ended first and already finalized the file;
+                    // nothing to report here.
+                    Some(Err(error)) => this.error = Some(error),
+                    None => {}
                 }
                 cx.notify();
             })
@@ -556,18 +733,29 @@ fn is_png(bytes: &[u8]) -> bool {
     bytes.starts_with(&PNG_SIGNATURE)
 }
 
-/// `screencap_<sanitized serial>_<unix millis>.png`; serials may contain `:`
-/// (TCP devices), which is replaced so the name stays a valid file name.
-fn suggested_screenshot_name(serial: &str, unix_millis: u128) -> String {
-    let sanitized: String = serial
+/// Serials may contain `:` (TCP devices); only file-name-safe characters
+/// survive sanitization.
+fn sanitized_serial(serial: &str) -> String {
+    serial
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.') {
-            c
-        } else {
-            '_'
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.') {
+                c
+            } else {
+                '_'
+            }
         })
-        .collect();
-    format!("screencap_{sanitized}_{unix_millis}.png")
+        .collect()
+}
+
+/// `screencap_<sanitized serial>_<unix millis>.png`.
+fn suggested_screenshot_name(serial: &str, unix_millis: u128) -> String {
+    format!("screencap_{}_{}.png", sanitized_serial(serial), unix_millis)
+}
+
+/// `record_<sanitized serial>_<unix millis>.mp4`.
+fn suggested_recording_name(serial: &str, unix_millis: u128) -> String {
+    format!("record_{}_{}.mp4", sanitized_serial(serial), unix_millis)
 }
 
 fn unix_millis() -> u128 {
@@ -791,10 +979,7 @@ impl Render for ScreencastWorkspace {
                 div()
                     .text_size(px(typography::SUPPORTING))
                     .text_color(theme.muted_foreground)
-                    .child(crate::studio::selectable(language.format(
-                        TextKey::ScreencastScreenshotSaved,
-                        &[("path", notice)],
-                    ))),
+                    .child(crate::studio::selectable(notice.clone())),
             );
         }
 
@@ -865,7 +1050,18 @@ impl ScreencastWorkspace {
                     .label(language.text(TextKey::ScreencastScreenshot))
                     .disabled(!has_device || self.screenshot_busy)
                     .on_click(cx.listener(|this, _, _, cx| this.capture_screenshot(cx))),
-            );
+            )
+            .child(if self.recording.is_some() {
+                Button::new("screencast-record")
+                    .label(language.text(TextKey::ScreencastRecordStop))
+                    .disabled(self.record_busy)
+                    .on_click(cx.listener(|this, _, _, cx| this.stop_recording(cx)))
+            } else {
+                Button::new("screencast-record")
+                    .label(language.text(TextKey::ScreencastRecord))
+                    .disabled(!is_running || self.record_busy)
+                    .on_click(cx.listener(|this, _, _, cx| this.start_recording(cx)))
+            });
 
         // Device picker: compact toggle buttons over the online devices; the
         // picker is locked while a session runs.
@@ -1017,6 +1213,18 @@ mod tests {
         assert_eq!(
             suggested_screenshot_name("192.168.1.5:5555", 42),
             "screencap_192.168.1.5_5555_42.png"
+        );
+    }
+
+    #[::core::prelude::v1::test]
+    fn suggested_recording_name_uses_the_mp4_extension() {
+        assert_eq!(
+            suggested_recording_name("FAKE001", 1_763_948_379_123),
+            "record_FAKE001_1763948379123.mp4"
+        );
+        assert_eq!(
+            suggested_recording_name("192.168.1.5:5555", 7),
+            "record_192.168.1.5_5555_7.mp4"
         );
     }
 }

@@ -11,16 +11,19 @@
 pub enum ScreencastQuality {
     /// 流畅: 1280 / 10 fps / 2 Mbps. Forced by the Kotlin jcodec fallback chain.
     Fluent,
-    /// 高清: 1600 / 60 fps / 12 Mbps. APS default.
-    #[default]
+    /// 高清: 1600 / 60 fps / 12 Mbps.
     Hd,
-    /// 原生: native resolution (no `max_size`) / 30 fps / 20 Mbps.
+    /// 原生: native resolution (no `max_size`) / 30 fps / 20 Mbps. APS
+    /// default (the mirror is the interaction surface; downscaling hurts
+    /// text legibility).
+    #[default]
     Native,
 }
 
 impl ScreencastQuality {
-    /// APS default preset (spec §7: `ScreencastQuality.DEFAULT` == HD).
-    pub const DEFAULT: ScreencastQuality = ScreencastQuality::Hd;
+    /// APS default preset: native resolution (user preference; the mirror is
+    /// the interaction surface, and downscaling hurts text legibility).
+    pub const DEFAULT: ScreencastQuality = ScreencastQuality::Native;
 
     /// UI-facing label; the dropdown renders `"<label> · <maxFps>fps"` (§7).
     pub fn label(self) -> &'static str {
@@ -76,11 +79,13 @@ impl ScreencastQuality {
 mod tests {
     use super::*;
 
-    /// Spec §10 ScreencastQualityTest: DEFAULT == HD.
+    /// The default preset is NATIVE (deliberate deviation from the spec's
+    /// `ScreencastQuality.DEFAULT == HD`; the mirror is the interaction
+    /// surface and downscaling hurts text legibility).
     #[test]
-    fn default_is_hd() {
-        assert_eq!(ScreencastQuality::DEFAULT, ScreencastQuality::Hd);
-        assert_eq!(ScreencastQuality::default(), ScreencastQuality::Hd);
+    fn default_is_native() {
+        assert_eq!(ScreencastQuality::DEFAULT, ScreencastQuality::Native);
+        assert_eq!(ScreencastQuality::default(), ScreencastQuality::Native);
     }
 
     /// Spec §10: FLUENT carries max_size=1280 / max_fps=10 / 2 Mbps.
