@@ -189,14 +189,14 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "aps-adb"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-platform",
 ]
 
 [[package]]
 name = "aps-ai"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-contracts",
  "aps-json",
@@ -210,7 +210,7 @@ dependencies = [
 
 [[package]]
 name = "aps-analysis"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-contracts",
  "aps-frame",
@@ -220,7 +220,7 @@ dependencies = [
 
 [[package]]
 name = "aps-app"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-adb",
  "aps-ai",
@@ -267,7 +267,7 @@ dependencies = [
 
 [[package]]
 name = "aps-battery"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-adb",
  "aps-json",
@@ -276,7 +276,7 @@ dependencies = [
 
 [[package]]
 name = "aps-benchmark"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-contracts",
  "aps-json",
@@ -286,7 +286,7 @@ dependencies = [
 
 [[package]]
 name = "aps-capture"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-adb",
  "aps-contracts",
@@ -295,7 +295,7 @@ dependencies = [
 
 [[package]]
 name = "aps-cli"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-adb",
  "aps-ai",
@@ -322,14 +322,14 @@ dependencies = [
 
 [[package]]
 name = "aps-contracts"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-primitives",
 ]
 
 [[package]]
 name = "aps-cpu"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-contracts",
  "aps-json",
@@ -340,11 +340,11 @@ dependencies = [
 
 [[package]]
 name = "aps-frame"
-version = "0.8.2"
+version = "0.8.3"
 
 [[package]]
 name = "aps-frame-mcp"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-analysis",
  "aps-contracts",
@@ -355,7 +355,7 @@ dependencies = [
 
 [[package]]
 name = "aps-gpu"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-adb",
  "aps-contracts",
@@ -366,11 +366,11 @@ dependencies = [
 
 [[package]]
 name = "aps-har-engine"
-version = "0.8.2"
+version = "0.8.3"
 
 [[package]]
 name = "aps-hprof-engine"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-primitives",
  "serde_json",
@@ -378,7 +378,7 @@ dependencies = [
 
 [[package]]
 name = "aps-json"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -386,7 +386,7 @@ dependencies = [
 
 [[package]]
 name = "aps-layout-inspector"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-adb",
  "aps-contracts",
@@ -401,7 +401,7 @@ dependencies = [
 
 [[package]]
 name = "aps-memory"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-hprof-engine",
  "aps-platform",
@@ -410,11 +410,11 @@ dependencies = [
 
 [[package]]
 name = "aps-method-recording"
-version = "0.8.2"
+version = "0.8.3"
 
 [[package]]
 name = "aps-network"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-contracts",
  "aps-har-engine",
@@ -424,7 +424,7 @@ dependencies = [
 
 [[package]]
 name = "aps-perfetto"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-contracts",
  "aps-frame",
@@ -433,15 +433,15 @@ dependencies = [
 
 [[package]]
 name = "aps-platform"
-version = "0.8.2"
+version = "0.8.3"
 
 [[package]]
 name = "aps-primitives"
-version = "0.8.2"
+version = "0.8.3"
 
 [[package]]
 name = "aps-protocol"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-contracts",
  "aps-primitives",
@@ -464,14 +464,14 @@ dependencies = [
 
 [[package]]
 name = "aps-simpleperf-engine"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-primitives",
 ]
 
 [[package]]
 name = "aps-source"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-contracts",
  "aps-platform",
@@ -479,7 +479,7 @@ dependencies = [
 
 [[package]]
 name = "aps-startup"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-adb",
  "aps-json",
@@ -489,7 +489,7 @@ dependencies = [
 
 [[package]]
 name = "aps-storage"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-contracts",
  "aps-json",
@@ -499,7 +499,7 @@ dependencies = [
 
 [[package]]
 name = "aps-ui-foundation"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-json",
 ]
