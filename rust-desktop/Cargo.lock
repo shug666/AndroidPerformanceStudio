@@ -449,7 +449,7 @@ dependencies = [
 
 [[package]]
 name = "aps-reversenet"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-adb",
  "mio",
@@ -457,7 +457,7 @@ dependencies = [
 
 [[package]]
 name = "aps-screencast"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-adb",
 ]
@@ -506,7 +506,7 @@ dependencies = [
 
 [[package]]
 name = "aps-winscope"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "aps-adb",
  "base64 0.23.1",

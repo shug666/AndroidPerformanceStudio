@@ -157,7 +157,9 @@ class WorkflowContractTest(unittest.TestCase):
     def test_preserves_release_trigger_and_publication_artifact_contract(self):
         self.assertIn('on:\n  push:\n    tags:\n      - "aps-desktop-v*"\n      - "v*"\n', self.workflow)
         publish = job(self.workflow, "publish")
-        self.assertIn("needs: [linux, macos, windows]", publish)
+        # This fork ships Windows and Linux only; the macOS matrix was removed
+        # with its hosted-runner queue (see the aps-desktop-release workflow).
+        self.assertIn("needs: [linux, windows]", publish)
         self.assertIn("pattern: packages-*", publish)
         self.assertIn("gh release create", publish)
 
