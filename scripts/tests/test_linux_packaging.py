@@ -117,6 +117,14 @@ class NativeLinuxPackagingTest(unittest.TestCase):
             icon = root / "rust-desktop/crates/aps-app/assets/icons/linux/app-icon.png"
             icon.parent.mkdir(parents=True)
             icon.write_bytes(b"fixture icon")
+            # The fork's packaging step also stages the Winscope viewer closure
+            # (see the workflow); the sandbox needs the staged sources it copies.
+            winscope = root / "rust-desktop/crates/aps-winscope/assets/winscope-viewer"
+            winscope.mkdir(parents=True)
+            (winscope / "index.html").write_text("<html>fixture</html>")
+            (root / "rust-desktop/crates/aps-winscope/assets/winscope-viewer-manifest.json").write_text(
+                '{"provenance": {}, "files": {}}'
+            )
             installer = root / "scripts/install-trace-processor.sh"
             installer.parent.mkdir()
             # Reproduce the downloader's original 0711 mode, without network or
