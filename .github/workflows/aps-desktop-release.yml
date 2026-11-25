@@ -28,10 +28,12 @@ on:
 permissions:
   contents: write
 
-# Tag pushes keep their real tag; manual runs synthesize a versioned tag from
-# the `version` input so artifact names and the release publish stay stable.
+# Tag pushes keep their real tag; manual runs synthesize the same
+# `-rebuild.N` tag shape from the `version` input so the packaging version
+# derivation (RPM forbids '-', the MSI regex only accepts rebuild.N) and the
+# artifact names keep working unchanged.
 env:
-  RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('aps-desktop-v{0}-manual.{1}', inputs.version || '0.0.0', github.run_number) }}
+  RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('aps-desktop-v{0}-rebuild.{1}', inputs.version || '0.0.0', github.run_number) }}
 
 jobs:
   firefox-profiler:
