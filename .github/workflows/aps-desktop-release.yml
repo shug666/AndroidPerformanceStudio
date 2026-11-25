@@ -9,12 +9,29 @@ on:
     tags:
       - "aps-desktop-v*"
       - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "App version for the packages, for example 0.8.3 (defaults to the current workspace version)"
+        required: false
+        type: string
+        default: "0.8.3"
+      publish:
+        description: "Create or refresh a GitHub Release with the built packages"
+        required: false
+        type: boolean
+        default: true
 
 # A -rebuild.N tag suffix selects a new source commit without changing the
 # application or installer version. Keep the full tag in artifact filenames.
 
 permissions:
   contents: write
+
+# Tag pushes keep their real tag; manual runs synthesize a versioned tag from
+# the `version` input so artifact names and the release publish stay stable.
+env:
+  RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('aps-desktop-v{0}-manual.{1}', inputs.version || '0.0.0', github.run_number) }}
 
 jobs:
   firefox-profiler:
@@ -85,7 +102,6 @@ jobs:
           path: dist/firefox-profiler
       - name: Package deb and rpm
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
           DEB_ARCH: ${{ matrix.deb_arch }}
           RPM_ARCH: ${{ matrix.rpm_arch }}
           TARGET: ${{ matrix.target }}
@@ -193,7 +209,6 @@ jobs:
       - name: Verify installed Linux packages as an ordinary user
         timeout-minutes: 15
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
           DEB_ARCH: ${{ matrix.deb_arch }}
           RPM_ARCH: ${{ matrix.rpm_arch }}
         run: |
@@ -286,15 +301,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "WiX installation failed: $LASTEXITCODE" }
       - name: Package portable ZIP and guided MSI
         shell: pwsh
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           ./scripts/windows/package.ps1
       - name: Smoke test Windows install, repair and uninstall
         shell: pwsh
         timeout-minutes: 10
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
         run: ./scripts/windows/smoke.ps1 -MsiPath "dist/aps-desktop-${env:RELEASE_TAG}-windows-x86_64.msi"
       - name: Upload Windows installer smoke logs
         if: always()
@@ -315,6 +326,9 @@ jobs:
   publish:
     name: Publish release
     needs: [linux, windows]
+    # Tag pushes always publish; manual runs follow the `publish` input so a
+    # smoke build can skip the release creation.
+    if: github.ref_type == 'tag' || inputs.publish == true
     runs-on: ubuntu-24.04
     steps:
       - name: Download packages
@@ -327,7 +341,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           version="${RELEASE_TAG#aps-desktop-v}"
           version="${version#rust-desktop-v}"; version="${version#v}"
@@ -340,5 +353,5 @@ jobs:
             gh release upload "${RELEASE_TAG}" release-assets/* --clobber
             gh release edit "${RELEASE_TAG}" --title "${title}"
           else
-            gh release create "${RELEASE_TAG}" release-assets/* --generate-notes --title "${title}"
+            gh release create "${RELEASE_TAG}" release-assets/* --generate-notes --title "${title}" --target "$GITHUB_SHA"
           fi
