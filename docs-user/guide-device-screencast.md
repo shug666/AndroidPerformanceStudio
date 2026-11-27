@@ -10,6 +10,10 @@ The Device Screencast module mirrors a connected Android device's screen inside 
 
 The app pushes a small scrcpy server (about 100 KB) to the device's `/data/local/tmp`, creates an adb reverse tunnel, and starts mirroring. No app is installed on the device and no root is required. Stopping the session or closing the module removes the tunnel and the pushed file.
 
+## Fullscreen
+
+Click **Fullscreen** in the toolbar (or double-click the mirror) to expand the mirror to the whole window: the title bar and navigation rail step aside, the frame is contain-fitted on a black backdrop, and device control keeps working. Press **Esc** or the **Exit fullscreen (Esc)** button in the top-right corner to return.
+
 ## Controls
 
 - **Mouse**: click to tap, drag to swipe, wheel to scroll. Coordinates map to the mirrored canvas area (letterboxing is ignored).

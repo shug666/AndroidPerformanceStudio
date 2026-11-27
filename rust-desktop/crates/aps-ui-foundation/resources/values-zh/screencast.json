@@ -35,5 +35,7 @@
   "screencast_send": "发送到设备",
   "screencast_error_prefix": "错误：{error}",
   "screencast_decoder_unavailable": "FFmpeg 解码器不可用：{error}",
-  "screencast_stop": "停止投屏"
+  "screencast_stop": "停止投屏",
+  "screencast_fullscreen": "全屏",
+  "screencast_exit_fullscreen": "退出全屏（Esc）"
 }

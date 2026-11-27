@@ -3155,6 +3155,16 @@ impl Render for Studio {
                     )),
             )
         };
+        // The screencast page owns the fullscreen state; build its overlay
+        // element (listeners bound to that entity) only when it is active.
+        let screencast_fullscreen = if self.screencast.read(cx).is_fullscreen() {
+            Some(
+                self.screencast
+                    .update(cx, |screencast, cx| screencast.fullscreen_overlay(cx)),
+            )
+        } else {
+            None
+        };
         let notifications_open = self.notifications.read(cx).is_open();
         let unread_notifications = self.notifications.read(cx).unread_count();
         let notification_button = || {
@@ -3267,15 +3277,25 @@ impl Render for Studio {
                     _ => {}
                 }
             })
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                if event.keystroke.key.eq_ignore_ascii_case("escape")
-                    && this.notifications.read(cx).is_open()
-                {
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                if !event.keystroke.key.eq_ignore_ascii_case("escape") {
+                    return;
+                }
+                // Layered dismissal: the popover first, then the fullscreen
+                // mirror. Handling it here (not only on the overlay) keeps ESC
+                // working wherever focus happens to be.
+                if this.notifications.read(cx).is_open() {
                     this.notifications.update(cx, |notifications, cx| {
                         notifications.close();
                         cx.notify();
                     });
                     cx.notify();
+                    cx.stop_propagation();
+                    return;
+                }
+                if this.screencast.read(cx).is_fullscreen() {
+                    this.screencast
+                        .update(cx, |screencast, cx| screencast.exit_fullscreen(window, cx));
                     cx.stop_propagation();
                 }
             }))
@@ -3657,6 +3677,7 @@ impl Render for Studio {
                                         | Destination::Cpu
                                         | Destination::Memory
                                         | Destination::LayoutInspector
+                                        | Destination::Screencast
                                         | Destination::Settings
                                 ) {
                                     workspace.overflow_hidden()
@@ -3666,6 +3687,12 @@ impl Render for Studio {
                             }),
                     ),
             )
+            // Fullscreen mirror: a page-level overlay would be clipped by the
+            // content area, so the shell renders it as the last child of the
+            // window root (above the title bar and navigation rail).
+            .when_some(screencast_fullscreen, |this, overlay| {
+                this.child(overlay)
+            })
             .when(notifications_open, |this| {
                 this.child(notification_backdrop).child(notification_panel)
             })

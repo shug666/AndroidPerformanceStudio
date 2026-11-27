@@ -107,6 +107,10 @@ pub(crate) struct ScreencastWorkspace {
     tick_started_at: std::time::Instant,
     /// Measured display frame rate (frames promoted per second).
     display_fps: u32,
+    /// The mirror owns the whole window (shell-rendered overlay; ESC exits).
+    fullscreen: bool,
+    /// Focus anchor of the overlay so ESC reaches it without a global binding.
+    fullscreen_focus: FocusHandle,
     send_input: Entity<InputState>,
 }
 
@@ -146,11 +150,43 @@ impl ScreencastWorkspace {
             promoted_since_tick: 0,
             tick_started_at: std::time::Instant::now(),
             display_fps: 0,
+            fullscreen: false,
+            fullscreen_focus: cx.focus_handle(),
             send_input,
         };
         workspace.refresh_devices(cx);
         cx.notify();
         workspace
+    }
+
+    /// Whether the shell should render the full-window mirror overlay.
+    pub(crate) fn is_fullscreen(&self) -> bool {
+        self.fullscreen
+    }
+
+    /// Toggles the full-window mirror. Only a live session can be expanded:
+    /// an idle or failed canvas has nothing to show fullscreen.
+    fn toggle_fullscreen(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !matches!(self.state, ScrcpySessionState::Running { .. }) {
+            return;
+        }
+        self.fullscreen = !self.fullscreen;
+        if self.fullscreen {
+            // The overlay is the only focusable surface left; anchoring focus
+            // here is what routes ESC to `exit_fullscreen`.
+            window.focus(&self.fullscreen_focus, cx);
+        }
+        cx.notify();
+    }
+
+    /// Leaves the full-window mirror (ESC, the corner button, or a session that
+    /// ended underneath it).
+    pub(crate) fn exit_fullscreen(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        if !self.fullscreen {
+            return;
+        }
+        self.fullscreen = false;
+        cx.notify();
     }
 
     pub(crate) fn set_language(&mut self, language: Language, cx: &mut Context<Self>) {
@@ -216,6 +252,13 @@ impl ScreencastWorkspace {
                                     metrics.resyncs,
                                     metrics.frames_decoded,
                                 );
+                            }
+                            // The overlay would otherwise keep showing the last
+                            // frame of a session that is gone.
+                            if this.fullscreen
+                                && !matches!(state, ScrcpySessionState::Running { .. })
+                            {
+                                this.fullscreen = false;
                             }
                             this.state = state;
                             cx.notify();
@@ -410,6 +453,8 @@ impl ScreencastWorkspace {
     }
 
     fn stop(&mut self, cx: &mut Context<Self>) {
+        // A stopped session has no surface to show fullscreen.
+        self.fullscreen = false;
         self.generation = self.generation.wrapping_add(1);
         if let Some(session) = self.session.take() {
             session.stop();
@@ -838,6 +883,152 @@ fn to_render_image(frame: BgraFrame) -> RenderImage {
     RenderImage::new([image::Frame::new(buffer)])
 }
 
+/// Full-window mirror overlay: the shell mounts it as the last child of the
+/// window root, so it covers the title bar and navigation rail and the frame
+/// gets every pixel the window has.
+impl ScreencastWorkspace {
+    pub(crate) fn fullscreen_overlay(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let language = self.language;
+        let frame = self.frame.clone();
+        let bounds_handle = cx.entity().downgrade();
+
+        let mut surface = div()
+            .id("screencast-fullscreen-surface")
+            .relative()
+            .size_full()
+            .child(
+                // Same probe contract as the inline canvas: the overlay surface
+                // owns the pointer mapping while it is up.
+                canvas(
+                    move |bounds, _, cx: &mut App| {
+                        bounds_handle
+                            .update(cx, |this: &mut ScreencastWorkspace, _| {
+                                if this.fullscreen {
+                                    this.canvas_bounds = Some(bounds);
+                                }
+                            })
+                            .ok();
+                    },
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full(),
+            );
+        if let Some(frame) = frame {
+            surface = surface.child(
+                img(ImageSource::Render(frame))
+                    .object_fit(ObjectFit::Contain)
+                    .size_full(),
+            );
+        }
+        let surface = Self::mirror_pointer(surface, cx);
+
+        div()
+            .id("screencast-fullscreen")
+            .absolute()
+            .inset_0()
+            // Opaque backdrop: the fit letterbox is black like a cinema screen
+            // and nothing of the page underneath shows through.
+            .bg(rgb(0x000000))
+            .track_focus(&self.fullscreen_focus)
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                if event.keystroke.key == "escape" {
+                    this.exit_fullscreen(window, cx);
+                }
+            }))
+            .child(surface)
+            .child(
+                div().absolute().top_3().right_3().child(
+                    Button::new("screencast-exit-fullscreen")
+                        .label(language.text(TextKey::ScreencastExitFullscreen))
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.exit_fullscreen(window, cx)),
+                        ),
+                ),
+            )
+            // A faint status strip keeps the frame rate readable without
+            // taking corner space away from the mirror.
+            .child(
+                div()
+                    .absolute()
+                    .bottom_2()
+                    .left_0()
+                    .right_0()
+                    .flex()
+                    .justify_center()
+                    .child(
+                        div()
+                            .text_size(px(typography::SUPPORTING))
+                            .text_color(rgba(0xffffffcc))
+                            .child(format!(
+                                "{} · {} fps",
+                                self.status_text(language),
+                                self.display_fps
+                            )),
+                    ),
+            )
+            .into_any_element()
+    }
+}
+
+impl ScreencastWorkspace {
+    /// Pointer mapping of the mirror surface, shared by the inline canvas and
+    /// the fullscreen overlay so both inject identically: press/drag/release
+    /// map to `ACTION_*`, the wheel to scroll, and a double click expands the
+    /// mirror to the whole window.
+    fn mirror_pointer(area: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
+        area.on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|this, event: &MouseDownEvent, _, _| {
+                this.pointer_pressed = true;
+                this.send_touch(ACTION_DOWN, event.position, 1.0, BUTTON_PRIMARY);
+            }),
+        )
+        .on_mouse_down(
+            MouseButton::Right,
+            cx.listener(|this, event: &MouseDownEvent, _, _| {
+                this.send_touch(ACTION_DOWN, event.position, 1.0, BUTTON_SECONDARY);
+            }),
+        )
+        .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, _| {
+            let (action, pressure, buttons) = if this.pointer_pressed {
+                (ACTION_MOVE, 1.0, BUTTON_PRIMARY)
+            } else {
+                (ACTION_HOVER_MOVE, 0.0, 0)
+            };
+            this.send_touch(action, event.position, pressure, buttons);
+        }))
+        .on_mouse_up(
+            MouseButton::Left,
+            cx.listener(|this, event: &MouseUpEvent, _, cx| {
+                this.pointer_pressed = false;
+                this.send_touch(ACTION_UP, event.position, 0.0, 0);
+                cx.notify();
+            }),
+        )
+        .on_mouse_up(
+            MouseButton::Right,
+            cx.listener(|this, event: &MouseUpEvent, _, _| {
+                this.send_touch(ACTION_UP, event.position, 0.0, 0);
+            }),
+        )
+        .on_scroll(cx.listener(|this, event: &ScrollEvent, _, _| {
+            let (scroll_x, scroll_y) = match event.delta {
+                ScrollDelta::Lines(delta) => (delta.x, delta.y),
+                ScrollDelta::Pixels(delta) => (f32::from(delta.x) / 40., f32::from(delta.y) / 40.),
+            };
+            this.send_scroll(event.position, scroll_x, scroll_y);
+        }))
+        .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
+            if event.click_count() >= 2 {
+                this.toggle_fullscreen(window, cx);
+            }
+        }))
+    }
+}
+
 impl Render for ScreencastWorkspace {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let language = self.language;
@@ -866,7 +1057,12 @@ impl Render for ScreencastWorkspace {
                     move |bounds, _, cx: &mut App| {
                         bounds_handle
                             .update(cx, |this: &mut ScreencastWorkspace, _| {
-                                this.canvas_bounds = Some(bounds);
+                                // The fullscreen overlay reports the bounds that
+                                // pointer events are mapped against; the inline
+                                // canvas must not clobber them meanwhile.
+                                if !this.fullscreen {
+                                    this.canvas_bounds = Some(bounds);
+                                }
                             })
                             .ok();
                     },
@@ -907,52 +1103,7 @@ impl Render for ScreencastWorkspace {
                         ),
                 )
             })
-            .when(is_running, |area| {
-                area.on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(|this, event: &MouseDownEvent, _, _| {
-                        this.pointer_pressed = true;
-                        this.send_touch(ACTION_DOWN, event.position, 1.0, BUTTON_PRIMARY);
-                    }),
-                )
-                .on_mouse_down(
-                    MouseButton::Right,
-                    cx.listener(|this, event: &MouseDownEvent, _, _| {
-                        this.send_touch(ACTION_DOWN, event.position, 1.0, BUTTON_SECONDARY);
-                    }),
-                )
-                .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, _| {
-                    let (action, pressure, buttons) = if this.pointer_pressed {
-                        (ACTION_MOVE, 1.0, BUTTON_PRIMARY)
-                    } else {
-                        (ACTION_HOVER_MOVE, 0.0, 0)
-                    };
-                    this.send_touch(action, event.position, pressure, buttons);
-                }))
-                .on_mouse_up(
-                    MouseButton::Left,
-                    cx.listener(|this, event: &MouseUpEvent, _, cx| {
-                        this.pointer_pressed = false;
-                        this.send_touch(ACTION_UP, event.position, 0.0, 0);
-                        cx.notify();
-                    }),
-                )
-                .on_mouse_up(
-                    MouseButton::Right,
-                    cx.listener(|this, event: &MouseUpEvent, _, _| {
-                        this.send_touch(ACTION_UP, event.position, 0.0, 0);
-                    }),
-                )
-                .on_scroll(cx.listener(|this, event: &ScrollEvent, _, _| {
-                    let (scroll_x, scroll_y) = match event.delta {
-                        ScrollDelta::Lines(delta) => (delta.x, delta.y),
-                        ScrollDelta::Pixels(delta) => {
-                            (f32::from(delta.x) / 40., f32::from(delta.y) / 40.)
-                        }
-                    };
-                    this.send_scroll(event.position, scroll_x, scroll_y);
-                }))
-            });
+            .when(is_running, |area| Self::mirror_pointer(area, cx));
 
         match &state {
             ScrcpySessionState::Idle => {
@@ -1201,6 +1352,13 @@ impl ScreencastWorkspace {
                 .on_click(cx.listener(|this, _, _, cx| this.refresh_devices(cx))),
         );
         if is_running {
+            row = row.child(
+                Button::new("screencast-fullscreen")
+                    .label(language.text(TextKey::ScreencastFullscreen))
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.toggle_fullscreen(window, cx)),
+                    ),
+            );
             row = row.child(
                 Button::new("screencast-stop")
                     .label(language.text(TextKey::ScreencastStop))

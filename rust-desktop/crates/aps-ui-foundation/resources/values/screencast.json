@@ -35,5 +35,7 @@
   "screencast_send": "Send to device",
   "screencast_error_prefix": "Error: {error}",
   "screencast_decoder_unavailable": "FFmpeg decoder unavailable: {error}",
-  "screencast_stop": "Stop casting"
+  "screencast_stop": "Stop casting",
+  "screencast_fullscreen": "Fullscreen",
+  "screencast_exit_fullscreen": "Exit fullscreen (Esc)"
 }
