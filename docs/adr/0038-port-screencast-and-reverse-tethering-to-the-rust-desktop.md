@@ -2,6 +2,9 @@
 
 Status: Accepted (2026-11-23)
 
+Extended by: [ADR 0039](0039-keep-the-screencast-mirror-live.md) (the CLI
+decoder's latency behavior: probe budget, thread count and the keyframe nudge).
+
 Extends: [ADR 0037](0037-port-winscope-capture-to-the-rust-desktop.md) onto the
 remaining fork-only features after upstream removed the legacy Kotlin
 `desktop-viewer` tree.

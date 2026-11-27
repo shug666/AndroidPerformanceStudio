@@ -3,15 +3,45 @@
 //! libavcodec/javacpp chain (or jcodec), this backend spawns the system
 //! `ffmpeg` CLI:
 //!
-//! `ffmpeg -nostdin -loglevel error -f h264 -i pipe:0 -f rawvideo -pix_fmt bgra pipe:1`
+//! `ffmpeg -nostdin -loglevel error -probesize 32 -analyzeduration 0 -threads 1
+//!  -f h264 -i pipe:0 -f rawvideo -pix_fmt bgra pipe:1`
 //!
 //! stdin receives H.264 Annex-B access units; stdout emits raw BGRA frames of
 //! exactly `width*height*4` bytes. `-nostdin` keeps ffmpeg from grabbing the
 //! terminal. A dedicated thread accumulates stdout into a `ByteBuffer`; each
-//! `decode` call only consumes frames that have already fully arrived (short
-//! deadline), leaving the rest buffered for the next call — this is what keeps
-//! the frame cadence smooth. The decoder interface mirrors spec §5.2
-//! (`configure`/`decode`/`reset`); `reset` kills and restarts the process.
+//! `decode` call returns the newest frame that has already fully arrived and
+//! discards older ones, so a stalled display can never build a backlog.
+//!
+//! ## Why those three options are load-bearing for a live mirror
+//!
+//! Measured on a real device stream (2136×1280 @ 24 AU/s, 97 KB per access
+//! unit), feeding one access unit per `decode` call:
+//!
+//! | ffmpeg options | first frame out |
+//! |---|---|
+//! | defaults (`-analyzeduration 0` only) | 2.2 s behind the stream |
+//! | `-probesize 32` | 0.7 s |
+//! | `-threads 1` | 2.1 s |
+//! | `-probesize 32 -threads 1` | **0.10 s** |
+//!
+//! - `-probesize 32` stops `avformat_find_stream_info` from buffering ~50
+//!   packets before the first decoded frame is emitted. With the default probe
+//!   budget the mirror is a two-second-delayed slideshow no matter how fast
+//!   the decoder itself is.
+//! - `-threads 1` disables frame-threaded decoding, which otherwise holds
+//!   `nproc - 1` decoded frames before releasing the first one (a second
+//!   source of delay that grows with core count).
+//! - `-analyzeduration 0` keeps the raw H.264 demuxer from probing seconds of
+//!   content first.
+//!
+//! `ffmpeg` still holds the last access unit until the *next* one arrives (the
+//! H.264 parser ends a frame only when it sees the following frame's start
+//! code), so a screen that never changes produces no new frame. The session
+//! compensates by asking the server for a fresh keyframe when the stream goes
+//! quiet with an undisplayed unit pending — see `session::run_session`.
+//!
+//! The decoder interface mirrors spec §5.2 (`configure`/`decode`/`reset`);
+//! `reset` kills and restarts the process.
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -23,10 +53,16 @@ use std::time::{Duration, Instant};
 /// Environment override consulted before the PATH search (task constraint).
 pub const FFMPEG_EXECUTABLE_ENV: &str = "FFMPEG_EXECUTABLE";
 
-/// Default per-decode wait for one frame to arrive before returning `None`.
-const DEFAULT_FRAME_WAIT: Duration = Duration::from_millis(100);
+/// Default per-decode wait for a frame to arrive before returning `None`.
+///
+/// This is an *opportunistic* wait, not a pacing budget: the packet reader
+/// must never be held back by a decoder that is simply still working. 4 ms
+/// covers the hand-off between the socket thread writing an access unit and
+/// the stdout pump thread publishing the frame that this unit released,
+/// without costing the read loop more than a fraction of a frame interval.
+const DEFAULT_FRAME_WAIT: Duration = Duration::from_millis(4);
 /// Poll interval while waiting for a frame.
-const POLL_INTERVAL: Duration = Duration::from_millis(2);
+const POLL_INTERVAL: Duration = Duration::from_millis(1);
 /// stdout read chunk.
 const READ_CHUNK: usize = 64 * 1024;
 /// Backpressure cap on buffered (undrained) output; beyond it the reader
@@ -35,11 +71,25 @@ const MAX_BUFFERED_BYTES: usize = 64 << 20;
 /// stderr tail kept for diagnostics.
 const STDERR_TAIL_BYTES: usize = 4096;
 
-/// Exact argv mandated by the porting task (note `-pix_fmt bgra`).
-pub const FFMPEG_DECODER_ARGV: [&str; 12] = [
+/// Exact argv used by the CLI backend. The first four options are latency
+/// critical for a live mirror and measured — see the module docs for the
+/// before/after numbers; do not drop them without re-measuring.
+pub const FFMPEG_DECODER_ARGV: [&str; 18] = [
     "-nostdin",
     "-loglevel",
     "error",
+    // Stream-info probing must not buffer the live stream (50 packets of
+    // startup delay on the default budget).
+    "-probesize",
+    "32",
+    "-analyzeduration",
+    "0",
+    // No frame-threaded decoding: it holds nproc-1 frames before the first
+    // one is released. Slice threading is unavailable (MediaCodec emits a
+    // single slice per frame), so one decode thread is the low-latency choice
+    // and still decodes this stream ~72 fps (measured).
+    "-threads",
+    "1",
     "-f",
     "h264",
     "-i",
@@ -50,6 +100,20 @@ pub const FFMPEG_DECODER_ARGV: [&str; 12] = [
     "bgra",
     "pipe:1",
 ];
+
+/// Counters for the diagnostics surface: how many access units went in, how
+/// many frames came out, and how many decoded frames were displaced by a newer
+/// one before the display could take them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DecoderStats {
+    /// Access units written to `ffmpeg` stdin.
+    pub packets: u64,
+    /// Frames handed to the caller.
+    pub frames: u64,
+    /// Decoded frames discarded because a newer frame was already available
+    /// in the same drain pass (the display only needs the newest frame).
+    pub frames_dropped: u64,
+}
 
 /// One decoded frame: tightly packed BGRA (Skia N32 / AV_PIX_FMT_BGRA layout),
 /// independently allocated per frame; consumers must not hold frames across
@@ -68,9 +132,12 @@ pub trait FrameDecoder: Send {
     /// Feed a codec config packet (Annex-B SPS/PPS). Produces no frame.
     fn configure(&mut self, payload: &[u8]);
 
-    /// Feed one access unit and try to take the next complete BGRA frame
-    /// (wait bounded by a short deadline). `Ok(None)` = no full frame arrived
-    /// yet; leftover bytes stay buffered for the next call.
+    /// Feed one access unit and return the newest frame that is available,
+    /// discarding older complete frames (a live mirror shows the newest frame
+    /// only). Waits at most a few milliseconds for the frame this unit
+    /// released, never for a frame that arrives with a later unit: returning
+    /// `Ok(None)` immediately is what keeps the packet reader ahead of the
+    /// stream.
     fn decode(
         &mut self,
         payload: &[u8],
@@ -80,6 +147,12 @@ pub trait FrameDecoder: Send {
 
     /// Drop all decoder state. The CLI backend kills and restarts the process.
     fn reset(&mut self);
+
+    /// Diagnostics counters; the default is all-zero for backends that do not
+    /// track them.
+    fn stats(&self) -> DecoderStats {
+        DecoderStats::default()
+    }
 }
 
 /// The ffmpeg CLI backend is unavailable (executable not found). Surfaced at
@@ -101,6 +174,26 @@ impl std::error::Error for DecoderUnavailable {}
 struct ByteBuffer {
     data: Vec<u8>,
     head: usize,
+}
+
+/// Atomic backing for [`DecoderStats`]: the decode path holds a `&mut self`
+/// borrow on the process handle, so the counters are shared instead of copied.
+#[derive(Debug, Default)]
+struct DecoderCounters {
+    packets: std::sync::atomic::AtomicU64,
+    frames: std::sync::atomic::AtomicU64,
+    frames_dropped: std::sync::atomic::AtomicU64,
+}
+
+impl DecoderCounters {
+    fn snapshot(&self) -> DecoderStats {
+        use std::sync::atomic::Ordering;
+        DecoderStats {
+            packets: self.packets.load(Ordering::Relaxed),
+            frames: self.frames.load(Ordering::Relaxed),
+            frames_dropped: self.frames_dropped.load(Ordering::Relaxed),
+        }
+    }
 }
 
 impl ByteBuffer {
@@ -125,6 +218,23 @@ impl ByteBuffer {
             self.head = 0;
         }
     }
+
+    /// Copies out the **newest** complete frame of `need` bytes and throws away
+    /// the older complete frames ahead of it; returns how many frames were
+    /// discarded.
+    ///
+    /// This is the "newest frame wins" display rule: when the decoder has been
+    /// catching up (or the display stalled) the buffer can hold several
+    /// frames, and displaying them in order would only add latency.
+    fn drain_newest(&mut self, need: usize, out: &mut Vec<u8>) -> usize {
+        let mut dropped = 0;
+        while self.len() >= need * 2 {
+            self.head += need;
+            dropped += 1;
+        }
+        self.drain(need, out);
+        dropped
+    }
 }
 
 /// One spawned ffmpeg process and its pump threads.
@@ -147,6 +257,7 @@ pub struct FfmpegCliDecoder {
     process: Option<DecodeProcess>,
     /// Spawn failure sticky error; `decode` surfaces it on every call.
     spawn_error: Option<String>,
+    stats: Arc<DecoderCounters>,
 }
 
 impl FfmpegCliDecoder {
@@ -170,6 +281,7 @@ impl FfmpegCliDecoder {
             frame_wait,
             process: None,
             spawn_error: None,
+            stats: Arc::new(DecoderCounters::default()),
         }
     }
 
@@ -222,22 +334,34 @@ impl FrameDecoder for FfmpegCliDecoder {
         let need = usize::try_from(need)
             .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
         let frame_wait = self.frame_wait;
+        let stats = self.stats.clone();
         let process = self.active_process()?;
-        if let Some(stdin) = process.stdin.as_mut()
-            && let Err(error) = stdin.write_all(payload).and_then(|_| stdin.flush())
-        {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::BrokenPipe,
-                format!("ffmpeg decoder stdin write failed: {error}"),
-            ));
+        if !payload.is_empty() {
+            stats.packets.fetch_add(1, Ordering::Relaxed);
+            if let Some(stdin) = process.stdin.as_mut()
+                && let Err(error) = stdin.write_all(payload).and_then(|_| stdin.flush())
+            {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::BrokenPipe,
+                    format!("ffmpeg decoder stdin write failed: {error}"),
+                ));
+            }
         }
+        // Opportunistic wait only: the frame released by this access unit is
+        // usually already in the pipe, but a frame that needs a *later* access
+        // unit must not stall the reader (that is what turned the mirror into
+        // a 1 fps slideshow).
         let deadline = Instant::now() + frame_wait;
         let mut out = Vec::with_capacity(need);
         loop {
             {
                 let mut buffer = lock(&process.buffer);
                 if buffer.len() >= need {
-                    buffer.drain(need, &mut out);
+                    let dropped = buffer.drain_newest(need, &mut out);
+                    stats.frames.fetch_add(1, Ordering::Relaxed);
+                    stats
+                        .frames_dropped
+                        .fetch_add(dropped as u64, Ordering::Relaxed);
                     return Ok(Some(BgraFrame {
                         bgra: out,
                         width,
@@ -257,6 +381,10 @@ impl FrameDecoder for FfmpegCliDecoder {
             }
             std::thread::sleep(POLL_INTERVAL);
         }
+    }
+
+    fn stats(&self) -> DecoderStats {
+        self.stats.snapshot()
     }
 
     /// Kill the child and start a fresh process (task constraint: reset = kill
@@ -299,8 +427,7 @@ fn spawn_decode_process(executable: &Path) -> Result<DecodeProcess, String> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    let mut child = command
-        .spawn()
+    let mut child = crate::spawn_executable(&mut command)
         .map_err(|error| format!("unable to spawn ffmpeg decoder: {error}"))?;
     let stdin = child
         .stdin
@@ -452,9 +579,18 @@ fn usable_executable(path: &Path) -> Option<PathBuf> {
 mod tests {
     use super::*;
 
+    /// A fresh scratch directory for one test.
+    ///
+    /// The sequence number matters: `SystemTime::now()` can be served from a
+    /// coarse clock (whole kernel ticks), so two tests starting in the same
+    /// tick used to compute the same path — one would write the stub script
+    /// while the other executed it, which the kernel rejects with
+    /// `ETXTBSY` ("Text file busy").
     fn unique_temp_dir(label: &str) -> PathBuf {
+        static SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let sequence = SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let directory = std::env::temp_dir().join(format!(
-            "aps-screencast-{label}-{}-{}",
+            "aps-screencast-{label}-{}-{}-{sequence}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -493,6 +629,33 @@ mod tests {
         buffer.push(&[9, 10]);
         buffer.drain(2, &mut out);
         assert_eq!(&out[3..], [9, 10]);
+    }
+
+    /// Newest-frame-wins: with three complete frames buffered, `drain_newest`
+    /// returns the last one and reports the two it discarded, so a display
+    /// that fell behind never replays stale frames.
+    #[test]
+    fn byte_buffer_newest_frame_wins() {
+        let mut buffer = ByteBuffer::default();
+        buffer.push(&[1, 1, 2, 2, 3, 3]);
+        let mut out = Vec::new();
+        let dropped = buffer.drain_newest(2, &mut out);
+        assert_eq!(out, [3, 3]);
+        assert_eq!(dropped, 2);
+        assert_eq!(buffer.len(), 0);
+
+        // Exactly one complete frame: nothing dropped, nothing left over.
+        buffer.push(&[7, 7]);
+        let mut out = Vec::new();
+        assert_eq!(buffer.drain_newest(2, &mut out), 0);
+        assert_eq!(out, [7, 7]);
+
+        // A partial trailing frame stays buffered for the next arrival.
+        buffer.push(&[9, 9, 10]);
+        let mut out = Vec::new();
+        assert_eq!(buffer.drain_newest(2, &mut out), 0);
+        assert_eq!(out, [9, 9]);
+        assert_eq!(buffer.len(), 1);
     }
 
     /// PATH lookup finds executables with the exec bit and skips the rest.
@@ -558,9 +721,12 @@ mod tests {
 
     /// End-to-end against the real ffmpeg CLI: encode a 64×64 testsrc clip,
     /// feed config + access units, then close the input pipe — ffmpeg's raw
-    /// h264 demuxer reads in ~1 KiB blocking chunks, so a finite clip only
-    /// flushes at EOF (a live scrcpy stream keeps the pipe continuously fed).
-    /// Verifies BGRA frames of exactly 64*64*4 bytes. Skipped (with a SKIP
+    /// h264 demuxer keeps the newest access unit pending until EOF (a live
+    /// scrcpy stream keeps the pipe continuously fed instead).
+    ///
+    /// Verifies BGRA frames of exactly 64*64*4 bytes and, because the drain
+    /// loop applies the newest-frame-wins rule, that the surviving frame is
+    /// the end of the clip rather than a stale early one. Skipped (with a SKIP
     /// line) when ffmpeg/libx264 is unavailable, per the porting task's
     /// §10-equivalent decoder test contract.
     #[test]
@@ -578,12 +744,15 @@ mod tests {
             !split.access_units.is_empty(),
             "splitter found no access units"
         );
+        // Decode the same bytes through ffmpeg in one shot: the last frame of
+        // that reference run is what the live decoder must end on too.
+        let reference_last = decode_whole_stream_last_frame(&executable, &stream, 64, 64);
 
         let mut decoder = FfmpegCliDecoder::with_frame_wait(executable, Duration::from_millis(40));
         if !split.config.is_empty() {
             decoder.configure(&split.config);
         }
-        // Feed everything; no frame can complete until the demuxer sees EOF.
+        // Feed everything; ffmpeg holds the tail of the stream until EOF.
         for unit in &split.access_units {
             decoder
                 .decode(unit, 64, 64)
@@ -597,7 +766,7 @@ mod tests {
         let error = loop {
             attempts += 1;
             assert!(
-                attempts <= 200,
+                attempts <= 500,
                 "decoder stalled with {} frames",
                 frames.len()
             );
@@ -611,21 +780,54 @@ mod tests {
             error.to_string().contains("ffmpeg decoder exited"),
             "drain loop must end with the process exit, got: {error}"
         );
-        assert_eq!(
-            frames.len(),
-            split.access_units.len(),
-            "every encoded access unit must produce one BGRA frame"
-        );
-        for frame in &frames {
-            assert_eq!(frame.width, 64);
-            assert_eq!(frame.height, 64);
-            assert_eq!(frame.bgra.len(), 64 * 64 * 4);
+        let last = frames.last().expect("the clip must decode to a frame");
+        assert_eq!(last.width, 64);
+        assert_eq!(last.height, 64);
+        assert_eq!(last.bgra.len(), 64 * 64 * 4);
+        if let Some(reference_last) = reference_last {
+            assert_eq!(
+                last.bgra, reference_last,
+                "the newest-frame-wins drain must end on the clip's last frame"
+            );
         }
-        assert_ne!(
-            frames[0].bgra,
-            frames.last().expect("at least one frame").bgra,
-            "testsrc animates; first and last frames must differ"
+        assert!(
+            decoder.stats().frames >= 1 && decoder.stats().packets > 0,
+            "stats must count the fed access units: {:?}",
+            decoder.stats()
         );
+    }
+
+    /// Reference decode of a finite Annex-B stream in a single ffmpeg run:
+    /// returns the final BGRA frame (the ground truth for the last frame).
+    fn decode_whole_stream_last_frame(
+        executable: &Path,
+        stream: &[u8],
+        width: u32,
+        height: u32,
+    ) -> Option<Vec<u8>> {
+        let mut child = Command::new(executable)
+            .args(FFMPEG_DECODER_ARGV)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .ok()?;
+        let mut stdin = child.stdin.take()?;
+        let bytes = stream.to_vec();
+        let writer = std::thread::spawn(move || {
+            use std::io::Write;
+            let _ = stdin.write_all(&bytes);
+        });
+        let mut stdout = child.stdout.take()?;
+        let mut sink = Vec::new();
+        let _ = stdout.read_to_end(&mut sink);
+        let _ = writer.join();
+        let _ = child.wait();
+        let frame_len = usize::try_from(u64::from(width) * u64::from(height) * 4).ok()?;
+        if sink.len() < frame_len {
+            return None;
+        }
+        Some(sink[sink.len() - frame_len..].to_vec())
     }
 
     /// Generates an H.264 Annex-B stream with the local ffmpeg CLI

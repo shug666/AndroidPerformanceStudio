@@ -64,8 +64,7 @@ impl VideoRecorder {
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::piped());
-        let mut child = command
-            .spawn()
+        let mut child = crate::spawn_executable(&mut command)
             .map_err(|error| format!("unable to spawn ffmpeg recorder: {error}"))?;
         let stdin = child
             .stdin
@@ -169,9 +168,18 @@ impl Drop for VideoRecorder {
 mod tests {
     use super::*;
 
+    /// A fresh scratch directory for one test.
+    ///
+    /// The sequence number matters: `SystemTime::now()` can be served from a
+    /// coarse clock (whole kernel ticks), so two tests starting in the same
+    /// tick used to compute the same path — one would write the stub script
+    /// while the other executed it, which the kernel rejects with
+    /// `ETXTBSY` ("Text file busy").
     fn unique_temp_dir(label: &str) -> PathBuf {
+        static SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let sequence = SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let directory = std::env::temp_dir().join(format!(
-            "aps-screencast-record-{label}-{}-{}",
+            "aps-screencast-{label}-{}-{}-{sequence}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -216,8 +224,8 @@ mod tests {
                 "/tmp/out.mp4"
             ]
         );
-        // Fluent mirrors at 10 fps; the seeded rate follows the session.
-        assert_eq!(recorder_argv(10, Path::new("x.mp4"))[6], "10");
+        // The seeded rate follows the session's preset (FLUENT mirrors at 30).
+        assert_eq!(recorder_argv(30, Path::new("x.mp4"))[6], "30");
     }
 
     /// End-to-end against a stub ffmpeg: the recorder pipes written bytes to
@@ -238,19 +246,18 @@ mod tests {
             ),
         );
 
-        let mut recorder =
-            VideoRecorder::spawn(&stub, output.clone(), 60).expect("stub spawn");
+        let mut recorder = VideoRecorder::spawn(&stub, output.clone(), 60).expect("stub spawn");
         recorder.write(&[0, 0, 0, 1, 0x67]).expect("config write");
         recorder.write(&[0, 0, 0, 1, 0x41]).expect("unit write");
         assert_eq!(recorder.path(), output.as_path());
         assert_eq!(recorder.finish().expect("finish"), output);
 
         let log = std::fs::read_to_string(&log_path).expect("stub log");
+        assert_eq!(log.lines().collect::<Vec<_>>(), recorder_argv(60, &output));
         assert_eq!(
-            log.lines().collect::<Vec<_>>(),
-            recorder_argv(60, &output)
+            std::fs::read(&output).expect("output"),
+            [0, 0, 0, 1, 0x67, 0, 0, 0, 1, 0x41]
         );
-        assert_eq!(std::fs::read(&output).expect("output"), [0, 0, 0, 1, 0x67, 0, 0, 0, 1, 0x41]);
         let _ = std::fs::remove_dir_all(&directory);
     }
 
@@ -282,9 +289,11 @@ mod tests {
         };
         let directory = unique_temp_dir("real");
         let output = directory.join("out.mp4");
-        let mut recorder = VideoRecorder::spawn(&executable, output.clone(), 60)
-            .expect("real recorder spawn");
-        recorder.write(&test_stream(&executable)).expect("stream write");
+        let mut recorder =
+            VideoRecorder::spawn(&executable, output.clone(), 60).expect("real recorder spawn");
+        recorder
+            .write(&test_stream(&executable))
+            .expect("stream write");
         recorder.finish().expect("finish");
 
         let bytes = std::fs::read(&output).expect("mp4 file");

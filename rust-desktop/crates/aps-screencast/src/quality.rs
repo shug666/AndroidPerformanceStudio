@@ -2,18 +2,36 @@
 //!
 //! The three presets map onto scrcpy-server v3.1 `key=value` options verbatim;
 //! the keys are the server's own parser keys (`max_size`, `max_fps`,
-//! `video_bit_rate`). NATIVE deliberately omits `max_size` (native resolution)
-//! and caps fps at 30 — a measured trade-off: 60 fps queues the device-side
-//! H.264 encoder and adds 20 ms+ end-to-end latency (spec §7, TB355FU).
+//! `video_bit_rate`).
+//!
+//! The numbers are budgeted against the *host* software decoder, which is what
+//! this app uses (see `decoder`): one ffmpeg decode thread sustains ~72 fps at
+//! 2136×1280 on a current desktop CPU, and the cost scales with pixel count.
+//! The presets therefore keep every option inside that budget instead of
+//! asking the device for frames the host cannot present:
+//!
+//! - 流畅 / FLUENT mirrors 1280 px and 30 fps: a mirror that updates ten times
+//!   a second (the legacy preset) reads as broken, and 1280 px is comfortable
+//!   for every host.
+//! - 高清 / HD mirrors 1600 px at up to 60 fps: the smooth-scrolling preset for
+//!   hosts with headroom; at 1600×960 one decode thread still sustains well
+//!   over 60 fps.
+//! - 原生 / NATIVE keeps the device resolution (no `max_size`) at 30 fps —
+//!   downscaling hurts text legibility, and 30 fps fits the one-thread decode
+//!   budget at 2136×1280.
+//!
+//! Bitrates stay near scrcpy's own default (8 Mbps) rather than racing the
+//! resolution: the link is adb (USB or Wi-Fi) and the device encoder pays for
+//! every megabit, while a still screen costs almost nothing either way.
 
 /// Encoding quality preset selected per session (spec §7).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ScreencastQuality {
-    /// 流畅: 1280 / 10 fps / 2 Mbps. Forced by the Kotlin jcodec fallback chain.
+    /// 流畅: 1280 / 30 fps / 4 Mbps. For weak hosts and USB 2 links.
     Fluent,
-    /// 高清: 1600 / 60 fps / 12 Mbps.
+    /// 高清: 1600 / 60 fps / 12 Mbps. Smooth scrolling with host headroom.
     Hd,
-    /// 原生: native resolution (no `max_size`) / 30 fps / 20 Mbps. APS
+    /// 原生: native resolution (no `max_size`) / 30 fps / 12 Mbps. APS
     /// default (the mirror is the interaction surface; downscaling hurts
     /// text legibility).
     #[default]
@@ -46,7 +64,7 @@ impl ScreencastQuality {
     /// `max_fps` server option (§7).
     pub fn max_fps(self) -> u32 {
         match self {
-            Self::Fluent => 10,
+            Self::Fluent => 30,
             Self::Hd => 60,
             Self::Native => 30,
         }
@@ -55,9 +73,9 @@ impl ScreencastQuality {
     /// `video_bit_rate` server option (§7).
     pub fn video_bit_rate(self) -> u32 {
         match self {
-            Self::Fluent => 2_000_000,
+            Self::Fluent => 4_000_000,
             Self::Hd => 12_000_000,
-            Self::Native => 20_000_000,
+            Self::Native => 12_000_000,
         }
     }
 
@@ -88,18 +106,19 @@ mod tests {
         assert_eq!(ScreencastQuality::default(), ScreencastQuality::Native);
     }
 
-    /// Spec §10: FLUENT carries max_size=1280 / max_fps=10 / 2 Mbps.
+    /// FLUENT carries max_size=1280 / 30 fps / 4 Mbps: a mirrored screen that
+    /// updates ten times a second (the legacy values) is not a mirror.
     #[test]
     fn fluent_server_argv_matches_the_spec_table() {
         let quality = ScreencastQuality::Fluent;
         assert_eq!(
             quality.server_argv(),
-            ["max_size=1280", "max_fps=10", "video_bit_rate=2000000"]
+            ["max_size=1280", "max_fps=30", "video_bit_rate=4000000"]
         );
         assert_eq!(quality.label(), "流畅");
     }
 
-    /// Spec §10: HD carries max_size=1600 / max_fps=60 / 12 Mbps.
+    /// HD carries max_size=1600 / 60 fps / 12 Mbps.
     #[test]
     fn hd_server_argv_matches_the_spec_table() {
         let quality = ScreencastQuality::Hd;
@@ -110,15 +129,44 @@ mod tests {
         assert_eq!(quality.label(), "高清");
     }
 
-    /// Spec §10: NATIVE has no max_size and carries max_fps=30 / 20 Mbps.
+    /// NATIVE has no max_size and carries max_fps=30 / 12 Mbps.
     #[test]
     fn native_omits_max_size() {
         let quality = ScreencastQuality::Native;
         assert!(quality.max_size().is_none());
         assert_eq!(
             quality.server_argv(),
-            ["max_fps=30", "video_bit_rate=20000000"]
+            ["max_fps=30", "video_bit_rate=12000000"]
         );
         assert_eq!(quality.label(), "原生");
+    }
+
+    /// Every preset must stay inside the one-thread software decode budget:
+    /// pixel count × fps is the cost driver, and 2136×1280 @ 30 fps is the
+    /// measured ceiling (~72 fps of decode capacity at that size).
+    #[test]
+    fn presets_stay_inside_the_software_decode_budget() {
+        let native_pixels = 2136.0 * 1280.0;
+        let budget = native_pixels * 30.0 * 1.4; // 40% headroom over the default
+        for quality in [
+            ScreencastQuality::Fluent,
+            ScreencastQuality::Hd,
+            ScreencastQuality::Native,
+        ] {
+            let pixels = match quality.max_size() {
+                // max_size caps the *long* side; the device here is 16:10-ish.
+                Some(size) => {
+                    let scale = f64::from(size) / 2136.0;
+                    native_pixels * scale * scale
+                }
+                None => native_pixels,
+            };
+            let load = pixels * f64::from(quality.max_fps());
+            assert!(
+                load <= budget,
+                "{} preset needs {load:.0} px·fps, budget is {budget:.0}",
+                quality.label()
+            );
+        }
     }
 }

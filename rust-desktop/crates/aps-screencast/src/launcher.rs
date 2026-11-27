@@ -13,6 +13,7 @@ use aps_adb::AdbLocator;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 /// Embedded scrcpy-server v3.1 (90,640-byte jar; the server self-checks its
@@ -37,6 +38,9 @@ pub const PUSH_TIMEOUT_SECS: u64 = 60;
 /// (spec §1.4/§6.4, CLEANUP_SETTLE_DELAY_MS).
 pub const CLEANUP_SETTLE_DELAY_MS: u64 = 500;
 
+/// Cap of the captured device-server output tail (diagnostics only).
+pub const SERVER_LOG_TAIL_BYTES: usize = 8 * 1024;
+
 /// One launched server session's identifiers (spec §1.1).
 #[derive(Debug, Clone)]
 pub struct LaunchedServer {
@@ -51,6 +55,10 @@ pub struct LaunchedServer {
     pub local_port: u16,
     /// Flip to cancel the session shell (killed like the Kotlin coroutine).
     pub cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// Merged stdout+stderr tail of the device-server shell: a crashed or
+    /// misbehaving server usually explains itself here (missing CLASSPATH
+    /// jar, incompatible Android, codec failures — all otherwise silent).
+    pub server_log_tail: Arc<Mutex<String>>,
 }
 
 impl LaunchedServer {
@@ -68,6 +76,7 @@ impl LaunchedServer {
             local_jar_path: PathBuf::new(),
             local_port,
             cancel: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            server_log_tail: Arc::new(Mutex::new(String::new())),
         }
     }
 }
@@ -85,19 +94,53 @@ fn drain_to_bytes<R: Read>(handle: Option<R>) -> Vec<u8> {
     sink
 }
 
-/// Fire-and-forget stderr/stdout drainer for the long-lived session shell.
-fn spawn_drainer<R: Read + Send + 'static>(handle: Option<R>) {
+/// Fire-and-forget stderr/stdout drainer for the long-lived session shell;
+/// each read chunk is handed to `sink` (bounded tail accumulation).
+fn spawn_drainer<R: Read + Send + 'static>(
+    handle: Option<R>,
+    sink: impl Fn(&[u8]) + Send + 'static,
+) {
     std::thread::spawn(move || {
-        let mut sink = Vec::new();
+        let sink = sink;
         if let Some(mut handle) = handle {
-            let _ = handle.read_to_end(&mut sink);
+            let mut chunk = [0u8; 4096];
+            loop {
+                match handle.read(&mut chunk) {
+                    Ok(0) | Err(_) => break,
+                    Ok(count) => sink(&chunk[..count]),
+                }
+            }
         }
     });
 }
 
+/// Appends `chunk` to the bounded tail, keeping only the last
+/// [`SERVER_LOG_TAIL_BYTES`] bytes (device output is diagnostics only).
+fn append_tail(tail: &Mutex<String>, chunk: &[u8]) {
+    let mut tail = tail.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    tail.push_str(&String::from_utf8_lossy(chunk));
+    if tail.len() > SERVER_LOG_TAIL_BYTES {
+        let cut = tail.len() - SERVER_LOG_TAIL_BYTES;
+        let boundary = (cut..tail.len())
+            .find(|i| tail.is_char_boundary(*i))
+            .unwrap_or(tail.len());
+        tail.drain(..boundary);
+    }
+}
+
+/// The bounded tail of the device-server output, trimmed to its last 600
+/// characters for error messages.
+pub fn server_log_tail_text(tail: &Mutex<String>) -> String {
+    let tail = tail.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let trimmed = tail.trim();
+    let chars: Vec<char> = trimmed.chars().collect();
+    let start = chars.len().saturating_sub(600);
+    chars[start..].iter().collect()
+}
+
 fn random_scid() -> u32 {
-    // SplitMix64 over nanos+pid: a non-cryptographic but adequate 31-bit draw
-    // that needs no external dependency.
+    // SplitMix64 over nanos+pid: a non-cryptographic but adequate draw that
+    // needs no external dependency.
     let mut state = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_nanos() as u64)
@@ -108,7 +151,10 @@ fn random_scid() -> u32 {
     z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
     z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
     z ^= z >> 31;
-    ((z % u64::from(u32::MAX)) as u32) + 1
+    // 31-bit: 1..=Int.MAX_VALUE — the server parses scid with
+    // Integer.parseInt(hex, 16), which throws on values above Int.MAX_VALUE
+    // (measured on scrcpy-server 3.1: "For input string: … under radix 16").
+    ((z % u64::from(u32::try_from(i32::MAX).expect("Int.MAX fits u32"))) as u32) + 1
 }
 
 /// Outcome of one adb invocation (mirrors `aps-winscope/src/adb.rs`).
@@ -197,12 +243,13 @@ impl AdbRunner {
         timeout: Duration,
         cancel: Option<&std::sync::atomic::AtomicBool>,
     ) -> (RawAdbOutput, AdbOutcome) {
-        let spawn = Command::new(&self.executable)
+        let mut command = Command::new(&self.executable);
+        command
             .args(arguments)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .stdin(Stdio::null())
-            .spawn();
+            .stdin(Stdio::null());
+        let spawn = crate::spawn_executable(&mut command);
         let mut child = match spawn {
             Ok(child) => child,
             Err(error) => {
@@ -243,9 +290,23 @@ impl AdbRunner {
                     if timed_out {
                         success = false;
                         stderr.push_str("\nadb command timed out");
-                        return (RawAdbOutput { stdout, stderr, success }, AdbOutcome::TimedOut);
+                        return (
+                            RawAdbOutput {
+                                stdout,
+                                stderr,
+                                success,
+                            },
+                            AdbOutcome::TimedOut,
+                        );
                     }
-                    return (RawAdbOutput { stdout, stderr, success }, AdbOutcome::Completed);
+                    return (
+                        RawAdbOutput {
+                            stdout,
+                            stderr,
+                            success,
+                        },
+                        AdbOutcome::Completed,
+                    );
                 }
                 Ok(None) => std::thread::sleep(Duration::from_millis(20)),
                 Err(error) => {
@@ -301,12 +362,15 @@ impl AdbRunner {
 
     /// The device-server shell: no effective timeout (24 h ceiling), runs
     /// without waiting for exit; the process dies when the handle is dropped
-    /// or `cancel` is flipped (spec §1.2 step 5).
+    /// or `cancel` is flipped (spec §1.2 step 5). The server's merged output
+    /// streams land in `log_tail` (bounded) — device-side crashes surface
+    /// there instead of vanishing.
     pub fn spawn_session_shell(
         &self,
         serial: &str,
         argv: &[String],
         cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        log_tail: Arc<Mutex<String>>,
     ) -> Result<(), String> {
         let mut command = Command::new(&self.executable);
         command.arg("-s").arg(serial);
@@ -317,13 +381,20 @@ impl AdbRunner {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        let mut child = command
-            .spawn()
+        let mut child = crate::spawn_executable(&mut command)
             .map_err(|error| format!("unable to spawn adb session shell: {error}"))?;
         let stdout_handle = child.stdout.take();
         let stderr_handle = child.stderr.take();
-        spawn_drainer(stdout_handle);
-        spawn_drainer(stderr_handle);
+        // Both streams append into the bounded tail: a server that dies mid
+        // handshake leaves its last words readable (spec diagnostics task).
+        let stdout_tail = log_tail.clone();
+        spawn_drainer(stdout_handle, move |chunk| {
+            append_tail(&stdout_tail, chunk);
+        });
+        let stderr_tail = log_tail.clone();
+        spawn_drainer(stderr_handle, move |chunk| {
+            append_tail(&stderr_tail, chunk);
+        });
         // Watcher thread: cancel flip → kill the local adb client (the shell
         // dies with it), matching the Kotlin `cancel` of the shell coroutine.
         std::thread::spawn(move || {
@@ -415,6 +486,30 @@ pub fn launch(
         return Err(LaunchError::Push(output.merged().trim().to_owned()));
     }
 
+    // Verify the jar actually landed: adb push can report success while the
+    // device-side file vanishes (root-state switches, tmp cleaners), and a
+    // missing CLASSPATH jar makes app_process abort with zero diagnostics.
+    let (verify, _) = runner.run(
+        &[
+            "-s",
+            serial,
+            "shell",
+            "[",
+            "-f",
+            &launched.remote_jar_path,
+            "]",
+        ],
+        Duration::from_secs(COMMAND_TIMEOUT_SECS),
+        None,
+    );
+    if !verify.success {
+        let _ = std::fs::remove_file(&local_jar);
+        return Err(LaunchError::Push(format!(
+            "device jar missing after push: {}",
+            launched.remote_jar_path
+        )));
+    }
+
     // Step 4: adb reverse (10 s budget).
     let (output, _) = runner.run(
         &[
@@ -439,6 +534,7 @@ pub fn launch(
             serial,
             &server_shell_argv(launched, quality),
             launched.cancel.clone(),
+            launched.server_log_tail.clone(),
         )
         .map_err(LaunchError::Shell)
 }
@@ -530,6 +626,25 @@ pub fn server_shell_argv(
 mod tests {
     use super::*;
 
+    /// A fresh scratch directory for one test (see the note on clock
+    /// granularity in `record::tests::unique_temp_dir`): the sequence number
+    /// keeps two tests from racing on the same path, which surfaces as
+    /// `ETXTBSY` when one writes a stub script while another executes it.
+    fn unique_temp_dir(label: &str) -> PathBuf {
+        static SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let sequence = SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let directory = std::env::temp_dir().join(format!(
+            "aps-screencast-{label}-{}-{}-{sequence}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|elapsed| elapsed.as_nanos())
+                .unwrap_or_default()
+        ));
+        std::fs::create_dir_all(&directory).expect("temp dir");
+        directory
+    }
+
     fn launched(scid: u32) -> LaunchedServer {
         LaunchedServer {
             scid,
@@ -538,6 +653,7 @@ mod tests {
             local_jar_path: PathBuf::new(),
             local_port: 34_567,
             cancel: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            server_log_tail: Arc::new(Mutex::new(String::new())),
         }
     }
 
@@ -554,6 +670,14 @@ mod tests {
         }
         let server = LaunchedServer::generate(1);
         assert!(server.scid >= 1, "scid is 1..=Int.MAX_VALUE");
+        // The server parses scid hex with Integer.parseInt (radix 16): values
+        // above Int.MAX_VALUE crash it at startup (NumberFormatException).
+        for _ in 0..64 {
+            assert!(
+                LaunchedServer::generate(1).scid <= i32::MAX as u32,
+                "scid must stay within the server's parseable range"
+            );
+        }
     }
 
     /// Spec §1.3: complete argv, scid unpadded hex, quality options appended.
@@ -611,15 +735,7 @@ mod tests {
         use std::fs::Permissions;
         use std::os::unix::fs::PermissionsExt;
 
-        let directory = std::env::temp_dir().join(format!(
-            "aps-screencast-shell-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|elapsed| elapsed.as_nanos())
-                .unwrap_or_default()
-        ));
-        std::fs::create_dir_all(&directory).expect("stub dir");
+        let directory = unique_temp_dir("shell");
         let log_path = directory.join("adb-log.txt");
         let log = log_path.to_string_lossy().replace('\'', "'\\''");
         let stub_path = directory.join("adb");
@@ -632,7 +748,7 @@ mod tests {
         let runner = AdbRunner::from_executable(stub_path);
 
         let output = runner.shell("FAKE003", &["input", "keyevent", "4"]);
-        assert!(output.success);
+        assert!(output.success, "stub adb failed: {}", output.merged());
 
         let log = std::fs::read_to_string(&log_path).expect("stub log");
         assert_eq!(
@@ -650,15 +766,7 @@ mod tests {
         use std::fs::Permissions;
         use std::os::unix::fs::PermissionsExt;
 
-        let directory = std::env::temp_dir().join(format!(
-            "aps-screencast-execout-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|elapsed| elapsed.as_nanos())
-                .unwrap_or_default()
-        ));
-        std::fs::create_dir_all(&directory).expect("stub dir");
+        let directory = unique_temp_dir("execout");
         let log_path = directory.join("adb-log.txt");
         let log = log_path.to_string_lossy().replace('\'', "'\\''");
         let stub_path = directory.join("adb");
@@ -708,15 +816,7 @@ mod tests {
         use std::fs::Permissions;
         use std::os::unix::fs::PermissionsExt;
 
-        let directory = std::env::temp_dir().join(format!(
-            "aps-screencast-stub-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|elapsed| elapsed.as_nanos())
-                .unwrap_or_default()
-        ));
-        std::fs::create_dir_all(&directory).expect("stub dir");
+        let directory = unique_temp_dir("stub");
         let log_path = directory.join("adb-log.txt");
         let log = log_path.to_string_lossy().replace('\'', "'\\''");
         let stub_path = directory.join("adb");
@@ -750,15 +850,28 @@ mod tests {
         // push: -s serial push <local jar> <remote jar>
         assert_eq!(&lines[0..3], ["-s", "FAKE002", "push"]);
         assert!(lines[4].contains("scrcpy_2abc0001.jar"));
+        // push verification: -s serial shell [ -f <remote jar> ]
+        assert_eq!(
+            &lines[5..12],
+            [
+                "-s",
+                "FAKE002",
+                "shell",
+                "[",
+                "-f",
+                "/data/local/tmp/scrcpy_aps/scrcpy_2abc0001.jar",
+                "]"
+            ]
+        );
         // reverse (fails with exit 9): -s serial reverse localabstract:<name> tcp:<port>
         assert_eq!(
-            &lines[5..9],
+            &lines[12..16],
             ["-s", "FAKE002", "reverse", "localabstract:scrcpy_2abc0001"]
         );
-        assert!(lines[9].starts_with("tcp:"));
+        assert!(lines[16].starts_with("tcp:"));
         // §1.4 rollback: reverse --remove, then shell rm -f.
         assert_eq!(
-            &lines[10..15],
+            &lines[17..22],
             [
                 "-s",
                 "FAKE002",
@@ -767,8 +880,8 @@ mod tests {
                 "localabstract:scrcpy_2abc0001"
             ]
         );
-        assert_eq!(&lines[15..20], ["-s", "FAKE002", "shell", "rm", "-f"]);
-        assert!(lines[20].contains("scrcpy_2abc0001.jar"));
+        assert_eq!(&lines[22..27], ["-s", "FAKE002", "shell", "rm", "-f"]);
+        assert!(lines[27].contains("scrcpy_2abc0001.jar"));
         // The host-side temp jar is gone after the rollback.
         assert!(!launched.local_jar_path.exists());
         let _ = std::fs::remove_dir_all(&directory);

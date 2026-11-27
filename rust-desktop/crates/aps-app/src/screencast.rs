@@ -101,17 +101,27 @@ pub(crate) struct ScreencastWorkspace {
     generation: u64,
     canvas_bounds: Option<Bounds<Pixels>>,
     pointer_pressed: bool,
+    /// Frames promoted to the canvas since the last poll tick, and the tick's
+    /// start: the pair yields the display frame rate shown in the status line.
+    promoted_since_tick: u32,
+    tick_started_at: std::time::Instant,
+    /// Measured display frame rate (frames promoted per second).
+    display_fps: u32,
     send_input: Entity<InputState>,
 }
 
 impl ScreencastWorkspace {
     pub(crate) fn new(language: Language, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let send_input = cx.new(|cx| InputState::new(window, cx));
-        cx.subscribe_in(&send_input, window, |this, _, event: &InputEvent, window, cx| {
-            if matches!(event, InputEvent::PressEnter { .. }) {
-                this.send_text(window, cx);
-            }
-        })
+        cx.subscribe_in(
+            &send_input,
+            window,
+            |this, _, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::PressEnter { .. }) {
+                    this.send_text(window, cx);
+                }
+            },
+        )
         .detach();
         let mut workspace = Self {
             language,
@@ -133,6 +143,9 @@ impl ScreencastWorkspace {
             generation: 0,
             canvas_bounds: None,
             pointer_pressed: false,
+            promoted_since_tick: 0,
+            tick_started_at: std::time::Instant::now(),
+            display_fps: 0,
             send_input,
         };
         workspace.refresh_devices(cx);
@@ -158,9 +171,52 @@ impl ScreencastWorkspace {
                     }
                     let mut keep_polling = true;
                     let running = matches!(this.state, ScrcpySessionState::Running { .. });
+                    // Display rate: what the canvas actually received, which is
+                    // the number the user perceives (the session's own counters
+                    // say what left the decoder).
+                    let elapsed = this.tick_started_at.elapsed();
+                    if elapsed >= std::time::Duration::from_millis(900) {
+                        let fps = (f64::from(this.promoted_since_tick)
+                            / elapsed.as_secs_f64())
+                        .round() as u32;
+                        this.promoted_since_tick = 0;
+                        this.tick_started_at = std::time::Instant::now();
+                        if fps != this.display_fps {
+                            this.display_fps = fps;
+                            cx.notify();
+                        }
+                    }
                     if let Some(session) = this.session.clone() {
                         let state = session.state();
                         if state != this.state {
+                            // A mirror that ends is the moment its pipeline
+                            // numbers are worth keeping: they say whether the
+                            // session was live (frames, first-frame latency) or
+                            // stalled (drops, resyncs).
+                            // Only an *unexpected* end is worth logging; a
+                            // user stop is intentional and clears the state
+                            // itself.
+                            if matches!(this.state, ScrcpySessionState::Running { .. })
+                                && matches!(
+                                    state,
+                                    ScrcpySessionState::Disconnected
+                                        | ScrcpySessionState::Failed(_)
+                                )
+                            {
+                                let metrics = session.metrics();
+                                eprintln!(
+                                    "[screencast] mirror ended: {} frames over {} ms (first frame {} ms, {} dropped, {} nudges, {} resyncs, {} decoded)",
+                                    metrics.frames_delivered,
+                                    metrics
+                                        .last_frame_ms
+                                        .saturating_sub(metrics.started_at_ms),
+                                    metrics.first_frame_ms,
+                                    metrics.frames_dropped,
+                                    metrics.nudges,
+                                    metrics.resyncs,
+                                    metrics.frames_decoded,
+                                );
+                            }
                             this.state = state;
                             cx.notify();
                         }
@@ -184,26 +240,31 @@ impl ScreencastWorkspace {
         .detach();
     }
 
-    /// Frame pump: drains the decoded-frame channel at stream cadence and
-    /// repaints on every promoted frame — the display loop mirrors scrcpy's
-    /// own (newest frame wins; bursts coalesce). Runs until the session ends
-    /// or a new generation replaces it.
+    /// Frame pump: drains the decoded-frame channel on a bounded ~8 ms cadence
+    /// and repaints whenever the newest frame changed — the display loop
+    /// mirrors scrcpy's own (newest frame wins; bursts coalesce). Runs until
+    /// the session ends or a new generation replaces it.
+    ///
+    /// Every iteration MUST await: this future runs on the foreground
+    /// executor, and a never-yielding loop would monopolize the main thread,
+    /// starving effect flushing — `cx.notify()` would never reach a repaint
+    /// (blank canvas). The 8 ms wait costs at most one frame of latency while
+    /// keeping each drain batch idempotent (promote newest, drop the rest).
     fn spawn_frame_pump(&mut self, generation: u64, cx: &mut Context<Self>) {
-        cx.spawn(async move |this, cx| loop {
-            let outcome = this
-                .update(cx, |this, cx| {
-                    if this.generation != generation {
-                        return PumpOutcome::Disconnected;
-                    }
-                    this.drain_frame(cx)
-                })
-                .unwrap_or(PumpOutcome::Disconnected);
-            match outcome {
-                PumpOutcome::Disconnected => break,
-                PumpOutcome::Frames => {}
-                PumpOutcome::Idle => {
-                    cx.background_executor().timer(FRAME_PUMP_IDLE_WAIT).await;
+        cx.spawn(async move |this, cx| {
+            loop {
+                let alive = this
+                    .update(cx, |this, cx| {
+                        if this.generation != generation {
+                            return false;
+                        }
+                        !matches!(this.drain_frame(cx), PumpOutcome::Disconnected)
+                    })
+                    .unwrap_or(false);
+                if !alive {
+                    break;
                 }
+                cx.background_executor().timer(FRAME_PUMP_IDLE_WAIT).await;
             }
         })
         .detach();
@@ -249,10 +310,9 @@ impl ScreencastWorkspace {
                 }
                 // Keep the selection stable; fall back to the first device like
                 // the Kotlin controller did.
-                let still_there = this
-                    .selected
-                    .as_ref()
-                    .is_some_and(|selected| this.devices.iter().any(|device| &device.serial == selected));
+                let still_there = this.selected.as_ref().is_some_and(|selected| {
+                    this.devices.iter().any(|device| &device.serial == selected)
+                });
                 if !still_there {
                     this.selected = this.devices.first().map(|device| device.serial.clone());
                 }
@@ -285,6 +345,7 @@ impl ScreencastWorkspace {
         }
         let promoted = latest.is_some();
         if let Some(frame) = latest {
+            self.promoted_since_tick += 1;
             self.frame_size = Some((frame.width, frame.height));
             self.frame = Some(Arc::new(to_render_image(frame)));
             cx.notify();
@@ -410,12 +471,12 @@ impl ScreencastWorkspace {
         let (screen_w, screen_h) = self.running_size()?;
         let rel_x = (canvas_point.x - viewport.origin.x) / viewport.size.width;
         let rel_y = (canvas_point.y - viewport.origin.y) / viewport.size.height;
-        if !(0.0..=1.0).contains(&f32::from(rel_x)) || !(0.0..=1.0).contains(&f32::from(rel_y)) {
+        if !(0.0..=1.0).contains(&rel_x) || !(0.0..=1.0).contains(&rel_y) {
             return None;
         }
         Some((
-            (f32::from(rel_x) * screen_w as f32).round() as i32,
-            (f32::from(rel_y) * screen_h as f32).round() as i32,
+            (rel_x * screen_w as f32).round() as i32,
+            (rel_y * screen_h as f32).round() as i32,
         ))
     }
 
@@ -531,9 +592,9 @@ impl ScreencastWorkspace {
             let runner = AdbRunner::locate(None)?;
             let bytes = runner.exec_out_bytes(&serial, &["screencap", "-p"])?;
             if !is_png(&bytes) {
-                return Err(
-                    language.text(TextKey::ScreencastScreenshotInvalid).to_owned(),
-                );
+                return Err(language
+                    .text(TextKey::ScreencastScreenshotInvalid)
+                    .to_owned());
             }
             Ok(bytes)
         });
@@ -661,10 +722,10 @@ impl ScreencastWorkspace {
                 match outcome {
                     Some(Ok(path)) => {
                         this.error = None;
-                        this.notice = Some(this.language.format(
-                            TextKey::ScreencastRecordSaved,
-                            &[("path", &path)],
-                        ));
+                        this.notice = Some(
+                            this.language
+                                .format(TextKey::ScreencastRecordSaved, &[("path", &path)]),
+                        );
                     }
                     // The session ended first and already finalized the file;
                     // nothing to report here.
@@ -800,16 +861,27 @@ impl Render for ScreencastWorkspace {
             .border_1()
             .border_color(colors.border)
             .bg(colors.panel)
-            .child(canvas(
-                move |bounds, _, cx: &mut App| {
-                    bounds_handle
-                        .update(cx, |this: &mut ScreencastWorkspace, _| {
-                            this.canvas_bounds = Some(bounds);
-                        })
-                        .ok();
-                },
-                |_, _, _, _| {},
-            ))
+            .child(
+                canvas(
+                    move |bounds, _, cx: &mut App| {
+                        bounds_handle
+                            .update(cx, |this: &mut ScreencastWorkspace, _| {
+                                this.canvas_bounds = Some(bounds);
+                            })
+                            .ok();
+                    },
+                    |_, _, _, _| {},
+                )
+                // Probe out of flow: in flow it would either collapse to zero
+                // height (degenerate bounds → every touch dropped) or, sized
+                // full, push the video img below the visible area. Anchored
+                // absolute it overlays the whole canvas and reports the real
+                // bounds.
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full(),
+            )
             .when(is_running && frame.is_some(), |area| {
                 area.child(
                     img(ImageSource::Render(frame.expect("frame checked")))
@@ -821,6 +893,8 @@ impl Render for ScreencastWorkspace {
                 area.child(
                     div()
                         .absolute()
+                        .top_0()
+                        .left_0()
                         .size_full()
                         .flex()
                         .items_center()
@@ -885,6 +959,8 @@ impl Render for ScreencastWorkspace {
                 canvas_area = canvas_area.child(
                     div()
                         .absolute()
+                        .top_0()
+                        .left_0()
                         .size_full()
                         .flex()
                         .flex_col()
@@ -914,6 +990,8 @@ impl Render for ScreencastWorkspace {
                 canvas_area = canvas_area.child(
                     div()
                         .absolute()
+                        .top_0()
+                        .left_0()
                         .size_full()
                         .flex()
                         .flex_col()
@@ -937,6 +1015,8 @@ impl Render for ScreencastWorkspace {
                 canvas_area = canvas_area.child(
                     div()
                         .absolute()
+                        .top_0()
+                        .left_0()
                         .size_full()
                         .flex()
                         .flex_col()
@@ -988,14 +1068,15 @@ impl Render for ScreencastWorkspace {
                 div()
                     .text_size(px(typography::SUPPORTING))
                     .text_color(theme.warning)
-                    .child(crate::studio::selectable(language.format(
-                        TextKey::ScreencastErrorPrefix,
-                        &[("error", error)],
-                    ))),
+                    .child(crate::studio::selectable(
+                        language.format(TextKey::ScreencastErrorPrefix, &[("error", error)]),
+                    )),
             );
         }
 
-        body = body.child(canvas_area).child(self.send_bar(language, &colors, is_running, cx));
+        body = body
+            .child(canvas_area)
+            .child(self.send_bar(language, &colors, is_running, cx));
         body
     }
 }
@@ -1017,7 +1098,11 @@ impl ScreencastWorkspace {
         for (label, keycode, key_id) in [
             (TextKey::ScreencastBack, KEYCODE_BACK, "nav-back"),
             (TextKey::ScreencastHome, KEYCODE_HOME, "nav-home"),
-            (TextKey::ScreencastRecents, KEYCODE_APP_SWITCH, "nav-recents"),
+            (
+                TextKey::ScreencastRecents,
+                KEYCODE_APP_SWITCH,
+                "nav-recents",
+            ),
         ] {
             row = row.child(
                 Button::new(key_id)
@@ -1131,14 +1216,25 @@ impl ScreencastWorkspace {
             ScrcpySessionState::Connecting => {
                 language.text(TextKey::ScreencastEstablishing).to_owned()
             }
-            ScrcpySessionState::Running { device_name, width, height } => language.format(
-                TextKey::ScreencastCasting,
-                &[
-                    ("device", &device_name),
-                    ("width", &width.to_string()),
-                    ("height", &height.to_string()),
-                ],
-            ),
+            ScrcpySessionState::Running {
+                device_name,
+                width,
+                height,
+            } => {
+                let base = language.format(
+                    TextKey::ScreencastCasting,
+                    &[
+                        ("device", &device_name),
+                        ("width", &width.to_string()),
+                        ("height", &height.to_string()),
+                    ],
+                );
+                if self.display_fps > 0 {
+                    format!("{base} · {} fps", self.display_fps)
+                } else {
+                    base
+                }
+            }
             ScrcpySessionState::Disconnected => {
                 language.text(TextKey::ScreencastDisconnected).to_owned()
             }
