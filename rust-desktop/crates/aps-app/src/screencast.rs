@@ -32,6 +32,17 @@ const DEVICE_POLL: Duration = Duration::from_millis(1_000);
 /// Frames themselves are pumped immediately (no pacing) so the display shows
 /// every decoded frame at stream cadence instead of the poll cadence.
 const FRAME_PUMP_IDLE_WAIT: Duration = Duration::from_millis(8);
+/// Texture-upload bandwidth the mirror allows itself: each promoted frame
+/// uploads a fresh full-resolution image into GPUI's sprite atlas, and at
+/// stream cadence that churned hundreds of MB/s of GPU allocations - enough to
+/// wedge the display stack (Xorg died mid-cast). The promotion gap adapts so
+/// width*height*4 bytes per promotion stay under this rate, with a floor at
+/// `PROMOTE_MIN_GAP`; the pump still drains at stream cadence and keeps the
+/// newest frame meanwhile.
+const PROMOTE_UPLOAD_CAP: f64 = 80.0 * 1024.0 * 1024.0;
+/// Fastest promotion cadence regardless of frame size (a still screen costs
+/// nothing, and 20 fps reads as smooth for a mirror).
+const PROMOTE_MIN_GAP: Duration = Duration::from_millis(50);
 /// Keycodes reused from the control contract (spec §2.3).
 const KEYCODE_BACK: i32 = 4;
 const KEYCODE_HOME: i32 = 3;
@@ -107,6 +118,8 @@ pub(crate) struct ScreencastWorkspace {
     tick_started_at: std::time::Instant,
     /// Measured display frame rate (frames promoted per second).
     display_fps: u32,
+    /// Last promotion instant, for the `PROMOTE_MIN_GAP` throttle.
+    last_promoted: Option<std::time::Instant>,
     /// The mirror owns the whole window (shell-rendered overlay; ESC exits).
     fullscreen: bool,
     /// Focus anchor of the overlay so ESC reaches it without a global binding.
@@ -150,6 +163,7 @@ impl ScreencastWorkspace {
             promoted_since_tick: 0,
             tick_started_at: std::time::Instant::now(),
             display_fps: 0,
+            last_promoted: None,
             fullscreen: false,
             fullscreen_focus: cx.focus_handle(),
             send_input,
@@ -386,12 +400,28 @@ impl ScreencastWorkspace {
                 }
             }
         }
-        let promoted = latest.is_some();
+        // Throttle promotions, not drains: the pump keeps consuming the socket
+        // at stream cadence, but only one texture per `PROMOTE_MIN_GAP` reaches
+        // the GPU. `promoted` reports whether this pass actually promoted, so an
+        // skipped pass parks the pump in its short idle wait instead of hot-
+        // spinning between frames the display will not show.
+        let mut promoted = false;
         if let Some(frame) = latest {
-            self.promoted_since_tick += 1;
             self.frame_size = Some((frame.width, frame.height));
-            self.frame = Some(Arc::new(to_render_image(frame)));
-            cx.notify();
+            let now = std::time::Instant::now();
+            let bytes = u64::from(frame.width) * u64::from(frame.height) * 4;
+            let bandwidth_gap = Duration::from_secs_f64(bytes as f64 / PROMOTE_UPLOAD_CAP);
+            let gap = bandwidth_gap.max(PROMOTE_MIN_GAP);
+            let due = self
+                .last_promoted
+                .map_or(true, |last| now.duration_since(last) >= gap);
+            if due {
+                self.last_promoted = Some(now);
+                self.promoted_since_tick += 1;
+                self.frame = Some(Arc::new(to_render_image(frame)));
+                promoted = true;
+                cx.notify();
+            }
         }
         if !connected {
             self.frames = None;
@@ -917,11 +947,13 @@ impl ScreencastWorkspace {
                 .size_full(),
             );
         if let Some(frame) = frame {
-            surface = surface.child(
-                img(ImageSource::Render(frame))
-                    .object_fit(ObjectFit::Contain)
-                    .size_full(),
-            );
+            surface = surface.child(Self::mirror_image(
+                frame,
+                // Fullscreen overlay: the canvas probe owns these bounds while
+                // the overlay is up.
+                self.viewport(),
+                self.canvas_bounds,
+            ));
         }
         let surface = Self::mirror_pointer(surface, cx);
 
@@ -966,6 +998,36 @@ impl ScreencastWorkspace {
 }
 
 impl ScreencastWorkspace {
+    /// The mirror image, placed at the contain-fit viewport with explicit pixel
+    /// geometry. GPUI resolves a percentage height against the canvas, but the
+    /// image element fell back to its aspect ratio instead - it ended up taller
+    /// than the canvas, and the overflow clip cut off the bottom of the device
+    /// (its dock). Sizing the element to the exact viewport, which the touch
+    /// mapping already uses, keeps picture and input consistent and letterboxes
+    /// instead of cropping. `bounds` is the canvas rect the probe last reported.
+    fn mirror_image(
+        frame: Arc<RenderImage>,
+        viewport: Option<Viewport>,
+        bounds: Option<Bounds<Pixels>>,
+    ) -> AnyElement {
+        let image = img(ImageSource::Render(frame)).object_fit(ObjectFit::Contain);
+        match (viewport, bounds) {
+            (Some(viewport), Some(bounds)) => {
+                let offset = viewport.origin - bounds.origin;
+                image
+                    .absolute()
+                    .left(offset.x)
+                    .top(offset.y)
+                    .w(viewport.size.width)
+                    .h(viewport.size.height)
+                    .into_any_element()
+            }
+            // The probe has not reported yet (first frame); fall back to the
+            // fill behavior for one tick.
+            _ => image.size_full().into_any_element(),
+        }
+    }
+
     /// Pointer mapping of the mirror surface, shared by the inline canvas and
     /// the fullscreen overlay so both inject identically: press/drag/release
     /// map to `ACTION_*`, the wheel to scroll, and a double click expands the
@@ -1074,11 +1136,11 @@ impl Render for ScreencastWorkspace {
                 .size_full(),
             )
             .when(is_running && frame.is_some(), |area| {
-                area.child(
-                    img(ImageSource::Render(frame.expect("frame checked")))
-                        .object_fit(ObjectFit::Contain)
-                        .size_full(),
-                )
+                area.child(Self::mirror_image(
+                    frame.expect("frame checked"),
+                    self.viewport(),
+                    self.canvas_bounds,
+                ))
             })
             .when(is_connecting, |area| {
                 area.child(

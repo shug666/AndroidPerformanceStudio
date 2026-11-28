@@ -28,20 +28,22 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ScreencastQuality {
     /// 流畅: 1280 / 30 fps / 4 Mbps. For weak hosts and USB 2 links.
+    #[default]
     Fluent,
     /// 高清: 1600 / 60 fps / 12 Mbps. Smooth scrolling with host headroom.
     Hd,
-    /// 原生: native resolution (no `max_size`) / 30 fps / 12 Mbps. APS
-    /// default (the mirror is the interaction surface; downscaling hurts
-    /// text legibility).
-    #[default]
+    /// 原生: native resolution (no `max_size`) / 30 fps / 12 Mbps. The
+    /// interaction surface at full device resolution; opt-in because of the
+    /// per-frame texture-upload cost on iGPU hosts.
     Native,
 }
 
 impl ScreencastQuality {
-    /// APS default preset: native resolution (user preference; the mirror is
-    /// the interaction surface, and downscaling hurts text legibility).
-    pub const DEFAULT: ScreencastQuality = ScreencastQuality::Native;
+    /// Fluent is the default: each promoted mirror frame becomes a
+    /// full-resolution GPU texture upload, and at Native (1920x1200) that
+    /// churned hundreds of MB/s - enough to hang the display stack on iGPU
+    /// hosts mid-cast. Native stays available as an explicit choice.
+    pub const DEFAULT: ScreencastQuality = ScreencastQuality::Fluent;
 
     /// UI-facing label; the dropdown renders `"<label> · <maxFps>fps"` (§7).
     pub fn label(self) -> &'static str {
@@ -98,12 +100,13 @@ mod tests {
     use super::*;
 
     /// The default preset is NATIVE (deliberate deviation from the spec's
-    /// `ScreencastQuality.DEFAULT == HD`; the mirror is the interaction
-    /// surface and downscaling hurts text legibility).
+    /// `ScreencastQuality.DEFAULT == Fluent`: the default keeps the host-side
+    /// texture-upload cost low (4 MB/frame at 1280x800 instead of 9 MB at
+    /// Native), which is what froze iGPU hosts during casting.
     #[test]
-    fn default_is_native() {
-        assert_eq!(ScreencastQuality::DEFAULT, ScreencastQuality::Native);
-        assert_eq!(ScreencastQuality::default(), ScreencastQuality::Native);
+    fn default_is_fluent() {
+        assert_eq!(ScreencastQuality::DEFAULT, ScreencastQuality::Fluent);
+        assert_eq!(ScreencastQuality::default(), ScreencastQuality::Fluent);
     }
 
     /// FLUENT carries max_size=1280 / 30 fps / 4 Mbps: a mirrored screen that

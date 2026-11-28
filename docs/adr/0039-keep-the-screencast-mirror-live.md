@@ -2,6 +2,8 @@
 
 Status: Accepted (2026-11-27)
 
+Extended by: [0040](0040-cap-mirror-texture-uploads.md)
+
 Extends: [ADR 0038](0038-port-screencast-and-reverse-tethering-to-the-rust-desktop.md)
 
 ## Context
