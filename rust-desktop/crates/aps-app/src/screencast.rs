@@ -940,33 +940,25 @@ impl ScreencastWorkspace {
             }))
             .child(surface)
             .child(
-                div().absolute().top_3().right_3().child(
-                    Button::new("screencast-exit-fullscreen")
-                        .label(language.text(TextKey::ScreencastExitFullscreen))
-                        .on_click(
-                            cx.listener(|this, _, window, cx| this.exit_fullscreen(window, cx)),
-                        ),
-                ),
-            )
-            // A faint status strip keeps the frame rate readable without
-            // taking corner space away from the mirror.
-            .child(
                 div()
                     .absolute()
-                    .bottom_2()
-                    .left_0()
-                    .right_0()
+                    .top_3()
+                    .right_3()
                     .flex()
-                    .justify_center()
+                    .items_center()
+                    .gap_2()
                     .child(
                         div()
                             .text_size(px(typography::SUPPORTING))
                             .text_color(rgba(0xffffffcc))
-                            .child(format!(
-                                "{} · {} fps",
-                                self.status_text(language),
-                                self.display_fps
-                            )),
+                            .child(format!("{} fps", self.display_fps)),
+                    )
+                    .child(
+                        Button::new("screencast-exit-fullscreen")
+                            .label(language.text(TextKey::ScreencastExitFullscreen))
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.exit_fullscreen(window, cx)),
+                            ),
                     ),
             )
             .into_any_element()
@@ -1046,7 +1038,10 @@ impl Render for ScreencastWorkspace {
             .id("screencast-canvas")
             .relative()
             .flex_1()
-            .min_h(px(280.))
+            // Shrink to zero before stealing height from the bottom bar: with a
+            // floor here a short window silently pushed the send bar out of the
+            // window and the mirror's bottom was the first thing to disappear.
+            .min_h(px(0.))
             .overflow_hidden()
             .rounded(px(8.))
             .border_1()
@@ -1196,10 +1191,15 @@ impl Render for ScreencastWorkspace {
             _ => {}
         }
 
-        let mut body = studio::page(&colors)
-            .child(self.toolbar(language, is_running, &theme, cx))
+        let mut body = studio::page_fill(&colors)
             .child(
                 div()
+                    .flex_shrink_0()
+                    .child(self.toolbar(language, is_running, &theme, cx)),
+            )
+            .child(
+                div()
+                    .flex_shrink_0()
                     .text_size(px(typography::SUPPORTING))
                     .text_color(theme.muted_foreground)
                     .child(crate::studio::selectable(self.status_text(language))),
@@ -1208,6 +1208,7 @@ impl Render for ScreencastWorkspace {
         if let Some(notice) = &self.notice {
             body = body.child(
                 div()
+                    .flex_shrink_0()
                     .text_size(px(typography::SUPPORTING))
                     .text_color(theme.muted_foreground)
                     .child(crate::studio::selectable(notice.clone())),
@@ -1217,6 +1218,7 @@ impl Render for ScreencastWorkspace {
         if let Some(error) = &self.error {
             body = body.child(
                 div()
+                    .flex_shrink_0()
                     .text_size(px(typography::SUPPORTING))
                     .text_color(theme.warning)
                     .child(crate::studio::selectable(
@@ -1225,9 +1227,11 @@ impl Render for ScreencastWorkspace {
             );
         }
 
-        body = body
-            .child(canvas_area)
-            .child(self.send_bar(language, &colors, is_running, cx));
+        body = body.child(canvas_area).child(
+            div()
+                .flex_shrink_0()
+                .child(self.send_bar(language, &colors, is_running, cx)),
+        );
         body
     }
 }

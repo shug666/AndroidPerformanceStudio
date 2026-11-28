@@ -3661,12 +3661,21 @@ impl Render for Studio {
                                 // The CPU report is a fill-height layout with its
                                 // own internal viewports; every other page keeps
                                 // the page-level vertical scroll.
-                                let workspace = div()
+                                let mut workspace = div()
                                     .id("workspace")
                                     .bg(background)
                                     .flex_1()
-                                    .min_h_0()
-                                    .child(body);
+                                    .min_h_0();
+                                // The screencast page hands its remaining height to
+                                // the mirror canvas, which needs a height resolved by
+                                // flex rather than a percentage: inside a plain block a
+                                // `size_full` page falls back to its content height, the
+                                // canvas then grows with the image and pushes the send
+                                // bar below the window. Only that page opts in.
+                                if matches!(selected, Destination::Screencast) {
+                                    workspace = workspace.flex().flex_col();
+                                }
+                                let workspace = workspace.child(body);
                                 if matches!(
                                     selected,
                                     Destination::Home
